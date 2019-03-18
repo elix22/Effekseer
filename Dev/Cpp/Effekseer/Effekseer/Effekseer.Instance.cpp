@@ -83,6 +83,47 @@ Instance::~Instance()
 	}
 }
 
+void Instance::GenerateChildrenInRequired(float currentTime)
+{
+	auto instanceGlobal = this->m_pContainer->GetRootInstance();
+
+	auto parameter = (EffectNodeImplemented*)m_pEffectNode;
+
+	InstanceGroup* group = m_headGroups;
+
+	for (int32_t i = 0; i < parameter->GetChildrenCount(); i++, group = group->NextUsedByInstance)
+	{
+		auto node = (EffectNodeImplemented*)parameter->GetChild(i);
+		assert(group != NULL);
+
+		while (true)
+		{
+			// GenerationTimeOffset can be minus value.
+			// Minus frame particles is generated simultaniously at frame 0.
+			if (node->CommonValues.MaxGeneration > m_generatedChildrenCount[i] &&
+				m_nextGenerationTime[i] <= currentTime)
+			{
+				// Create a particle
+				auto newInstance = group->CreateInstance();
+				if (newInstance != nullptr)
+				{
+					Matrix43 rootMatrix;
+					rootMatrix.Indentity();
+
+					newInstance->Initialize(this, m_generatedChildrenCount[i], (int32_t)std::max(0.0f, this->m_LivingTime), rootMatrix);
+				}
+
+				m_generatedChildrenCount[i]++;
+				m_nextGenerationTime[i] += Max(0.0f, node->CommonValues.GenerationTime.getValue(*instanceGlobal));
+			}
+			else
+			{
+				break;
+			}
+		}
+	}
+}
+
 //----------------------------------------------------------------------------------
 //
 //----------------------------------------------------------------------------------
@@ -102,7 +143,7 @@ const Matrix43& Instance::GetGlobalMatrix43() const
 //----------------------------------------------------------------------------------
 //
 //----------------------------------------------------------------------------------
-void Instance::Initialize( Instance* parent, int32_t instanceNumber )
+void Instance::Initialize( Instance* parent, int32_t instanceNumber, int32_t parentTime, const Matrix43& globalMatrix)
 {
 	assert(this->m_pContainer != nullptr);
 	
@@ -149,12 +190,14 @@ void Instance::Initialize( Instance* parent, int32_t instanceNumber )
 
 		// SRTの初期化
 		m_GenerationLocation.Indentity();
-		m_GlobalMatrix43.Indentity();
+		m_GlobalMatrix43 = globalMatrix;
 		m_ParentMatrix43.Indentity();
 
 		// 親の初期化
 		m_ParentMatrix43 = GetGlobalMatrix43();
 
+		// Generate zero frame effect
+		GenerateChildrenInRequired(0.0f);
 		return;
 	}
 	
@@ -174,7 +217,7 @@ void Instance::Initialize( Instance* parent, int32_t instanceNumber )
 	m_GlobalRevisionLocation = Vector3D(0.0f, 0.0f, 0.0f);
 	m_GlobalRevisionVelocity = Vector3D(0.0f, 0.0f, 0.0f);
 	m_GenerationLocation.Indentity();
-	m_GlobalMatrix43.Indentity();
+	m_GlobalMatrix43 = globalMatrix;
 	m_ParentMatrix43.Indentity();
 
 	// 親の初期化
@@ -471,7 +514,7 @@ void Instance::Initialize( Instance* parent, int32_t instanceNumber )
 				{
 					emitter = model->GetEmitter( 
 						instanceGlobal, 
-						m_LivingTime,
+						parentTime,
 						m_pManager->GetCoordinateSystem(), 
 						((EffectImplemented*)m_pEffectNode->GetEffect())->GetMaginification() );
 				}
@@ -479,7 +522,7 @@ void Instance::Initialize( Instance* parent, int32_t instanceNumber )
 				{
 					emitter = model->GetEmitterFromVertex( 
 						instanceNumber,
-						m_LivingTime,
+						parentTime,
 						m_pManager->GetCoordinateSystem(), 
 						((EffectImplemented*)m_pEffectNode->GetEffect())->GetMaginification() );
 				}
@@ -487,7 +530,7 @@ void Instance::Initialize( Instance* parent, int32_t instanceNumber )
 				{
 					emitter = model->GetEmitterFromVertex( 
 						instanceGlobal,
-						m_LivingTime,
+						parentTime,
 						m_pManager->GetCoordinateSystem(), 
 						((EffectImplemented*)m_pEffectNode->GetEffect())->GetMaginification() );
 				}
@@ -495,7 +538,7 @@ void Instance::Initialize( Instance* parent, int32_t instanceNumber )
 				{
 					emitter = model->GetEmitterFromFace( 
 						instanceNumber,
-						m_LivingTime,
+						parentTime,
 						m_pManager->GetCoordinateSystem(), 
 						((EffectImplemented*)m_pEffectNode->GetEffect())->GetMaginification() );
 				}
@@ -503,7 +546,7 @@ void Instance::Initialize( Instance* parent, int32_t instanceNumber )
 				{
 					emitter = model->GetEmitterFromFace( 
 						instanceGlobal,
-						m_LivingTime,
+						parentTime,
 						m_pManager->GetCoordinateSystem(), 
 						((EffectImplemented*)m_pEffectNode->GetEffect())->GetMaginification() );
 				}
@@ -580,13 +623,13 @@ void Instance::Initialize( Instance* parent, int32_t instanceNumber )
 
 	if( m_pEffectNode->SoundType == ParameterSoundType_Use )
 	{
-		soundValues.delay = m_pEffectNode->Sound.Delay.getValue( *instanceGlobal );
+		soundValues.delay = (int32_t)m_pEffectNode->Sound.Delay.getValue( *instanceGlobal );
 	}
 
 	// UV
 	if (m_pEffectNode->RendererCommon.UVType == ParameterRendererCommon::UV_ANIMATION)
 	{
-		uvTimeOffset = m_pEffectNode->RendererCommon.UV.Animation.StartFrame.getValue(*instanceGlobal);
+		uvTimeOffset = (int32_t)m_pEffectNode->RendererCommon.UV.Animation.StartFrame.getValue(*instanceGlobal);
 		uvTimeOffset *= m_pEffectNode->RendererCommon.UV.Animation.FrameLength;
 	}
 	
@@ -614,39 +657,7 @@ void Instance::Initialize( Instance* parent, int32_t instanceNumber )
 	m_pEffectNode->InitializeRenderedInstance(*this, m_pManager);
 
 	// Generate zero frame effect
-	{
-		InstanceGroup* group = m_headGroups;
-
-		for (int32_t i = 0; i < parameter->GetChildrenCount(); i++, group = group->NextUsedByInstance)
-		{
-			auto node = (EffectNodeImplemented*) parameter->GetChild(i);
-			auto container = m_pContainer->GetChild(i);
-			assert(group != NULL);
-
-			while (true)
-			{
-				// GenerationTimeOffset can be minus value.
-				// Minus frame particles is generated simultaniously at frame 0.
-				if (node->CommonValues.MaxGeneration > m_generatedChildrenCount[i] &&
-					m_nextGenerationTime[i] <= 0.0f)
-				{
-					// Create a particle
-					auto newInstance = group->CreateInstance();
-					if (newInstance != nullptr)
-					{
-						newInstance->Initialize(this, m_generatedChildrenCount[i]);
-					}
-
-					m_generatedChildrenCount[i]++;
-					m_nextGenerationTime[i] += Max(0.0f, node->CommonValues.GenerationTime.getValue(*instanceGlobal));
-				}
-				else
-				{
-					break;
-				}
-			}
-		}
-	}
+	GenerateChildrenInRequired(0.0f);
 }
 
 //----------------------------------------------------------------------------------
@@ -659,8 +670,6 @@ void Instance::Update( float deltaFrame, bool shown )
 	// Invalidate matrix
 	m_GlobalMatrix43Calculated = false;
 	m_ParentMatrix43Calculated = false;
-
-	auto instanceGlobal = this->m_pContainer->GetRootInstance();
 
 	if (m_stepTime && m_pEffectNode->GetType() != EFFECT_NODE_TYPE_ROOT)
 	{
@@ -711,9 +720,13 @@ void Instance::Update( float deltaFrame, bool shown )
 		m_LivingTime += deltaFrame;
 	}
 
-	// 子の処理
+	// Create child particles
 	if( m_stepTime && (originalTime <= m_LivedTime || !m_pEffectNode->CommonValues.RemoveWhenLifeIsExtinct) )
 	{
+		GenerateChildrenInRequired(originalTime + deltaFrame);
+
+
+		/*
 		InstanceGroup* group = m_headGroups;
 
 		for (int i = 0; i < m_pEffectNode->GetChildrenCount(); i++, group = group->NextUsedByInstance)
@@ -748,6 +761,7 @@ void Instance::Update( float deltaFrame, bool shown )
 				}
 			}
 		}
+		*/
 	}
 	
 	// 死亡判定
@@ -1331,7 +1345,7 @@ RectF Instance::GetUV() const
 	}
 	else if( m_pEffectNode->RendererCommon.UVType == ParameterRendererCommon::UV_SCROLL )
 	{
-		auto time = m_LivingTime + uvTimeOffset;
+		auto time = (int32_t)m_LivingTime + uvTimeOffset;
 
 		return RectF(
 			uvAreaOffset.X + uvScrollSpeed.X * time,
@@ -1341,7 +1355,7 @@ RectF Instance::GetUV() const
 	}
 	else if (m_pEffectNode->RendererCommon.UVType == ParameterRendererCommon::UV_FCURVE)
 	{
-		auto time = m_LivingTime + uvTimeOffset;
+		auto time = (int32_t)m_LivingTime + uvTimeOffset;
 
 		return RectF(
 			uvAreaOffset.X + m_pEffectNode->RendererCommon.UV.FCurve.Position->X.GetValue(time),

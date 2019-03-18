@@ -374,6 +374,7 @@ namespace Swig {
 }
 
 
+#include "efk.Base.h"
 #include "GUI/efk.ImageResource.h"
 #include "dll.h"
 #include "GUI/efk.GUIManager.h"
@@ -561,6 +562,30 @@ SWIGEXPORT char16_t * SWIGSTDCALL CSharp_Effekseerfswig_ImageResource_GetPath___
   arg1 = (efk::ImageResource *)jarg1; 
   result = (char16_t *)((efk::ImageResource const *)arg1)->GetPath();
   jresult = (char16_t *)result; 
+  return jresult;
+}
+
+
+SWIGEXPORT int SWIGSTDCALL CSharp_Effekseerfswig_ImageResource_GetWidth___(void * jarg1) {
+  int jresult ;
+  efk::ImageResource *arg1 = (efk::ImageResource *) 0 ;
+  int32_t result;
+  
+  arg1 = (efk::ImageResource *)jarg1; 
+  result = (int32_t)((efk::ImageResource const *)arg1)->GetWidth();
+  jresult = result; 
+  return jresult;
+}
+
+
+SWIGEXPORT int SWIGSTDCALL CSharp_Effekseerfswig_ImageResource_GetHeight___(void * jarg1) {
+  int jresult ;
+  efk::ImageResource *arg1 = (efk::ImageResource *) 0 ;
+  int32_t result;
+  
+  arg1 = (efk::ImageResource *)jarg1; 
+  result = (int32_t)((efk::ImageResource const *)arg1)->GetHeight();
+  jresult = result; 
   return jresult;
 }
 
@@ -1737,14 +1762,14 @@ SWIGEXPORT void SWIGSTDCALL CSharp_Effekseerfswig_delete_Native___(void * jarg1)
 }
 
 
-SWIGEXPORT unsigned int SWIGSTDCALL CSharp_Effekseerfswig_Native_CreateWindow_Effekseer__SWIG_0___(void * jarg1, void * jarg2, int jarg3, int jarg4, unsigned int jarg5, unsigned int jarg6) {
+SWIGEXPORT unsigned int SWIGSTDCALL CSharp_Effekseerfswig_Native_CreateWindow_Effekseer___(void * jarg1, void * jarg2, int jarg3, int jarg4, unsigned int jarg5, int jarg6) {
   unsigned int jresult ;
   Native *arg1 = (Native *) 0 ;
   void *arg2 = (void *) 0 ;
   int arg3 ;
   int arg4 ;
   bool arg5 ;
-  bool arg6 ;
+  efk::DeviceType arg6 ;
   bool result;
   
   arg1 = (Native *)jarg1; 
@@ -1754,30 +1779,8 @@ SWIGEXPORT unsigned int SWIGSTDCALL CSharp_Effekseerfswig_Native_CreateWindow_Ef
   arg3 = (int)jarg3; 
   arg4 = (int)jarg4; 
   arg5 = jarg5 ? true : false; 
-  arg6 = jarg6 ? true : false; 
+  arg6 = (efk::DeviceType)jarg6; 
   result = (bool)(arg1)->CreateWindow_Effekseer(arg2,arg3,arg4,arg5,arg6);
-  jresult = result; 
-  return jresult;
-}
-
-
-SWIGEXPORT unsigned int SWIGSTDCALL CSharp_Effekseerfswig_Native_CreateWindow_Effekseer__SWIG_1___(void * jarg1, void * jarg2, int jarg3, int jarg4, unsigned int jarg5) {
-  unsigned int jresult ;
-  Native *arg1 = (Native *) 0 ;
-  void *arg2 = (void *) 0 ;
-  int arg3 ;
-  int arg4 ;
-  bool arg5 ;
-  bool result;
-  
-  arg1 = (Native *)jarg1; 
-  {
-    arg2 = jarg2; 
-  }
-  arg3 = (int)jarg3; 
-  arg4 = (int)jarg4; 
-  arg5 = jarg5 ? true : false; 
-  result = (bool)(arg1)->CreateWindow_Effekseer(arg2,arg3,arg4,arg5);
   jresult = result; 
   return jresult;
 }
@@ -2457,6 +2460,18 @@ SWIGEXPORT int SWIGSTDCALL CSharp_Effekseerfswig_Native_GetAndResetVertexCount__
 }
 
 
+SWIGEXPORT int SWIGSTDCALL CSharp_Effekseerfswig_Native_GetInstanceCount___(void * jarg1) {
+  int jresult ;
+  Native *arg1 = (Native *) 0 ;
+  int32_t result;
+  
+  arg1 = (Native *)jarg1; 
+  result = (int32_t)(arg1)->GetInstanceCount();
+  jresult = result; 
+  return jresult;
+}
+
+
 SWIGEXPORT float SWIGSTDCALL CSharp_Effekseerfswig_Native_GetFPS___(void * jarg1) {
   float jresult ;
   Native *arg1 = (Native *) 0 ;
@@ -2464,6 +2479,16 @@ SWIGEXPORT float SWIGSTDCALL CSharp_Effekseerfswig_Native_GetFPS___(void * jarg1
   
   arg1 = (Native *)jarg1; 
   result = (float)(arg1)->GetFPS();
+  jresult = result; 
+  return jresult;
+}
+
+
+SWIGEXPORT unsigned int SWIGSTDCALL CSharp_Effekseerfswig_Native_IsDebugMode___() {
+  unsigned int jresult ;
+  bool result;
+  
+  result = (bool)Native::IsDebugMode();
   jresult = result; 
   return jresult;
 }
@@ -2636,13 +2661,13 @@ SWIGEXPORT void SWIGSTDCALL CSharp_Effekseerfswig_delete_GUIManager___(void * ja
 }
 
 
-SWIGEXPORT unsigned int SWIGSTDCALL CSharp_Effekseerfswig_GUIManager_Initialize___(void * jarg1, char16_t * jarg2, int jarg3, int jarg4, unsigned int jarg5, unsigned int jarg6) {
+SWIGEXPORT unsigned int SWIGSTDCALL CSharp_Effekseerfswig_GUIManager_Initialize___(void * jarg1, char16_t * jarg2, int jarg3, int jarg4, int jarg5, unsigned int jarg6) {
   unsigned int jresult ;
   efk::GUIManager *arg1 = (efk::GUIManager *) 0 ;
   char16_t *arg2 = (char16_t *) 0 ;
   int32_t arg3 ;
   int32_t arg4 ;
-  bool arg5 ;
+  efk::DeviceType arg5 ;
   bool arg6 ;
   bool result;
   
@@ -2650,7 +2675,7 @@ SWIGEXPORT unsigned int SWIGSTDCALL CSharp_Effekseerfswig_GUIManager_Initialize_
   arg2 = (char16_t *)jarg2; 
   arg3 = (int32_t)jarg3; 
   arg4 = (int32_t)jarg4; 
-  arg5 = jarg5 ? true : false; 
+  arg5 = (efk::DeviceType)jarg5; 
   arg6 = jarg6 ? true : false; 
   result = (bool)(arg1)->Initialize((char16_t const *)arg2,arg3,arg4,arg5,arg6);
   jresult = result; 
@@ -2675,6 +2700,16 @@ SWIGEXPORT void SWIGSTDCALL CSharp_Effekseerfswig_GUIManager_SetTitle___(void * 
   arg1 = (efk::GUIManager *)jarg1; 
   arg2 = (char16_t *)jarg2; 
   (arg1)->SetTitle((char16_t const *)arg2);
+}
+
+
+SWIGEXPORT void SWIGSTDCALL CSharp_Effekseerfswig_GUIManager_SetWindowIcon___(void * jarg1, char16_t * jarg2) {
+  efk::GUIManager *arg1 = (efk::GUIManager *) 0 ;
+  char16_t *arg2 = (char16_t *) 0 ;
+  
+  arg1 = (efk::GUIManager *)jarg1; 
+  arg2 = (char16_t *)jarg2; 
+  (arg1)->SetWindowIcon((char16_t const *)arg2);
 }
 
 
@@ -2794,7 +2829,17 @@ SWIGEXPORT void SWIGSTDCALL CSharp_Effekseerfswig_GUIManager_ResetGUI___(void * 
 }
 
 
-SWIGEXPORT void SWIGSTDCALL CSharp_Effekseerfswig_GUIManager_RenderGUI___(void * jarg1) {
+SWIGEXPORT void SWIGSTDCALL CSharp_Effekseerfswig_GUIManager_RenderGUI__SWIG_0___(void * jarg1, unsigned int jarg2) {
+  efk::GUIManager *arg1 = (efk::GUIManager *) 0 ;
+  bool arg2 ;
+  
+  arg1 = (efk::GUIManager *)jarg1; 
+  arg2 = jarg2 ? true : false; 
+  (arg1)->RenderGUI(arg2);
+}
+
+
+SWIGEXPORT void SWIGSTDCALL CSharp_Effekseerfswig_GUIManager_RenderGUI__SWIG_1___(void * jarg1) {
   efk::GUIManager *arg1 = (efk::GUIManager *) 0 ;
   
   arg1 = (efk::GUIManager *)jarg1; 
@@ -3114,6 +3159,30 @@ SWIGEXPORT float SWIGSTDCALL CSharp_Effekseerfswig_GUIManager_GetTextLineHeightW
 }
 
 
+SWIGEXPORT float SWIGSTDCALL CSharp_Effekseerfswig_GUIManager_GetFrameHeight___(void * jarg1) {
+  float jresult ;
+  efk::GUIManager *arg1 = (efk::GUIManager *) 0 ;
+  float result;
+  
+  arg1 = (efk::GUIManager *)jarg1; 
+  result = (float)(arg1)->GetFrameHeight();
+  jresult = result; 
+  return jresult;
+}
+
+
+SWIGEXPORT float SWIGSTDCALL CSharp_Effekseerfswig_GUIManager_GetFrameHeightWithSpacing___(void * jarg1) {
+  float jresult ;
+  efk::GUIManager *arg1 = (efk::GUIManager *) 0 ;
+  float result;
+  
+  arg1 = (efk::GUIManager *)jarg1; 
+  result = (float)(arg1)->GetFrameHeightWithSpacing();
+  jresult = result; 
+  return jresult;
+}
+
+
 SWIGEXPORT void SWIGSTDCALL CSharp_Effekseerfswig_GUIManager_Columns__SWIG_0___(void * jarg1, int jarg2, char * jarg3, unsigned int jarg4) {
   efk::GUIManager *arg1 = (efk::GUIManager *) 0 ;
   int arg2 ;
@@ -3262,7 +3331,41 @@ SWIGEXPORT void SWIGSTDCALL CSharp_Effekseerfswig_GUIManager_TextWrapped___(void
 }
 
 
-SWIGEXPORT unsigned int SWIGSTDCALL CSharp_Effekseerfswig_GUIManager_Button___(void * jarg1, char16_t * jarg2) {
+SWIGEXPORT unsigned int SWIGSTDCALL CSharp_Effekseerfswig_GUIManager_Button__SWIG_0___(void * jarg1, char16_t * jarg2, float jarg3, float jarg4) {
+  unsigned int jresult ;
+  efk::GUIManager *arg1 = (efk::GUIManager *) 0 ;
+  char16_t *arg2 = (char16_t *) 0 ;
+  float arg3 ;
+  float arg4 ;
+  bool result;
+  
+  arg1 = (efk::GUIManager *)jarg1; 
+  arg2 = (char16_t *)jarg2; 
+  arg3 = (float)jarg3; 
+  arg4 = (float)jarg4; 
+  result = (bool)(arg1)->Button((char16_t const *)arg2,arg3,arg4);
+  jresult = result; 
+  return jresult;
+}
+
+
+SWIGEXPORT unsigned int SWIGSTDCALL CSharp_Effekseerfswig_GUIManager_Button__SWIG_1___(void * jarg1, char16_t * jarg2, float jarg3) {
+  unsigned int jresult ;
+  efk::GUIManager *arg1 = (efk::GUIManager *) 0 ;
+  char16_t *arg2 = (char16_t *) 0 ;
+  float arg3 ;
+  bool result;
+  
+  arg1 = (efk::GUIManager *)jarg1; 
+  arg2 = (char16_t *)jarg2; 
+  arg3 = (float)jarg3; 
+  result = (bool)(arg1)->Button((char16_t const *)arg2,arg3);
+  jresult = result; 
+  return jresult;
+}
+
+
+SWIGEXPORT unsigned int SWIGSTDCALL CSharp_Effekseerfswig_GUIManager_Button__SWIG_2___(void * jarg1, char16_t * jarg2) {
   unsigned int jresult ;
   efk::GUIManager *arg1 = (efk::GUIManager *) 0 ;
   char16_t *arg2 = (char16_t *) 0 ;
@@ -6052,6 +6155,22 @@ SWIGEXPORT void SWIGSTDCALL CSharp_Effekseerfswig_GUIManager_SetTooltip___(void 
 }
 
 
+SWIGEXPORT void SWIGSTDCALL CSharp_Effekseerfswig_GUIManager_BeginTooltip___(void * jarg1) {
+  efk::GUIManager *arg1 = (efk::GUIManager *) 0 ;
+  
+  arg1 = (efk::GUIManager *)jarg1; 
+  (arg1)->BeginTooltip();
+}
+
+
+SWIGEXPORT void SWIGSTDCALL CSharp_Effekseerfswig_GUIManager_EndTooltip___(void * jarg1) {
+  efk::GUIManager *arg1 = (efk::GUIManager *) 0 ;
+  
+  arg1 = (efk::GUIManager *)jarg1; 
+  (arg1)->EndTooltip();
+}
+
+
 SWIGEXPORT unsigned int SWIGSTDCALL CSharp_Effekseerfswig_GUIManager_BeginMainMenuBar___(void * jarg1) {
   unsigned int jresult ;
   efk::GUIManager *arg1 = (efk::GUIManager *) 0 ;
@@ -6448,15 +6567,15 @@ SWIGEXPORT void SWIGSTDCALL CSharp_Effekseerfswig_GUIManager_SetItemDefaultFocus
 }
 
 
-SWIGEXPORT void SWIGSTDCALL CSharp_Effekseerfswig_GUIManager_AddFontFromFileTTF___(void * jarg1, char * jarg2, float jarg3) {
+SWIGEXPORT void SWIGSTDCALL CSharp_Effekseerfswig_GUIManager_AddFontFromFileTTF___(void * jarg1, char16_t * jarg2, float jarg3) {
   efk::GUIManager *arg1 = (efk::GUIManager *) 0 ;
-  char *arg2 = (char *) 0 ;
+  char16_t *arg2 = (char16_t *) 0 ;
   float arg3 ;
   
   arg1 = (efk::GUIManager *)jarg1; 
-  arg2 = (char *)jarg2; 
+  arg2 = (char16_t *)jarg2; 
   arg3 = (float)jarg3; 
-  (arg1)->AddFontFromFileTTF((char const *)arg2,arg3);
+  (arg1)->AddFontFromFileTTF((char16_t const *)arg2,arg3);
 }
 
 
@@ -6519,6 +6638,20 @@ SWIGEXPORT unsigned int SWIGSTDCALL CSharp_Effekseerfswig_GUIManager_IsKeyDown__
   arg1 = (efk::GUIManager *)jarg1; 
   arg2 = (int)jarg2; 
   result = (bool)(arg1)->IsKeyDown(arg2);
+  jresult = result; 
+  return jresult;
+}
+
+
+SWIGEXPORT unsigned int SWIGSTDCALL CSharp_Effekseerfswig_GUIManager_IsMouseDown___(void * jarg1, int jarg2) {
+  unsigned int jresult ;
+  efk::GUIManager *arg1 = (efk::GUIManager *) 0 ;
+  int arg2 ;
+  bool result;
+  
+  arg1 = (efk::GUIManager *)jarg1; 
+  arg2 = (int)jarg2; 
+  result = (bool)(arg1)->IsMouseDown(arg2);
   jresult = result; 
   return jresult;
 }
@@ -6728,23 +6861,23 @@ SWIGEXPORT void SWIGSTDCALL CSharp_Effekseerfswig_GUIManager_ResetNextParentDock
 }
 
 
-SWIGEXPORT void SWIGSTDCALL CSharp_Effekseerfswig_GUIManager_SaveDock___(void * jarg1, char * jarg2) {
+SWIGEXPORT void SWIGSTDCALL CSharp_Effekseerfswig_GUIManager_SaveDock___(void * jarg1, char16_t * jarg2) {
   efk::GUIManager *arg1 = (efk::GUIManager *) 0 ;
-  char *arg2 = (char *) 0 ;
+  char16_t *arg2 = (char16_t *) 0 ;
   
   arg1 = (efk::GUIManager *)jarg1; 
-  arg2 = (char *)jarg2; 
-  (arg1)->SaveDock((char const *)arg2);
+  arg2 = (char16_t *)jarg2; 
+  (arg1)->SaveDock((char16_t const *)arg2);
 }
 
 
-SWIGEXPORT void SWIGSTDCALL CSharp_Effekseerfswig_GUIManager_LoadDock___(void * jarg1, char * jarg2) {
+SWIGEXPORT void SWIGSTDCALL CSharp_Effekseerfswig_GUIManager_LoadDock___(void * jarg1, char16_t * jarg2) {
   efk::GUIManager *arg1 = (efk::GUIManager *) 0 ;
-  char *arg2 = (char *) 0 ;
+  char16_t *arg2 = (char16_t *) 0 ;
   
   arg1 = (efk::GUIManager *)jarg1; 
-  arg2 = (char *)jarg2; 
-  (arg1)->LoadDock((char const *)arg2);
+  arg2 = (char16_t *)jarg2; 
+  (arg1)->LoadDock((char16_t const *)arg2);
 }
 
 
@@ -6784,6 +6917,18 @@ SWIGEXPORT void SWIGSTDCALL CSharp_Effekseerfswig_GUIManager_SetNextDockTabToolT
 }
 
 
+SWIGEXPORT unsigned int SWIGSTDCALL CSharp_Effekseerfswig_GUIManager_GetDockActive___(void * jarg1) {
+  unsigned int jresult ;
+  efk::GUIManager *arg1 = (efk::GUIManager *) 0 ;
+  bool result;
+  
+  arg1 = (efk::GUIManager *)jarg1; 
+  result = (bool)(arg1)->GetDockActive();
+  jresult = result; 
+  return jresult;
+}
+
+
 SWIGEXPORT void SWIGSTDCALL CSharp_Effekseerfswig_GUIManager_SetDockActive___(void * jarg1) {
   efk::GUIManager *arg1 = (efk::GUIManager *) 0 ;
   
@@ -6792,13 +6937,45 @@ SWIGEXPORT void SWIGSTDCALL CSharp_Effekseerfswig_GUIManager_SetDockActive___(vo
 }
 
 
-SWIGEXPORT unsigned int SWIGSTDCALL CSharp_Effekseerfswig_GUIManager_BeginFCurve__SWIG_0___(void * jarg1, int jarg2, void * jarg3, void * jarg4, float jarg5, float jarg6) {
+SWIGEXPORT unsigned int SWIGSTDCALL CSharp_Effekseerfswig_GUIManager_BeginFCurve__SWIG_0___(void * jarg1, int jarg2, void * jarg3, float jarg4, void * jarg5, float jarg6, float jarg7) {
   unsigned int jresult ;
   efk::GUIManager *arg1 = (efk::GUIManager *) 0 ;
   int arg2 ;
   efk::Vec2 *arg3 = 0 ;
-  efk::Vec2 *arg4 = 0 ;
-  float arg5 ;
+  float arg4 ;
+  efk::Vec2 *arg5 = 0 ;
+  float arg6 ;
+  float arg7 ;
+  bool result;
+  
+  arg1 = (efk::GUIManager *)jarg1; 
+  arg2 = (int)jarg2; 
+  arg3 = (efk::Vec2 *)jarg3;
+  if (!arg3) {
+    SWIG_CSharpSetPendingExceptionArgument(SWIG_CSharpArgumentNullException, "efk::Vec2 const & type is null", 0);
+    return 0;
+  } 
+  arg4 = (float)jarg4; 
+  arg5 = (efk::Vec2 *)jarg5;
+  if (!arg5) {
+    SWIG_CSharpSetPendingExceptionArgument(SWIG_CSharpArgumentNullException, "efk::Vec2 const & type is null", 0);
+    return 0;
+  } 
+  arg6 = (float)jarg6; 
+  arg7 = (float)jarg7; 
+  result = (bool)(arg1)->BeginFCurve(arg2,(efk::Vec2 const &)*arg3,arg4,(efk::Vec2 const &)*arg5,arg6,arg7);
+  jresult = result; 
+  return jresult;
+}
+
+
+SWIGEXPORT unsigned int SWIGSTDCALL CSharp_Effekseerfswig_GUIManager_BeginFCurve__SWIG_1___(void * jarg1, int jarg2, void * jarg3, float jarg4, void * jarg5, float jarg6) {
+  unsigned int jresult ;
+  efk::GUIManager *arg1 = (efk::GUIManager *) 0 ;
+  int arg2 ;
+  efk::Vec2 *arg3 = 0 ;
+  float arg4 ;
+  efk::Vec2 *arg5 = 0 ;
   float arg6 ;
   bool result;
   
@@ -6809,26 +6986,26 @@ SWIGEXPORT unsigned int SWIGSTDCALL CSharp_Effekseerfswig_GUIManager_BeginFCurve
     SWIG_CSharpSetPendingExceptionArgument(SWIG_CSharpArgumentNullException, "efk::Vec2 const & type is null", 0);
     return 0;
   } 
-  arg4 = (efk::Vec2 *)jarg4;
-  if (!arg4) {
+  arg4 = (float)jarg4; 
+  arg5 = (efk::Vec2 *)jarg5;
+  if (!arg5) {
     SWIG_CSharpSetPendingExceptionArgument(SWIG_CSharpArgumentNullException, "efk::Vec2 const & type is null", 0);
     return 0;
   } 
-  arg5 = (float)jarg5; 
   arg6 = (float)jarg6; 
-  result = (bool)(arg1)->BeginFCurve(arg2,(efk::Vec2 const &)*arg3,(efk::Vec2 const &)*arg4,arg5,arg6);
+  result = (bool)(arg1)->BeginFCurve(arg2,(efk::Vec2 const &)*arg3,arg4,(efk::Vec2 const &)*arg5,arg6);
   jresult = result; 
   return jresult;
 }
 
 
-SWIGEXPORT unsigned int SWIGSTDCALL CSharp_Effekseerfswig_GUIManager_BeginFCurve__SWIG_1___(void * jarg1, int jarg2, void * jarg3, void * jarg4, float jarg5) {
+SWIGEXPORT unsigned int SWIGSTDCALL CSharp_Effekseerfswig_GUIManager_BeginFCurve__SWIG_2___(void * jarg1, int jarg2, void * jarg3, float jarg4, void * jarg5) {
   unsigned int jresult ;
   efk::GUIManager *arg1 = (efk::GUIManager *) 0 ;
   int arg2 ;
   efk::Vec2 *arg3 = 0 ;
-  efk::Vec2 *arg4 = 0 ;
-  float arg5 ;
+  float arg4 ;
+  efk::Vec2 *arg5 = 0 ;
   bool result;
   
   arg1 = (efk::GUIManager *)jarg1; 
@@ -6838,39 +7015,13 @@ SWIGEXPORT unsigned int SWIGSTDCALL CSharp_Effekseerfswig_GUIManager_BeginFCurve
     SWIG_CSharpSetPendingExceptionArgument(SWIG_CSharpArgumentNullException, "efk::Vec2 const & type is null", 0);
     return 0;
   } 
-  arg4 = (efk::Vec2 *)jarg4;
-  if (!arg4) {
+  arg4 = (float)jarg4; 
+  arg5 = (efk::Vec2 *)jarg5;
+  if (!arg5) {
     SWIG_CSharpSetPendingExceptionArgument(SWIG_CSharpArgumentNullException, "efk::Vec2 const & type is null", 0);
     return 0;
   } 
-  arg5 = (float)jarg5; 
-  result = (bool)(arg1)->BeginFCurve(arg2,(efk::Vec2 const &)*arg3,(efk::Vec2 const &)*arg4,arg5);
-  jresult = result; 
-  return jresult;
-}
-
-
-SWIGEXPORT unsigned int SWIGSTDCALL CSharp_Effekseerfswig_GUIManager_BeginFCurve__SWIG_2___(void * jarg1, int jarg2, void * jarg3, void * jarg4) {
-  unsigned int jresult ;
-  efk::GUIManager *arg1 = (efk::GUIManager *) 0 ;
-  int arg2 ;
-  efk::Vec2 *arg3 = 0 ;
-  efk::Vec2 *arg4 = 0 ;
-  bool result;
-  
-  arg1 = (efk::GUIManager *)jarg1; 
-  arg2 = (int)jarg2; 
-  arg3 = (efk::Vec2 *)jarg3;
-  if (!arg3) {
-    SWIG_CSharpSetPendingExceptionArgument(SWIG_CSharpArgumentNullException, "efk::Vec2 const & type is null", 0);
-    return 0;
-  } 
-  arg4 = (efk::Vec2 *)jarg4;
-  if (!arg4) {
-    SWIG_CSharpSetPendingExceptionArgument(SWIG_CSharpArgumentNullException, "efk::Vec2 const & type is null", 0);
-    return 0;
-  } 
-  result = (bool)(arg1)->BeginFCurve(arg2,(efk::Vec2 const &)*arg3,(efk::Vec2 const &)*arg4);
+  result = (bool)(arg1)->BeginFCurve(arg2,(efk::Vec2 const &)*arg3,arg4,(efk::Vec2 const &)*arg5);
   jresult = result; 
   return jresult;
 }
@@ -7057,6 +7208,24 @@ SWIGEXPORT int SWIGSTDCALL CSharp_Effekseerfswig_GUIManager_show___(char16_t * j
   result = (efk::DialogSelection)efk::GUIManager::show((char16_t const *)arg1,(char16_t const *)arg2,arg3,arg4);
   jresult = (int)result; 
   return jresult;
+}
+
+
+SWIGEXPORT unsigned int SWIGSTDCALL CSharp_Effekseerfswig_GUIManager_IsMacOSX___() {
+  unsigned int jresult ;
+  bool result;
+  
+  result = (bool)efk::GUIManager::IsMacOSX();
+  jresult = result; 
+  return jresult;
+}
+
+
+SWIGEXPORT void SWIGSTDCALL CSharp_Effekseerfswig_GUIManager_SetIniFilename___(char16_t * jarg1) {
+  char16_t *arg1 = (char16_t *) 0 ;
+  
+  arg1 = (char16_t *)jarg1; 
+  efk::GUIManager::SetIniFilename((char16_t const *)arg1);
 }
 
 

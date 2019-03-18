@@ -1,5 +1,7 @@
-
+#include <memory>
 #include "efk.Window.h"
+#include "../EffekseerRendererCommon/EffekseerRenderer.PngTextureLoader.h"
+#include "../Effekseer/Effekseer/Effekseer.DefaultFile.h"
 
 #ifdef __APPLE__
 #include <OpenGL/gl3.h>
@@ -81,7 +83,7 @@ namespace efk
 	{}
 
 
-	bool Window::Initialize(const char16_t* title, int32_t width, int32_t height, bool isSRGBMode, bool isOpenGLMode)
+	bool Window::Initialize(const char16_t* title, int32_t width, int32_t height, bool isSRGBMode, DeviceType deviceType)
 	{
 		if (!glfwInit())
 		{
@@ -95,9 +97,9 @@ namespace efk
 		glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 #endif
 
-		this->isOpenGLMode = isOpenGLMode;
+		this->deviceType = deviceType;
 
-		if (this->isOpenGLMode)
+		if (deviceType == DeviceType::OpenGL)
 		{
 			glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_API);
 		}
@@ -157,6 +159,29 @@ namespace efk
 	void Window::SetTitle(const char16_t* title)
 	{
 		glfwSetWindowTitle(window, utf16_to_utf8(title).c_str());
+	}
+
+	void Window::SetWindowIcon(const char16_t * iconPath)
+	{
+		Effekseer::DefaultFileInterface file;
+		std::unique_ptr<Effekseer::FileReader> 
+			reader( file.OpenRead( iconPath ) );
+		if( reader.get() != NULL ) {
+			size_t size = reader->GetLength();
+			std::vector<uint8_t> data(size);
+			reader->Read( &data[0], size );
+
+			auto pngLoader = EffekseerRenderer::PngTextureLoader();
+			pngLoader.Initialize();
+			pngLoader.Load(&data[0], size, false);
+			pngLoader.Finalize();
+
+			GLFWimage image;
+			image.pixels = pngLoader.GetData().data();
+			image.width = pngLoader.GetWidth();
+			image.height = pngLoader.GetHeight();
+			glfwSetWindowIcon(window, 1, &image);
+		}
 	}
 
 	Vec2 Window::GetSize() const

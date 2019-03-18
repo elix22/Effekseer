@@ -1,9 +1,10 @@
-
+Ôªø
 //----------------------------------------------------------------------------------
 //
 //----------------------------------------------------------------------------------
 #include <stdio.h>
 #include <windows.h>
+#include <string>
 
 //----------------------------------------------------------------------------------
 //
@@ -11,6 +12,7 @@
 #include <d3d11.h>
 #include <XAudio2.h>
 #pragma comment(lib, "d3d11.lib" )
+#pragma comment(lib, "xaudio2.lib" )
 
 //----------------------------------------------------------------------------------
 //
@@ -20,13 +22,13 @@
 #include <EffekseerSoundXAudio2.h>
 
 #if _DEBUG
-#pragma comment(lib, "VS2013/Debug/Effekseer.lib" )
-#pragma comment(lib, "VS2013/Debug/EffekseerRendererDX11.lib" )
-#pragma comment(lib, "VS2013/Debug/EffekseerSoundXAudio2.lib" )
+#pragma comment(lib, "VS2015/Debug/Effekseer.lib" )
+#pragma comment(lib, "VS2015/Debug/EffekseerRendererDX11.lib" )
+#pragma comment(lib, "VS2015/Debug/EffekseerSoundXAudio2.lib" )
 #else
-#pragma comment(lib, "VS2013/Release/Effekseer.lib" )
-#pragma comment(lib, "VS2013/Release/EffekseerRendererDX11.lib" )
-#pragma comment(lib, "VS2013/Release/EffekseerSoundXAudio2.lib" )
+#pragma comment(lib, "VS2015/Release/Effekseer.lib" )
+#pragma comment(lib, "VS2015/Release/EffekseerRendererDX11.lib" )
+#pragma comment(lib, "VS2015/Release/EffekseerSoundXAudio2.lib" )
 #endif
 
 //----------------------------------------------------------------------------------
@@ -105,10 +107,10 @@ void InitWindow()
 	ShowWindow( g_window_handle, true );
 	UpdateWindow( g_window_handle );
 	
-	// COMÇÃèâä˙âª
+	// COM„ÅÆÂàùÊúüÂåñ
 	CoInitializeEx( NULL, NULL );
 
-	// DirectX11ÇÃèâä˙âªÇçsÇ§
+	// DirectX11„ÅÆÂàùÊúüÂåñ„ÇíË°å„ÅÜ
 	UINT debugFlag = 0;
 	//debugFlag = D3D11_CREATE_DEVICE_DEBUG;
 
@@ -213,7 +215,7 @@ void InitWindow()
 	vp.MaxDepth = 1.0f;
 	g_context->RSSetViewports(1, &vp);
 	
-	// XAudio2ÇÃèâä˙âªÇçsÇ§
+	// XAudio2„ÅÆÂàùÊúüÂåñ„ÇíË°å„ÅÜ
 	XAudio2Create( &g_xa2 );
 
 	g_xa2->CreateMasteringVoice( &g_xa2_master );
@@ -252,23 +254,23 @@ void MainLoop()
 		}
 		else
 		{
-			// ÉGÉtÉFÉNÉgÇÃà⁄ìÆèàóùÇçsÇ§
+			// „Ç®„Éï„Çß„ÇØ„Éà„ÅÆÁßªÂãïÂá¶ÁêÜ„ÇíË°å„ÅÜ
 			g_manager->AddLocation( g_handle, ::Effekseer::Vector3D( 0.2f, 0.0f, 0.0f ) );
 
-			// ÉGÉtÉFÉNÉgÇÃçXêVèàóùÇçsÇ§
+			// „Ç®„Éï„Çß„ÇØ„Éà„ÅÆÊõ¥Êñ∞Âá¶ÁêÜ„ÇíË°å„ÅÜ
 			g_manager->Update();
 			
 			float ClearColor[] = {0.0f, 0.0f, 0.0f, 1.0f};
 			g_context->ClearRenderTargetView( g_renderTargetView, ClearColor);
 			g_context->ClearDepthStencilView( g_depthStencilView, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
 
-			// ÉGÉtÉFÉNÉgÇÃï`âÊäJénèàóùÇçsÇ§ÅB
+			// „Ç®„Éï„Çß„ÇØ„Éà„ÅÆÊèèÁîªÈñãÂßãÂá¶ÁêÜ„ÇíË°å„ÅÜ„ÄÇ
 			g_renderer->BeginRendering();
 
-			// ÉGÉtÉFÉNÉgÇÃï`âÊÇçsÇ§ÅB
+			// „Ç®„Éï„Çß„ÇØ„Éà„ÅÆÊèèÁîª„ÇíË°å„ÅÜ„ÄÇ
 			g_manager->Draw();
 
-			// ÉGÉtÉFÉNÉgÇÃï`âÊèIóπèàóùÇçsÇ§ÅB
+			// „Ç®„Éï„Çß„ÇØ„Éà„ÅÆÊèèÁîªÁµÇ‰∫ÜÂá¶ÁêÜ„ÇíË°å„ÅÜ„ÄÇ
 			g_renderer->EndRendering();
 
 			
@@ -277,76 +279,88 @@ void MainLoop()
 	}
 }
 
+#if _WIN32
+#include <Windows.h>
+std::wstring ToWide(const char* pText);
+void GetDirectoryName(char* dst, char* src);
+#endif
+
 //----------------------------------------------------------------------------------
 //
 //----------------------------------------------------------------------------------
-int main()
+int main(int argc, char **argv)
 {
+#if _WIN32
+	char current_path[MAX_PATH + 1];
+	GetDirectoryName(current_path, argv[0]);
+	SetCurrentDirectoryA(current_path);
+#endif
+
 	InitWindow();
 	
-	// ï`âÊópÉCÉìÉXÉ^ÉìÉXÇÃê∂ê¨
+	// ÊèèÁîªÁî®„Ç§„É≥„Çπ„Çø„É≥„Çπ„ÅÆÁîüÊàê
 	g_renderer = ::EffekseerRendererDX11::Renderer::Create( g_device, g_context, 2000 );
 	
-	// ÉGÉtÉFÉNÉgä«óùópÉCÉìÉXÉ^ÉìÉXÇÃê∂ê¨
+	// „Ç®„Éï„Çß„ÇØ„ÉàÁÆ°ÁêÜÁî®„Ç§„É≥„Çπ„Çø„É≥„Çπ„ÅÆÁîüÊàê
 	g_manager = ::Effekseer::Manager::Create( 2000 );
 
-	// ï`âÊópÉCÉìÉXÉ^ÉìÉXÇ©ÇÁï`âÊã@î\Çê›íË
+	// ÊèèÁîªÁî®„Ç§„É≥„Çπ„Çø„É≥„Çπ„Åã„ÇâÊèèÁîªÊ©üËÉΩ„ÇíË®≠ÂÆö
 	g_manager->SetSpriteRenderer( g_renderer->CreateSpriteRenderer() );
 	g_manager->SetRibbonRenderer( g_renderer->CreateRibbonRenderer() );
 	g_manager->SetRingRenderer( g_renderer->CreateRingRenderer() );
 	g_manager->SetTrackRenderer( g_renderer->CreateTrackRenderer() );
 	g_manager->SetModelRenderer( g_renderer->CreateModelRenderer() );
 
-	// ï`âÊópÉCÉìÉXÉ^ÉìÉXÇ©ÇÁÉeÉNÉXÉ`ÉÉÇÃì«çûã@î\Çê›íË
-	// ì∆é©ägí£â¬î\ÅAåªç›ÇÕÉtÉ@ÉCÉãÇ©ÇÁì«Ç›çûÇÒÇ≈Ç¢ÇÈÅB
+	// ÊèèÁîªÁî®„Ç§„É≥„Çπ„Çø„É≥„Çπ„Åã„Çâ„ÉÜ„ÇØ„Çπ„ÉÅ„É£„ÅÆË™≠ËæºÊ©üËÉΩ„ÇíË®≠ÂÆö
+	// Áã¨Ëá™Êã°ÂºµÂèØËÉΩ„ÄÅÁèæÂú®„ÅØ„Éï„Ç°„Ç§„É´„Åã„ÇâË™≠„ÅøËæº„Çì„Åß„ÅÑ„Çã„ÄÇ
 	g_manager->SetTextureLoader( g_renderer->CreateTextureLoader() );
 	g_manager->SetModelLoader( g_renderer->CreateModelLoader() );
 
-	// âπçƒê∂ópÉCÉìÉXÉ^ÉìÉXÇÃê∂ê¨
+	// Èü≥ÂÜçÁîüÁî®„Ç§„É≥„Çπ„Çø„É≥„Çπ„ÅÆÁîüÊàê
 	g_sound = ::EffekseerSound::Sound::Create( g_xa2, 16, 16 );
 
-	// âπçƒê∂ópÉCÉìÉXÉ^ÉìÉXÇ©ÇÁçƒê∂ã@î\ÇéwíË
+	// Èü≥ÂÜçÁîüÁî®„Ç§„É≥„Çπ„Çø„É≥„Çπ„Åã„ÇâÂÜçÁîüÊ©üËÉΩ„ÇíÊåáÂÆö
 	g_manager->SetSoundPlayer( g_sound->CreateSoundPlayer() );
 	
-	// âπçƒê∂ópÉCÉìÉXÉ^ÉìÉXÇ©ÇÁÉTÉEÉìÉhÉfÅ[É^ÇÃì«çûã@î\Çê›íË
-	// ì∆é©ägí£â¬î\ÅAåªç›ÇÕÉtÉ@ÉCÉãÇ©ÇÁì«Ç›çûÇÒÇ≈Ç¢ÇÈÅB
+	// Èü≥ÂÜçÁîüÁî®„Ç§„É≥„Çπ„Çø„É≥„Çπ„Åã„Çâ„Çµ„Ç¶„É≥„Éâ„Éá„Éº„Çø„ÅÆË™≠ËæºÊ©üËÉΩ„ÇíË®≠ÂÆö
+	// Áã¨Ëá™Êã°ÂºµÂèØËÉΩ„ÄÅÁèæÂú®„ÅØ„Éï„Ç°„Ç§„É´„Åã„ÇâË™≠„ÅøËæº„Çì„Åß„ÅÑ„Çã„ÄÇ
 	g_manager->SetSoundLoader( g_sound->CreateSoundLoader() );
 
-	// éãì_à íuÇämíË
+	// Ë¶ñÁÇπ‰ΩçÁΩÆ„ÇíÁ¢∫ÂÆö
 	g_position = ::Effekseer::Vector3D( 10.0f, 5.0f, 20.0f );
 
-	// ìäâeçsóÒÇê›íË
+	// ÊäïÂΩ±Ë°åÂàó„ÇíË®≠ÂÆö
 	g_renderer->SetProjectionMatrix(
 		::Effekseer::Matrix44().PerspectiveFovRH( 90.0f / 180.0f * 3.14f, (float)g_window_width / (float)g_window_height, 1.0f, 50.0f ) );
 
-	// ÉJÉÅÉâçsóÒÇê›íË
+	// „Ç´„É°„É©Ë°åÂàó„ÇíË®≠ÂÆö
 	g_renderer->SetCameraMatrix(
 		::Effekseer::Matrix44().LookAtRH( g_position, ::Effekseer::Vector3D( 0.0f, 0.0f, 0.0f ), ::Effekseer::Vector3D( 0.0f, 1.0f, 0.0f ) ) );
 	
-	// ÉGÉtÉFÉNÉgÇÃì«çû
+	// „Ç®„Éï„Çß„ÇØ„Éà„ÅÆË™≠Ëæº
 	g_effect = Effekseer::Effect::Create( g_manager, (const EFK_CHAR*)L"test.efk" );
 
-	// ÉGÉtÉFÉNÉgÇÃçƒê∂
+	// „Ç®„Éï„Çß„ÇØ„Éà„ÅÆÂÜçÁîü
 	g_handle = g_manager->Play( g_effect, 0, 0, 0 );
 
 	MainLoop();
 	
-	// ÉGÉtÉFÉNÉgÇÃí‚é~
+	// „Ç®„Éï„Çß„ÇØ„Éà„ÅÆÂÅúÊ≠¢
 	g_manager->StopEffect( g_handle );
 
-	// ÉGÉtÉFÉNÉgÇÃîjä¸
+	// „Ç®„Éï„Çß„ÇØ„Éà„ÅÆÁ†¥Ê£Ñ
 	ES_SAFE_RELEASE( g_effect );
 
-	// êÊÇ…ÉGÉtÉFÉNÉgä«óùópÉCÉìÉXÉ^ÉìÉXÇîjä¸
+	// ÂÖà„Å´„Ç®„Éï„Çß„ÇØ„ÉàÁÆ°ÁêÜÁî®„Ç§„É≥„Çπ„Çø„É≥„Çπ„ÇíÁ†¥Ê£Ñ
 	g_manager->Destroy();
 
-	// éüÇ…âπçƒê∂ópÉCÉìÉXÉ^ÉìÉXÇîjä¸
+	// Ê¨°„Å´Èü≥ÂÜçÁîüÁî®„Ç§„É≥„Çπ„Çø„É≥„Çπ„ÇíÁ†¥Ê£Ñ
 	g_sound->Destroy();
 
-	// éüÇ…ï`âÊópÉCÉìÉXÉ^ÉìÉXÇîjä¸
+	// Ê¨°„Å´ÊèèÁîªÁî®„Ç§„É≥„Çπ„Çø„É≥„Çπ„ÇíÁ†¥Ê£Ñ
 	g_renderer->Destroy();
 
-	// XAudio2ÇÃâï˙
+	// XAudio2„ÅÆËß£Êîæ
 	if( g_xa2_master != NULL )
 	{
 		g_xa2_master->DestroyVoice();
@@ -354,7 +368,7 @@ int main()
 	}
 	ES_SAFE_RELEASE( g_xa2 );
 
-	// DirectXÇÃâï˙
+	// DirectX„ÅÆËß£Êîæ
 	ES_SAFE_RELEASE( g_renderTargetView );
 	ES_SAFE_RELEASE( g_backBuffer );
 	ES_SAFE_RELEASE( g_depthStencilView );
@@ -366,11 +380,50 @@ int main()
 	ES_SAFE_RELEASE( g_context );
 	ES_SAFE_RELEASE( g_device );
 
-	// COMÇÃèIóπèàóù
+	// COM„ÅÆÁµÇ‰∫ÜÂá¶ÁêÜ
 	CoUninitialize();
 
 	return 0;
 }
+//----------------------------------------------------------------------------------
+//
+//----------------------------------------------------------------------------------
+
+#if _WIN32
+static std::wstring ToWide(const char* pText)
+{
+	int Len = ::MultiByteToWideChar(CP_ACP, 0, pText, -1, NULL, 0);
+
+	wchar_t* pOut = new wchar_t[Len + 1];
+	::MultiByteToWideChar(CP_ACP, 0, pText, -1, pOut, Len);
+	std::wstring Out(pOut);
+	delete[] pOut;
+
+	return Out;
+}
+
+void GetDirectoryName(char* dst, char* src)
+{
+	auto Src = std::string(src);
+	int pos = 0;
+	int last = 0;
+	while (Src.c_str()[pos] != 0)
+	{
+		dst[pos] = Src.c_str()[pos];
+
+		if (Src.c_str()[pos] == L'\\' || Src.c_str()[pos] == L'/')
+		{
+			last = pos;
+		}
+
+		pos++;
+	}
+
+	dst[pos] = 0;
+	dst[last] = 0;
+}
+#endif
+
 //----------------------------------------------------------------------------------
 //
 //----------------------------------------------------------------------------------

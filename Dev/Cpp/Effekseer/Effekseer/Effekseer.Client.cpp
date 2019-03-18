@@ -1,24 +1,16 @@
 ﻿
 #if !( defined(_PSVITA) || defined(_PS4) || defined(_SWITCH) || defined(_XBOXONE) )
 
-//----------------------------------------------------------------------------------
-// Include
-//----------------------------------------------------------------------------------
 #include "Effekseer.ClientImplemented.h"
 
 #include "Effekseer.Manager.h"
 #include "Effekseer.EffectLoader.h"
 
-//----------------------------------------------------------------------------------
-//
-//----------------------------------------------------------------------------------
 namespace Effekseer {
-//----------------------------------------------------------------------------------
-//
-//----------------------------------------------------------------------------------
+
 void ClientImplemented::RecvAsync( void* data )
 {
-	ClientImplemented* client = (ClientImplemented*)data;
+	auto client = (ClientImplemented*)data;
 
 	while(true)
 	{
@@ -28,30 +20,37 @@ void ClientImplemented::RecvAsync( void* data )
 		restSize = 4;
 		while(restSize > 0)
 		{
-			int32_t recvSize = ::recv( client->m_socket, (char*)(&size), restSize, 0 );
+			auto recvSize = ::recv( client->m_socket, (char*)(&size), restSize, 0 );
 			restSize -= recvSize;
 
 			if( recvSize == 0 || recvSize == -1 )
 			{
-				/* 失敗 */
-				client->Stop();
+				client->StopInternal();
 				return;
 			}
 		}
 	}
 }
 
-//----------------------------------------------------------------------------------
-//
-//----------------------------------------------------------------------------------
+void ClientImplemented::StopInternal()
+{
+	std::lock_guard<std::mutex> lock(mutexStop);
+
+	if (!m_running) return;
+	m_running = false;
+
+	Socket::Shutsown(m_socket);
+	Socket::Close(m_socket);
+
+	EffekseerPrintDebug("Client : Stop(Internal)\n");
+}
+
 ClientImplemented::ClientImplemented()
 	: m_running		( false )
 {
 	Socket::Initialize();
 }
-//----------------------------------------------------------------------------------
-//
-//----------------------------------------------------------------------------------
+
 ClientImplemented::~ClientImplemented()
 {
 	Stop();
@@ -59,78 +58,94 @@ ClientImplemented::~ClientImplemented()
 	Socket::Finalize();
 }
 
-//----------------------------------------------------------------------------------
-//
-//----------------------------------------------------------------------------------
 Client* Client::Create()
 {
 	return new ClientImplemented();
 }
 
-//----------------------------------------------------------------------------------
-//
-//----------------------------------------------------------------------------------
+/*
 HOSTENT* ClientImplemented::GetHostEntry( const char* host )
 {
-	HOSTENT* hostEntry = NULL;
+	HOSTENT* hostEntry = nullptr;
 	IN_ADDR InAddrHost;
 
-	/* IPアドレスかDNSか調べる */
+	// check ip adress or DNS
 	InAddrHost.s_addr = ::inet_addr( host );
 	if ( InAddrHost.s_addr == InaddrNone )
 	{
-		/* DNS */
+		// DNS
 		hostEntry = ::gethostbyname( host );
-		if ( hostEntry == NULL )
+		if ( hostEntry == nullptr)
 		{
-			return NULL;
+			return nullptr;
 		}
 	}
 	else
 	{
-		/* IPアドレス */
+		// Ip address
 		hostEntry = ::gethostbyaddr( (const char*)(&InAddrHost), sizeof(IN_ADDR), AF_INET );
-		if ( hostEntry == NULL )
+		if ( hostEntry == nullptr)
 		{
-			return NULL;
+			return nullptr;
 		}
 	}
 
 	return hostEntry;
 }
+*/
 
-//----------------------------------------------------------------------------------
-//
-//----------------------------------------------------------------------------------
+bool ClientImplemented::GetAddr(const char* host, IN_ADDR* addr)
+{
+	HOSTENT* hostEntry = nullptr;
+
+	// check ip adress or DNS
+	addr->s_addr = ::inet_addr(host);
+	if (addr->s_addr == InaddrNone)
+	{
+		// DNS
+		hostEntry = ::gethostbyname(host);
+		if (hostEntry == nullptr)
+		{
+			return false;
+		}
+
+		addr->s_addr = *(unsigned int *)hostEntry->h_addr_list[0];
+	}
+
+	return true;
+}
+
 bool ClientImplemented::Start( char* host, uint16_t port )
 {
 	if( m_running ) return false;
 
+	// to stop thread
+	Stop();
+
 	SOCKADDR_IN sockAddr;
-	HOSTENT* hostEntry= NULL;
-	
-	// Create a socket
+
+	// create a socket
 	EfkSocket socket_ = Socket::GenSocket();
 	if ( socket_ == InvalidSocket )
 	{
 		return false;
 	}
 
-	/* ホスト情報取得 */
-	hostEntry = GetHostEntry( host );
-	if ( hostEntry == NULL )
+	// get adder
+	IN_ADDR addr;
+	if (!GetAddr(host, &addr))
 	{
-		if ( socket_ != InvalidSocket ) Socket::Close( socket_ );
+		if (socket_ != InvalidSocket) Socket::Close(socket_);
 		return false;
 	}
 
-	/* 接続用データ生成 */
+	// generate data to connect
 	memset( &sockAddr, 0, sizeof(SOCKADDR_IN) );
 	sockAddr.sin_family	= AF_INET;
 	sockAddr.sin_port	= htons( port );
-	sockAddr.sin_addr	= *(IN_ADDR*)(hostEntry->h_addr_list[0]);
+	sockAddr.sin_addr	= addr;
 
-	/* 接続 */
+	// connect
 	int32_t ret = ::connect( socket_, (SOCKADDR*)(&sockAddr), sizeof(SOCKADDR_IN) );
 	if ( ret == SocketError )
 	{
@@ -143,30 +158,30 @@ bool ClientImplemented::Start( char* host, uint16_t port )
 
 	m_running = true;
 
-	m_threadRecv.Create( RecvAsync, this );
+	isThreadRunning = true;
+	m_threadRecv = std::thread(
+		[this](){
+		RecvAsync(this);
+	});
 
 	EffekseerPrintDebug("Client : Start\n");
 
 	return true;
 }
 
-//----------------------------------------------------------------------------------
-//
-//----------------------------------------------------------------------------------
 void ClientImplemented::Stop()
 {
-	if( !m_running ) return;
+	StopInternal();
 
-	Socket::Shutsown( m_socket );
-	Socket::Close( m_socket );
-	m_running = false;
+	if (isThreadRunning)
+	{
+		m_threadRecv.join();
+		isThreadRunning = false;
+	}
 
 	EffekseerPrintDebug("Client : Stop\n");
 }
 
-//----------------------------------------------------------------------------------
-//
-//----------------------------------------------------------------------------------
 bool ClientImplemented::Send( void* data, int32_t datasize )
 {
 	if( !m_running ) return false;
@@ -182,10 +197,10 @@ bool ClientImplemented::Send( void* data, int32_t datasize )
 		m_sendBuffer.push_back( ((uint8_t*)(data))[i] );
 	}
 
-	int32_t size = m_sendBuffer.size();
+	int32_t size = (int32_t)m_sendBuffer.size();
 	while( size > 0 )
 	{
-		int32_t ret = ::send( m_socket, (const char*)(&(m_sendBuffer[m_sendBuffer.size()-size])), size, 0 );
+		auto ret = ::send( m_socket, (const char*)(&(m_sendBuffer[m_sendBuffer.size()-size])), size, 0 );
 		if( ret == 0 || ret < 0 )
 		{
 			Stop();
@@ -197,9 +212,6 @@ bool ClientImplemented::Send( void* data, int32_t datasize )
 	return true;
 }
 
-//----------------------------------------------------------------------------------
-//
-//----------------------------------------------------------------------------------
 void ClientImplemented::Reload( const EFK_CHAR* key, void* data, int32_t size )
 {
 	int32_t keylen = 0;
@@ -225,7 +237,7 @@ void ClientImplemented::Reload( const EFK_CHAR* key, void* data, int32_t size )
 		buf.push_back( ((uint8_t*)(data))[i] );
 	}
 
-	Send( &(buf[0]), buf.size() );
+	Send( &(buf[0]), (int32_t)buf.size() );
 }
 
 //----------------------------------------------------------------------------------

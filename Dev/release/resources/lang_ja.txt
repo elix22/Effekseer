@@ -27,7 +27,7 @@ Files,ファイル
 FileViewer,ファイルビューア
 Format,出力形式
 Frame,フレーム
-Frequency_Frame,出力頻度(フレーム毎)
+Frequency_Frame,出力頻度\n(フレーム毎)
 Gauss,中心,振幅
 GenerateAlpha,生成
 Height,縦幅
@@ -93,7 +93,7 @@ Scale,拡大
 SendData,データ送信
 ShowGuide,録画範囲を表示
 Sound,音
-SoundFilter,*.wav
+SoundFilter,wav
 SpawningMethod,生成方法
 Start,開始
 StartFrame,開始フレーム
@@ -119,11 +119,9 @@ Depth,深度
 Global,全体
 nan,nan
 EnlargeAnchor,アンカーの展開
-EnlargeAnchor_Desc,値が滑らかに変化するように
-アンカーを広げる
+EnlargeAnchor_Desc,値が滑らかに変化するように\nアンカーを広げる
 ShrinkAnchor,アンカーの縮退
-ShrinkAnchor_Desc,値が急に変化するように
-アンカーをキーの位置に移動させる
+ShrinkAnchor_Desc,値が急に変化するように\nアンカーをキーの位置に移動させる
 AutoZoom,自動ズーム
 AutoZoom_Desc,自動的にグラフの高さを調節する
 FCurveCtrl_Desc,ダブルクリック-点の追加,削除, Alt+ホイール-横方向拡大, Ctrl+ホイール-縦方向拡大

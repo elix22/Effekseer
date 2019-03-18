@@ -1,4 +1,4 @@
-﻿
+
 //----------------------------------------------------------------------------------
 //
 //----------------------------------------------------------------------------------
@@ -7,9 +7,16 @@
 #include "Graphics/efk.AVIExporter.h"
 #include "Graphics/efk.GifHelper.h"
 
+#ifdef _WIN32
+#include "3rdParty/imgui_platform/imgui_impl_dx9.h"
+#include "3rdParty/imgui_platform/imgui_impl_dx11.h"
+#endif
+
 #include "dll.h"
 
 #pragma comment(lib, "d3d9.lib" )
+#pragma comment(lib, "d3d11.lib" )
+#pragma comment(lib, "d3dcompiler.lib")
 
 #define NONDLL	1
 
@@ -43,9 +50,9 @@ static bool									g_mouseRotDirectionInvY = false;
 static bool									g_mouseSlideDirectionInvX = false;
 static bool									g_mouseSlideDirectionInvY = false;
 
-//----------------------------------------------------------------------------------
-//
-//----------------------------------------------------------------------------------
+static int		g_lastViewWidth = 0;
+static int		g_lastViewHeight = 0;
+
 bool Combine( const char16_t* rootPath, const char16_t* treePath,  char16_t* dst, int dst_length )
 {
 	int rootPathLength = 0;
@@ -60,13 +67,13 @@ bool Combine( const char16_t* rootPath, const char16_t* treePath,  char16_t* dst
 		treePathLength++;
 	}
 
-	// 両方ともなし
+	// both pathes are none
 	if( rootPathLength == 0 && treePathLength == 0 )
 	{
 		return false;
 	}
 
-	// 片方なし
+	// either path is none
 	if( rootPathLength == 0 )
 	{
 		if( treePathLength < dst_length )
@@ -93,24 +100,24 @@ bool Combine( const char16_t* rootPath, const char16_t* treePath,  char16_t* dst
 		}
 	}
 	
-	// 両方あり
+	// both exists
 
-	// ディレクトリパスまで戻す。
+	// back to a directory separator
 	int PathPosition = rootPathLength;
 	while( PathPosition > 0 )
 	{
-		if( rootPath[ PathPosition - 1 ] == L'/' || rootPath[ PathPosition - 1 ] == L'\\' )
+		if( rootPath[ PathPosition - 1 ] == u'/' || rootPath[ PathPosition - 1 ] == u'\\' )
 		{
 			break;
 		}
 		PathPosition--;
 	}
 
-	// コピーする
+	// copy
 	memcpy( dst, rootPath, sizeof(char16_t) * PathPosition );
 	dst[ PathPosition ] = 0;
 
-	// 無理やり繋げる
+	// connect forcely
 	if( PathPosition + treePathLength > dst_length )
 	{
 		return false;
@@ -120,7 +127,7 @@ bool Combine( const char16_t* rootPath, const char16_t* treePath,  char16_t* dst
 	PathPosition = PathPosition + treePathLength;
 	dst[ PathPosition ] = 0;
 
-	// ../ ..\ の処理
+	// execute ..\ or ../
 	for( int i = 0; i < PathPosition - 2; i++ )
 	{
 		if( dst[ i ] == L'.' && dst[ i + 1 ] == L'.' && ( dst[ i + 2 ] == L'/' || dst[ i + 2 ] == L'\\' ) )
@@ -154,9 +161,6 @@ bool Combine( const char16_t* rootPath, const char16_t* treePath,  char16_t* dst
 	return true;
 }
 
-//----------------------------------------------------------------------------------
-//
-//----------------------------------------------------------------------------------
 ViewerParamater::ViewerParamater()
 	: GuideWidth		( 0 )
 	, GuideHeight		( 0 )
@@ -220,6 +224,7 @@ struct HandleHolder
 {
 	::Effekseer::Handle		Handle = 0;
 	int32_t					Time = 0;
+	bool					IsRootStopped = false;
 
 	HandleHolder()
 		: Handle(0)
@@ -251,7 +256,7 @@ static ::Effekseer::Vector3D	g_focus_position;
 
 static ::Effekseer::Client*		g_client = NULL;
 
-static bool						g_isOpenGLMode = false;
+static efk::DeviceType			g_deviceType = efk::DeviceType::OpenGL;
 
 //----------------------------------------------------------------------------------
 //
@@ -259,12 +264,17 @@ static bool						g_isOpenGLMode = false;
 Native::TextureLoader::TextureLoader(EffekseerRenderer::Renderer* renderer)
 	: m_renderer	( renderer )
 {
-	if (g_isOpenGLMode)
+	if (g_deviceType == efk::DeviceType::OpenGL)
 	{
 		auto r = (EffekseerRendererGL::Renderer*)m_renderer;
 		m_originalTextureLoader = EffekseerRendererGL::CreateTextureLoader();
 	}
 #ifdef _WIN32
+	else if (g_deviceType == efk::DeviceType::DirectX11)
+	{
+		auto r = (EffekseerRendererDX11::Renderer*)m_renderer;
+		m_originalTextureLoader = EffekseerRendererDX11::CreateTextureLoader(r->GetDevice(), r->GetContext());
+	}
 	else
 	{
 		auto r = (EffekseerRendererDX9::Renderer*)m_renderer;
@@ -386,7 +396,7 @@ void* Native::ModelLoader::Load( const EFK_CHAR* path )
 	}
 	else
 	{
-		if (g_isOpenGLMode)
+		if (g_deviceType == efk::DeviceType::OpenGL)
 		{
 			auto r = (EffekseerRendererGL::Renderer*)m_renderer;
 			auto loader = ::EffekseerRendererGL::CreateModelLoader();
@@ -402,6 +412,21 @@ void* Native::ModelLoader::Load( const EFK_CHAR* path )
 			return m;
 		}
 #ifdef _WIN32
+		else if (g_deviceType == efk::DeviceType::DirectX11)
+		{
+			auto r = (EffekseerRendererDX11::Renderer*)m_renderer;
+			auto loader = ::EffekseerRendererDX11::CreateModelLoader(r->GetDevice());
+			auto m = (Effekseer::Model*)loader->Load((const EFK_CHAR*)dst);
+
+			if (m != nullptr)
+			{
+				m_models[key] = m;
+			}
+
+			ES_SAFE_DELETE(loader);
+
+			return m;
+		}
 		else
 		{
 			auto r = (EffekseerRendererDX9::Renderer*)m_renderer;
@@ -461,15 +486,15 @@ Native::~Native()
 //----------------------------------------------------------------------------------
 //
 //----------------------------------------------------------------------------------
-bool Native::CreateWindow_Effekseer(void* pHandle, int width, int height, bool isSRGBMode, bool isOpenGLMode)
+bool Native::CreateWindow_Effekseer(void* pHandle, int width, int height, bool isSRGBMode, efk::DeviceType deviceType)
 {
 	m_isSRGBMode = isSRGBMode;
-	g_isOpenGLMode = isOpenGLMode;
-
+	g_deviceType = deviceType;
+	
 	// because internal buffer is 16bit
 	int32_t spriteCount = 65000 / 4;
 
-	g_renderer = new ::EffekseerTool::Renderer(spriteCount, isSRGBMode, isOpenGLMode );
+	g_renderer = new ::EffekseerTool::Renderer(spriteCount, isSRGBMode, g_deviceType );
 	if( g_renderer->Initialize( pHandle, width, height ) )
 	{
 		// 関数追加
@@ -507,6 +532,7 @@ bool Native::CreateWindow_Effekseer(void* pHandle, int width, int height, bool i
 		// Assign device lost events.
 		g_renderer->LostedDevice = [this]() -> void
 		{
+
 			this->InvalidateTextureCache();
 			auto e = this->GetEffect();
 			if (e != nullptr)
@@ -516,12 +542,17 @@ bool Native::CreateWindow_Effekseer(void* pHandle, int width, int height, bool i
 
 			{
 				Effekseer::TextureLoader* loader = nullptr;
-				if (g_isOpenGLMode)
+				if (g_deviceType == efk::DeviceType::OpenGL)
 				{
 					auto r = (EffekseerRendererGL::Renderer*)g_renderer->GetRenderer();
 					loader = EffekseerRendererGL::CreateTextureLoader();
 				}
 #ifdef _WIN32
+				else if (g_deviceType == efk::DeviceType::DirectX11)
+				{
+					auto r = (EffekseerRendererDX11::Renderer*)g_renderer->GetRenderer();
+					loader = EffekseerRendererDX11::CreateTextureLoader(r->GetDevice(), r->GetContext());
+				}
 				else
 				{
 					auto r = (EffekseerRendererDX9::Renderer*)g_renderer->GetRenderer();
@@ -531,9 +562,26 @@ bool Native::CreateWindow_Effekseer(void* pHandle, int width, int height, bool i
 				for (auto& resource : g_imageResources)
 				{
 					loader->Unload(resource.second->GetTextureData());
+					resource.second->GetTextureData() = nullptr;
 				}
 
 				delete loader;
+			}
+
+			{
+				if (g_deviceType == efk::DeviceType::OpenGL)
+				{
+				}
+#ifdef _WIN32
+				else if (g_deviceType == efk::DeviceType::DirectX11)
+				{
+
+				}
+				else
+				{
+					ImGui_ImplDX9_InvalidateDeviceObjects();
+				}
+#endif
 			}
 		};
 
@@ -547,12 +595,17 @@ bool Native::CreateWindow_Effekseer(void* pHandle, int width, int height, bool i
 
 			{
 				Effekseer::TextureLoader* loader = nullptr;
-				if (g_isOpenGLMode)
+				if (g_deviceType == efk::DeviceType::OpenGL)
 				{
 					auto r = (EffekseerRendererGL::Renderer*)g_renderer->GetRenderer();
 					loader = EffekseerRendererGL::CreateTextureLoader();
 				}
 #ifdef _WIN32
+				else if (g_deviceType == efk::DeviceType::DirectX11)
+				{
+					auto r = (EffekseerRendererDX11::Renderer*)g_renderer->GetRenderer();
+					loader = EffekseerRendererDX11::CreateTextureLoader(r->GetDevice(), r->GetContext());
+				}
 				else
 				{
 					auto r = (EffekseerRendererDX9::Renderer*)g_renderer->GetRenderer();
@@ -565,6 +618,21 @@ bool Native::CreateWindow_Effekseer(void* pHandle, int width, int height, bool i
 				}
 
 				delete loader;
+			}
+
+			{
+				if (g_deviceType == efk::DeviceType::OpenGL)
+				{
+				}
+#ifdef _WIN32
+				else if (g_deviceType == efk::DeviceType::DirectX11)
+				{
+				}
+				else
+				{
+					ImGui_ImplDX9_CreateDeviceObjects();
+				}
+#endif
 			}
 		};
 	}
@@ -690,12 +758,17 @@ bool Native::DestroyWindow()
 
 	{
 		Effekseer::TextureLoader* loader = nullptr;
-		if (g_isOpenGLMode)
+		if (g_deviceType == efk::DeviceType::OpenGL)
 		{
 			auto r = (EffekseerRendererGL::Renderer*)g_renderer->GetRenderer();
 			loader = EffekseerRendererGL::CreateTextureLoader();
 		}
 #ifdef _WIN32
+		else if (g_deviceType == efk::DeviceType::DirectX11)
+		{
+			auto r = (EffekseerRendererDX11::Renderer*)g_renderer->GetRenderer();
+			loader = EffekseerRendererDX11::CreateTextureLoader(r->GetDevice(), r->GetContext());
+		}
 		else
 		{
 			auto r = (EffekseerRendererDX9::Renderer*)g_renderer->GetRenderer();
@@ -776,7 +849,20 @@ bool Native::PlayEffect()
 		posY += m_effectBehavior.PositionY;
 		posZ += m_effectBehavior.PositionZ;
 
-		HandleHolder handleHolder(g_manager->Play(g_effect, x, y, z));
+		HandleHolder handleHolder(g_manager->Play(g_effect, posX, posY, posZ));
+
+		Effekseer::Matrix43 mat, matTra, matRot, matScale;
+		matTra.Translation(posX, posY, posZ);
+		matRot.RotationZXY(m_rootRotation.Z, m_rootRotation.X, m_rootRotation.Y);
+		matScale.Scaling(m_rootScale.X, m_rootScale.Y, m_rootScale.Z);
+
+		mat.Indentity();
+		Effekseer::Matrix43::Multiple(mat, mat, matScale);
+		Effekseer::Matrix43::Multiple(mat, mat, matRot);
+		Effekseer::Matrix43::Multiple(mat, mat, matTra);
+
+		g_manager->SetMatrix(handleHolder.Handle, mat);
+
 		g_handles.push_back(handleHolder);
 
 		if (m_effectBehavior.AllColorR != 255 ||
@@ -940,6 +1026,7 @@ bool Native::StepEffect()
 			if (g_handles[i].Time >= m_effectBehavior.RemovedTime)
 			{
 				g_manager->StopRoot(g_handles[i].Handle);
+				g_handles[i].IsRootStopped = true;
 			}
 		}
 		
@@ -1062,6 +1149,9 @@ bool Native::SetRandomSeed( int seed )
 
 void* Native::RenderView(int32_t width, int32_t height)
 {
+	g_lastViewWidth = width;
+	g_lastViewHeight = height;
+
 	g_renderer->BeginRenderToView(width, height);
 	RenderWindow();
 	g_renderer->EndRenderToView();
@@ -1100,9 +1190,11 @@ bool Native::Record(const char16_t* pathWithoutExt, const char16_t* ext, int32_t
 		g_manager->Update();
 	}
 	
+	g_renderer->BeginRenderToView(g_lastViewWidth, g_lastViewHeight);
+
 	for (int32_t i = 0; i < count; i++)
 	{
-		if (!g_renderer->BeginRecord(g_renderer->GuideWidth, g_renderer->GuideHeight)) return false;
+		if (!g_renderer->BeginRecord(g_renderer->GuideWidth, g_renderer->GuideHeight))  goto Exit;
 
 		g_renderer->BeginRendering();
 		
@@ -1140,16 +1232,27 @@ bool Native::Record(const char16_t* pathWithoutExt, const char16_t* ext, int32_t
 		auto p_ = (wchar_t*)path_;
 		swprintf_s(p_, 260, L"%s.%d%s", pathWithoutExt, i, ext);
 #else
-		// TODO : Implement
-		assert(0);
+        
+        char pathWOE[256];
+        char ext_[256];
+        char path8_dst[256];
+        Effekseer::ConvertUtf16ToUtf8( (int8_t*)pathWOE, 256, (const int16_t*)pathWithoutExt );
+        Effekseer::ConvertUtf16ToUtf8( (int8_t*)ext_, 256, (const int16_t*)ext );
+        sprintf(path8_dst, "%s.%d%s", pathWOE, i, ext_);
+        Effekseer::ConvertUtf8ToUtf16( (int16_t*)path_, 260, (const int8_t*)path8_dst );
 #endif
 
 		efk::PNGHelper pngHelper;
 		pngHelper.Save((char16_t*)path_, g_renderer->GuideWidth, g_renderer->GuideHeight, pixels.data());
 	}
 
+Exit:;
+
 	g_manager->StopEffect(handle);
 	g_manager->Update();
+
+	g_renderer->EndRenderToView();
+
 	return true;
 }
 
@@ -1194,12 +1297,14 @@ bool Native::Record(const char16_t* path, int32_t count, int32_t xCount, int32_t
 		g_manager->Update();
 	}
 
+	g_renderer->BeginRenderToView(g_lastViewWidth, g_lastViewHeight);
+
 	int32_t count_ = 0;
 	for( int y = 0; y < yCount; y++ )
 	{
 		for( int x = 0; x < xCount; x++ )
 		{
-			if (!g_renderer->BeginRecord(g_renderer->GuideWidth, g_renderer->GuideHeight)) return false;
+			if (!g_renderer->BeginRecord(g_renderer->GuideWidth, g_renderer->GuideHeight)) goto Exit;
 
 			g_renderer->BeginRendering();
 
@@ -1254,6 +1359,8 @@ Exit:;
 
 	g_manager->Update();
 
+	g_renderer->EndRenderToView();
+
 	return true;
 }
 
@@ -1289,12 +1396,14 @@ bool Native::RecordAsGifAnimation(const char16_t* path, int32_t count, int32_t o
 		g_manager->Update();
 	}
 
+	g_renderer->BeginRenderToView(g_lastViewWidth, g_lastViewHeight);
+
 	efk::GifHelper helper;
 	helper.Initialize(path, g_renderer->GuideWidth, g_renderer->GuideHeight, freq);
 
 	for (int32_t i = 0; i < count; i++)
 	{
-		if (!g_renderer->BeginRecord(g_renderer->GuideWidth, g_renderer->GuideHeight)) return false;
+		if (!g_renderer->BeginRecord(g_renderer->GuideWidth, g_renderer->GuideHeight)) goto End;
 
 		g_renderer->BeginRendering();
 
@@ -1418,8 +1527,12 @@ bool Native::RecordAsGifAnimation(const char16_t* path, int32_t count, int32_t o
 	gdImageDestroy(img);
 	*/
 
+End:;
+
 	g_manager->StopEffect(handle);
 	g_manager->Update();
+
+	g_renderer->EndRenderToView();
 
 	return true;
 }
@@ -1428,7 +1541,6 @@ bool Native::RecordAsAVI(const char16_t* path, int32_t count, int32_t offsetFram
 {
 	if (g_effect == NULL) return false;
 
-#if _WIN32
 	g_renderer->IsBackgroundTranslucent = transparenceType == TransparenceType::Original;
 
 	::Effekseer::Vector3D position(0, 0, g_Distance);
@@ -1457,9 +1569,18 @@ bool Native::RecordAsAVI(const char16_t* path, int32_t count, int32_t offsetFram
 		g_manager->Update();
 	}
 
-	FILE*		fp = nullptr;
-	fp = _wfopen((wchar_t*)path, L"wb");
+	FILE* fp = nullptr;
+#ifdef _WIN32
+    _wfopen_s( &fp, (const wchar_t*)path, L"wb" );
+#else
+    int8_t path8[256];
+    Effekseer::ConvertUtf16ToUtf8( path8, 256, (const int16_t*)path );
+    fp = fopen( (const char*)path8, "wb" );
+#endif
 
+    if (fp == nullptr) return false;
+
+    
 	efk::AVIExporter exporter;
 	exporter.Initialize(g_renderer->GuideWidth, g_renderer->GuideHeight, (int32_t)(60.0f / (float)freq), count);
 
@@ -1467,10 +1588,12 @@ bool Native::RecordAsAVI(const char16_t* path, int32_t count, int32_t offsetFram
 	exporter.BeginToExportAVI(d);
 	fwrite(d.data(), 1, d.size(), fp);
 
+	g_renderer->BeginRenderToView(g_lastViewWidth, g_lastViewHeight);
+
 	for (int32_t i = 0; i < count; i++)
 	{
-		if (!g_renderer->BeginRecord(g_renderer->GuideWidth, g_renderer->GuideHeight)) return false;
-
+		if (!g_renderer->BeginRecord(g_renderer->GuideWidth, g_renderer->GuideHeight)) goto End;
+        
 		g_renderer->BeginRendering();
 	
 		if (g_renderer->Distortion == EffekseerTool::eDistortionType::DistortionType_Current)
@@ -1508,15 +1631,16 @@ bool Native::RecordAsAVI(const char16_t* path, int32_t count, int32_t offsetFram
 	exporter.FinishToExportAVI(d);
 	fwrite(d.data(), 1, d.size(), fp);
 
+End:;
+
 	fclose(fp);
 
 	g_manager->StopEffect(handle);
 	g_manager->Update();
 
+	g_renderer->EndRenderToView();
+
 	return true;
-#else
-	return false;
-#endif
 }
 
 //----------------------------------------------------------------------------------
@@ -1824,12 +1948,17 @@ void Native::SetCullingParameter( bool isCullingShown, float cullingRadius, floa
 efk::ImageResource* Native::LoadImageResource(const char16_t* path)
 {
 	Effekseer::TextureLoader* loader = nullptr;
-	if (g_isOpenGLMode)
+	if (g_deviceType == efk::DeviceType::OpenGL)
 	{
 		auto r = (EffekseerRendererGL::Renderer*)g_renderer->GetRenderer();
 		loader = EffekseerRendererGL::CreateTextureLoader();
 	}
 #ifdef _WIN32
+	else if (g_deviceType == efk::DeviceType::DirectX11)
+	{
+		auto r = (EffekseerRendererDX11::Renderer*)g_renderer->GetRenderer();
+		loader = EffekseerRendererDX11::CreateTextureLoader(r->GetDevice(), r->GetContext());
+	}
 	else
 	{
 		auto r = (EffekseerRendererDX9::Renderer*)g_renderer->GetRenderer();
@@ -1868,9 +1997,38 @@ int32_t Native::GetAndResetVertexCount()
 	return call;
 }
 
+int32_t Native::GetInstanceCount()
+{
+	if (m_time == 0) return 0;
+
+	int32_t sum = 0;
+	for (int i = 0; i < g_handles.size(); i++)
+	{
+		auto count = g_manager->GetInstanceCount(g_handles[i].Handle);
+		
+		// Root
+		if (!g_handles[i].IsRootStopped) count--;
+
+		if (!g_manager->Exists(g_handles[i].Handle)) count = 0;
+
+		sum += count;
+	}
+
+	return sum;
+}
+
 float Native::GetFPS()
 {
 	return 60.0;
+}
+
+bool Native::IsDebugMode()
+{
+#ifdef _DEBUG
+	return true;
+#else
+	return false;
+#endif
 }
 
 EffekseerRenderer::Renderer* Native::GetRenderer()

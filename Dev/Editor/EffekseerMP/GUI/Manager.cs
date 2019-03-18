@@ -15,14 +15,17 @@ namespace Effekseer.GUI
 
 
 		public override void Resized(int x, int y)
-		{
-			Manager.Native.ResizeWindow(x, y);
-
+		{			
 			if(x > 0 && y > 0)
 			{
+				Manager.Native.ResizeWindow(x, y);
+
 				Manager.WindowSize.X = x;
 				Manager.WindowSize.Y = y;
 			}
+
+			Manager.resizedCount = 5;
+			Manager.actualWidth = x;
 		}
 
 		public override void Focused()
@@ -46,7 +49,7 @@ namespace Effekseer.GUI
 		
 			if(!handle)
 			{
-				Commands.Open();
+				Commands.Open(this.GetPath());
 			}
 		}
 
@@ -73,8 +76,6 @@ namespace Effekseer.GUI
 
 	public class Manager
 	{
-
- 
 		public static swig.GUIManager NativeManager;
 		public static swig.Native Native;
 
@@ -88,7 +89,11 @@ namespace Effekseer.GUI
 
 		internal static swig.Vec2 WindowSize = new swig.Vec2(1280, 720);
 
+		public static float TextOffsetY {get; private set;}
+
 		static int resetCount = 0;
+		internal static int resizedCount = 0;
+		internal static int actualWidth = 1;
 
         /// <summary>
         /// if this flag is true, a dialog box on disposing is not shown
@@ -136,12 +141,10 @@ namespace Effekseer.GUI
 
 		internal static Utils.DelayedList<IRemovableControl> Controls = new Utils.DelayedList<IRemovableControl>();
 
-		public static bool Initialize(int width, int height)
+		public static bool Initialize(int width, int height, swig.DeviceType deviceType)
 		{
-			bool isOpenGLMode = true;
-
 			var mgr = new swig.GUIManager();
-			if (mgr.Initialize("Effekseer", 1280, 720, isOpenGLMode, false))
+			if (mgr.Initialize("Effekseer", 1280, 720, deviceType, false))
 			{
 			}
 			else
@@ -154,7 +157,7 @@ namespace Effekseer.GUI
 			Native = new swig.Native();
 
 			Viewer = new Viewer(Native);
-			if (!Viewer.ShowViewer(mgr.GetNativeHandle(), 1280, 720, isOpenGLMode))
+			if (!Viewer.ShowViewer(mgr.GetNativeHandle(), 1280, 720, deviceType))
 			{
 				mgr.Dispose();
 				mgr = null;
@@ -172,8 +175,13 @@ namespace Effekseer.GUI
 
 			panels = new Dock.DockPanel[dockTypes.Length];
 
+			var appDirectory = Manager.GetEntryDirectory();
+
 			// Load font
-			NativeManager.AddFontFromFileTTF("resources/GenShinGothic-Monospace-Normal.ttf", 16);
+			NativeManager.AddFontFromFileTTF(System.IO.Path.Combine(appDirectory, "resources/GenShinGothic-Monospace-Normal.ttf"), 16);
+
+			// Load window icon
+			NativeManager.SetWindowIcon(System.IO.Path.Combine(appDirectory, "resources/icon.png"));
 
 			// Load config
 			RecentFiles.LoadRecentConfig();
@@ -208,7 +216,10 @@ namespace Effekseer.GUI
 				ResetWindowActually();
 			}
 
+			TextOffsetY = (NativeManager.GetTextLineHeightWithSpacing() - NativeManager.GetTextLineHeight()) / 2;
+
 			Network = new Network(Native);
+			Network.Load();
 
 			Command.CommandManager.Changed += OnChanged;
 
@@ -278,13 +289,18 @@ namespace Effekseer.GUI
 			Core.OnAfterLoad += new EventHandler(Core_OnAfterLoad);
 			Core.OnAfterNew += new EventHandler(Core_OnAfterNew);
 			Core.OnReload += new EventHandler(Core_OnReload);
-		
+
+			// Set imgui path
+			var entryDirectory = GetEntryDirectory();
+			swig.GUIManager.SetIniFilename(entryDirectory + "/imgui.ini");
+
 			return true;
 		}
 
 		public static void Terminate()
 		{
-			System.IO.Directory.SetCurrentDirectory(GetEntryDirectory());
+			var entryDirectory = GetEntryDirectory();
+			System.IO.Directory.SetCurrentDirectory(entryDirectory);
 
 			Manager.NativeManager.SaveDock("config.Dock.config");
 			SaveWindowConfig("config.Dock.xml");
@@ -302,6 +318,7 @@ namespace Effekseer.GUI
 				effectViewer.DispatchDisposed();
 			}
 
+			Network.Save();
 			Shortcuts.SeveShortcuts();
 			RecentFiles.SaveRecentConfig();
 
@@ -324,7 +341,13 @@ namespace Effekseer.GUI
 
 		public static void Update()
 		{
+			// Reset
+			NativeManager.SetNextDockRate(0.5f);
+			NativeManager.SetNextDock(swig.DockSlot.Tab);
+			NativeManager.ResetNextParentDock();
+
 			Shortcuts.Update();
+			Network.Update();
 
 			var handle = false;
 			if(!handle)
@@ -391,6 +414,11 @@ namespace Effekseer.GUI
 				}
 			}
 
+			if(resizedCount > 0)
+			{
+				resizedCount--;
+			}
+
 			Controls.Lock();
 
 			foreach (var c in Controls.Internal)
@@ -425,12 +453,19 @@ namespace Effekseer.GUI
 				}
 			}
 
-			NativeManager.RenderGUI();
+			NativeManager.RenderGUI(resizedCount == 0);
 
 			Native.Present();
 			NativeManager.Present();
 
 			isFirstUpdate = false;
+
+			// TODO more smart
+			// When minimized, suppress CPU activity
+			if (actualWidth == 0)
+			{
+				System.Threading.Thread.Sleep(16);
+			}
 		}
 
 		public static void ResetWindow()
@@ -503,6 +538,7 @@ namespace Effekseer.GUI
 					panels[i].InitialDockSize = defaultSize;
 					panels[i].InitialDockReset = isResetParent;
 					panels[i].InitialDockRate = dockRate;
+					panels[i].IsInitialized = -1;
 
 					if (dockManager != null)
 					{

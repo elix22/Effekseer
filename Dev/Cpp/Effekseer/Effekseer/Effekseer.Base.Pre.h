@@ -24,7 +24,7 @@
 //----------------------------------------------------------------------------------
 
 #ifdef _WIN32
-#include <windows.h>
+//#include <windows.h>
 #elif defined(_PSVITA)
 #include "Effekseer.PSVita.h"
 #elif defined(_PS4)
@@ -211,6 +211,17 @@ enum class RenderMode : int32_t
 {
 	Normal,				// 通常描画
 	Wireframe,			// ワイヤーフレーム描画
+};
+
+/**
+	@brief
+	\~English	A thread where reload function is called
+	\~Japanese	リロードの関数が呼ばれるスレッド
+*/
+enum class ReloadingThreadType
+{
+	Main,
+	Render,
 };
 
 //----------------------------------------------------------------------------------

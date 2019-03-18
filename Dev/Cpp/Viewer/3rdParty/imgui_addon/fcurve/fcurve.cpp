@@ -175,7 +175,7 @@ namespace ImGui
 		}
 	}
 
-	bool BeginFCurve(int id, const ImVec2& size, const ImVec2& scale, float min_value, float max_value)
+	bool BeginFCurve(int id, const ImVec2& size, float current, const ImVec2& scale, float min_value, float max_value)
 	{
 		bool isAutoZoomMode = min_value <= max_value;
 
@@ -199,7 +199,7 @@ namespace ImGui
 		window->StateStorage.SetFloat((ImGuiID)FCurveStorageValues::SCALE_X, scale_x);
 		window->StateStorage.SetFloat((ImGuiID)FCurveStorageValues::SCALE_Y, scale_y);
 
-		const ImRect innerRect = window->InnerRect;
+		const ImRect innerRect = window->InnerMainRect;
 		float width = innerRect.Max.x - innerRect.Min.x;
 		float height = innerRect.Max.y - innerRect.Min.y;
 
@@ -365,6 +365,17 @@ namespace ImGui
 			}
 		}
 
+		// Render current
+		{
+			ImVec2 upperLeft_s = ImVec2(innerRect.Min.x, innerRect.Min.y);
+			ImVec2 lowerRight_s = ImVec2(innerRect.Max.x, innerRect.Max.y);
+
+			auto upperLeft_f = transform_s2f(upperLeft_s);
+			auto lowerRight_f = transform_s2f(lowerRight_s);
+
+			window->DrawList->AddLine(transform_f2s(ImVec2(current, upperLeft_f.y)), transform_f2s(ImVec2(current, lowerRight_f.y)), 0x55aaaaaa);
+		}
+
 		// get left button drag
 		if (IsMouseDragging(0))
 		{
@@ -424,7 +435,7 @@ namespace ImGui
 		float scale_x = window->StateStorage.GetFloat((ImGuiID)FCurveStorageValues::SCALE_X, 1.0f);
 		float scale_y = window->StateStorage.GetFloat((ImGuiID)FCurveStorageValues::SCALE_Y, 1.0f);
 
-		const ImRect innerRect = window->InnerRect;
+		const ImRect innerRect = window->InnerMainRect;
 		float width = innerRect.Max.x - innerRect.Min.x;
 		float height = innerRect.Max.y - innerRect.Min.y;
 
@@ -493,6 +504,10 @@ namespace ImGui
 
 		// render curve
 
+		auto lineThiness = 1;
+		if (selected) lineThiness++;
+		if (isLineHovered) lineThiness++;
+
 		// start
 		{
 			auto v1 = ImVec2(transform_s2f(innerRect.Min).x, defaultValue);
@@ -502,7 +517,7 @@ namespace ImGui
 				transform_f2s(v1),
 				transform_f2s(v2),
 				col,
-				selected ? 2 : 1);
+				lineThiness);
 		}
 
 		PopID();
@@ -572,7 +587,7 @@ namespace ImGui
 		float scale_x = window->StateStorage.GetFloat((ImGuiID)FCurveStorageValues::SCALE_X, 1.0f);
 		float scale_y = window->StateStorage.GetFloat((ImGuiID)FCurveStorageValues::SCALE_Y, 1.0f);
 
-		const ImRect innerRect = window->InnerRect;
+		const ImRect innerRect = window->InnerMainRect;
 		float width = innerRect.Max.x - innerRect.Min.x;
 		float height = innerRect.Max.y - innerRect.Min.y;
 
@@ -653,7 +668,7 @@ namespace ImGui
 
 				if (isDrawPositionRequired)
 				{
-					DrawMaker(window, pos, pointSize, 0x55FFFFFF, 2);
+					DrawMaker(window, pos, pointSize, 0xAAFFFFFF, 2);
 
 					char text[255];
 					sprintf(text, "(%.3f, %.3f)", keys[i], values[i]);
@@ -674,9 +689,6 @@ namespace ImGui
 					if (changedType != nullptr)
 					{
 						(*changedType) = 0;
-
-						if (movedX != nullptr) (*movedX) = dx / scale_x;
-						if (movedY != nullptr) (*movedY) = -dy / scale_y;
 					}
 
 					break;
@@ -686,6 +698,25 @@ namespace ImGui
 			// move points acctually
 			if (movedIndex >= 0)
 			{
+				// calculate dx, dy on a field.
+				auto fd = moveFWithS(ImVec2(0, 0), ImVec2(dx, dy));
+
+				// make int
+				auto mousePos = GetMousePos();
+				auto f_mousePos = transform_s2f(mousePos);
+				if (keys[movedIndex] <= f_mousePos.x && 0 < fd.x)
+				{
+					fd.x = 1;
+				}
+				else if (keys[movedIndex] >= f_mousePos.x && 0 > fd.x)
+				{
+					fd.x = -1;
+				}
+				else
+				{
+					fd.x = 0;
+				}
+				
 				for (int i = 0; i < count; i++)
 				{
 					if (!kv_selected[i]) continue;
@@ -694,23 +725,16 @@ namespace ImGui
 					auto center_v = moveFWithS(ImVec2(keys[i], values[i]), ImVec2(dx, dy));
 					center_v.y = std::max(std::min(center_v.y, v_max), v_min);
 
-					keys[i] = center_v.x;
-					values[i] = center_v.y;
-					
-					auto diff_x = center_v.x - pre_center_v.x;
-					auto diff_y = center_v.y - pre_center_v.y;
-					
-					{
-						leftHandleKeys[i] += diff_x;
-						leftHandleValues[i] += diff_y;						
-					}
-
-					{
-						auto v = moveFWithS(ImVec2(rightHandleKeys[i], rightHandleValues[i]), ImVec2(dx, dy));
-						rightHandleKeys[i] += diff_x;
-						rightHandleValues[i] += diff_y;
-					}
+					keys[i] += fd.x;
+					values[i] += fd.y;
+					leftHandleKeys[i] += fd.x;
+					leftHandleValues[i] += fd.y;
+					rightHandleKeys[i] += fd.x;
+					rightHandleValues[i] += fd.y;
 				}
+
+				if (movedX != nullptr) (*movedX) = fd.x;
+				if (movedY != nullptr) (*movedY) = fd.y;
 
 				ClampHandles(keys, values, leftHandleKeys, leftHandleValues, rightHandleKeys, rightHandleValues, count);
 
@@ -817,7 +841,7 @@ namespace ImGui
 
 				if (isDrawPositionRequired)
 				{
-					DrawMaker(window, pos, pointSize, 0x55FFFFFF, 2);
+					DrawMaker(window, pos, pointSize, 0xAAFFFFFF, 2);
 
 					char text[255];
 					sprintf(text, "(%.3f, %.3f)", leftHandleKeys[i], leftHandleValues[i]);
@@ -908,7 +932,7 @@ namespace ImGui
 
 				if (isDrawPositionRequired)
 				{
-					DrawMaker(window, pos, pointSize, 0x55FFFFFF, 2);
+					DrawMaker(window, pos, pointSize, 0xAAFFFFFF, 2);
 
 					char text[255];
 					sprintf(text, "(%.3f, %.3f)", rightHandleKeys[i], rightHandleValues[i]);
@@ -1150,6 +1174,9 @@ namespace ImGui
 				auto mousePos = GetMousePos();
 				auto v = transform_s2f(mousePos);
 
+				// make int
+				v.x = (int32_t)(v.x + 0.5);
+
 				if (v.x < keys[0])
 				{
 					for (int j = count; j > 0; j--)
@@ -1241,6 +1268,11 @@ namespace ImGui
 			}
 		}
 
+		auto lineThiness = 1;
+		if (selected) lineThiness++;
+		if (isLineHovered) lineThiness++;
+
+
 		// render curve
 		auto renderCurve = [&](float offset, bool isReversed) -> void
 		{
@@ -1265,7 +1297,7 @@ namespace ImGui
 							transform_f2s(cp2),
 							transform_f2s(v2),
 							col,
-							selected ? 2 : 1);
+							lineThiness);
 					}
 					else
 					{
@@ -1273,7 +1305,7 @@ namespace ImGui
 							transform_f2s(v1),
 							transform_f2s(v2),
 							col,
-							selected ? 2 : 1);
+							lineThiness);
 					}
 				}
 			}
@@ -1295,7 +1327,7 @@ namespace ImGui
 							transform_f2s(cp2),
 							transform_f2s(v2),
 							col,
-							selected ? 2 : 1);
+							lineThiness);
 					}
 					else
 					{
@@ -1303,7 +1335,7 @@ namespace ImGui
 							transform_f2s(v1),
 							transform_f2s(v2),
 							col,
-							selected ? 2 : 1);
+							lineThiness);
 
 					}
 				}
@@ -1320,7 +1352,7 @@ namespace ImGui
 					transform_f2s(v1),
 					transform_f2s(v2),
 					col,
-					selected ? 2 : 1);
+					lineThiness);
 			}
 			else if (startEdge == ImFCurveEdgeType::Loop)
 			{
@@ -1358,7 +1390,7 @@ namespace ImGui
 					transform_f2s(v1),
 					transform_f2s(v2),
 					col,
-					selected ? 2 : 1);
+					lineThiness);
 			}
 			else if(endEdge == ImFCurveEdgeType::Loop)
 			{
@@ -1390,17 +1422,17 @@ namespace ImGui
 					int pointSize = 3;
 					auto pos = transform_f2s(ImVec2(keys[i], values[i]));
 
-					DrawMaker(window, pos, pointSize, 0xAAFFFFFF, 3);
+					DrawMaker(window, pos, pointSize, 0xEEFFFFFF, 3);
 
-					window->DrawList->AddLine(transform_f2s(ImVec2(leftHandleKeys[i], leftHandleValues[i])), pos, 0x55FFFFFF);
-					window->DrawList->AddLine(transform_f2s(ImVec2(rightHandleKeys[i], rightHandleValues[i])), pos, 0x55FFFFFF);
+					window->DrawList->AddLine(transform_f2s(ImVec2(leftHandleKeys[i], leftHandleValues[i])), pos, 0xEEFFFFFF);
+					window->DrawList->AddLine(transform_f2s(ImVec2(rightHandleKeys[i], rightHandleValues[i])), pos, 0xEEFFFFFF);
 				}
 				else
 				{
 					int pointSize = 2;
 					auto pos = transform_f2s(ImVec2(keys[i], values[i]));
 
-					DrawMaker(window, pos, pointSize, 0x55FFFFFF, 2);
+					DrawMaker(window, pos, pointSize, 0xAAFFFFFF, 2);
 				}
 			}
 		}

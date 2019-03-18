@@ -14,6 +14,7 @@
 #include "EffekseerTool/EffekseerTool.Sound.h"
 
 #include "GUI/efk.ImageResource.h"
+#include "efk.Base.h"
 
 //----------------------------------------------------------------------------------
 //
@@ -195,7 +196,7 @@ public:
 
 	~Native();
 
-	bool CreateWindow_Effekseer( void* handle, int width, int height, bool isSRGBMode, bool isOpenGLMode = false);
+	bool CreateWindow_Effekseer( void* handle, int width, int height, bool isSRGBMode, efk::DeviceType deviceType);
 
 	bool UpdateWindow();
 
@@ -291,7 +292,11 @@ public:
 
 	int32_t GetAndResetVertexCount();
 
+	int32_t GetInstanceCount();
+
 	float GetFPS();
+
+	static bool IsDebugMode();
 
 #if !SWIG
 	EffekseerRenderer::Renderer* GetRenderer();

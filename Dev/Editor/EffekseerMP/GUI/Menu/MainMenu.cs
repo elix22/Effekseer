@@ -79,6 +79,11 @@ namespace Effekseer.GUI.Menu
 				newTitle += Resources.GetString("UnsavedChanges");
 			}
 
+			if (swig.Native.IsDebugMode())
+			{
+				newTitle += " - DebugMode";
+			}
+
 			if (currentTitle != newTitle)
 			{
 				currentTitle = newTitle;
@@ -189,6 +194,11 @@ namespace Effekseer.GUI.Menu
 
 							if (!string.IsNullOrEmpty(result))
 							{
+								if (System.IO.Path.GetExtension(result) != "." + filter)
+								{
+									result += "." + filter;
+								}
+
 								var filepath = result;
 								script.Function(filepath);
 

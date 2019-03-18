@@ -10,6 +10,7 @@
 #include <string.h>
 #include <vector>
 
+#include "EffekseerRenderer.Renderer.h"
 #include "EffekseerRenderer.CommonUtils.h"
 #include "EffekseerRenderer.RenderStateBase.h"
 #include "EffekseerRenderer.VertexBufferBase.h"
@@ -38,6 +39,7 @@ struct ModelRendererVertexConstantBuffer
 	float	LightDirection[4];
 	float	LightColor[4];
 	float	LightAmbientColor[4];
+	float	UVInversed[4];
 };
 
 struct ModelRendererPixelConstantBuffer
@@ -94,7 +96,6 @@ public:
 	template<typename RENDERER>
 	void Rendering_(RENDERER* renderer, const efkModelNodeParam& parameter, const efkModelInstanceParam& instanceParameter, void* userData)
 	{
-		auto camera = renderer->GetCameraMatrix();
 		::Effekseer::BillboardType btype = parameter.Billboard;
 		Effekseer::Matrix44 mat44;
 
@@ -116,8 +117,7 @@ public:
 			{
 				::Effekseer::Vector3D Up(0.0f, 1.0f, 0.0f);
 
-				::Effekseer::Vector3D::Normal(F, ::Effekseer::Vector3D(-camera.Values[0][2], -camera.Values[1][2], -camera.Values[2][2]));
-
+				::Effekseer::Vector3D::Normal(F, -renderer->GetCameraFrontDirection());
 				::Effekseer::Vector3D::Normal(R, ::Effekseer::Vector3D::Cross(R, Up, F));
 				::Effekseer::Vector3D::Normal(U, ::Effekseer::Vector3D::Cross(U, F, R));
 			}
@@ -125,7 +125,7 @@ public:
 			{
 				::Effekseer::Vector3D Up(0.0f, 1.0f, 0.0f);
 
-				::Effekseer::Vector3D::Normal(F, ::Effekseer::Vector3D(-camera.Values[0][2], -camera.Values[1][2], -camera.Values[2][2]));
+				::Effekseer::Vector3D::Normal(F, -renderer->GetCameraFrontDirection());
 
 				::Effekseer::Vector3D::Normal(R, ::Effekseer::Vector3D::Cross(R, Up, F));
 				::Effekseer::Vector3D::Normal(U, ::Effekseer::Vector3D::Cross(U, F, R));
@@ -161,7 +161,7 @@ public:
 			{
 				U = ::Effekseer::Vector3D(r.Value[1][0], r.Value[1][1], r.Value[1][2]);
 
-				::Effekseer::Vector3D::Normal(F, ::Effekseer::Vector3D(-camera.Values[0][2], -camera.Values[1][2], -camera.Values[2][2]));
+				::Effekseer::Vector3D::Normal(F, -renderer->GetCameraFrontDirection());
 
 				::Effekseer::Vector3D::Normal(R, ::Effekseer::Vector3D::Cross(R, U, F));
 				::Effekseer::Vector3D::Normal(F, ::Effekseer::Vector3D::Cross(F, R, U));
@@ -246,8 +246,6 @@ public:
 	{
 		if (m_matrixes.size() == 0) return;
 		if (param.ModelIndex < 0) return;
-
-		auto camera = renderer->GetCameraMatrix();
 
 		MODEL* model = (MODEL*) param.EffectPointer->GetModel(param.ModelIndex);
 		if (model == NULL) return;
@@ -357,17 +355,48 @@ public:
 
 		state.TextureFilterTypes[0] = param.TextureFilter;
 		state.TextureWrapTypes[0] = param.TextureWrap;
-		state.TextureFilterTypes[1] = param.TextureFilter;
-		state.TextureWrapTypes[1] = param.TextureWrap;
+
+		if (distortion)
+		{
+			state.TextureFilterTypes[1] = Effekseer::TextureFilterType::Nearest;
+			state.TextureWrapTypes[1] = Effekseer::TextureWrapType::Clamp;
+		}
+		else
+		{
+			state.TextureFilterTypes[1] = param.TextureFilter;
+			state.TextureWrapTypes[1] = param.TextureWrap;
+		}
 
 		renderer->GetRenderState()->Update(distortion);
 
 		ModelRendererVertexConstantBuffer<InstanceCount>* vcb = (ModelRendererVertexConstantBuffer<InstanceCount>*)shader_->GetVertexConstantBuffer();
 
+		if (renderer->GetTextureUVStyle() == UVStyle::VerticalFlipped)
+		{
+			vcb->UVInversed[0] = 1;
+			vcb->UVInversed[1] = -1;
+		}
+		else
+		{
+			vcb->UVInversed[0] = 0;
+			vcb->UVInversed[1] = 1;
+		}
+
 		if (distortion)
 		{
 			float* pcb = (float*) shader_->GetPixelConstantBuffer();
-			pcb[0] = param.DistortionIntensity;
+			pcb[4 * 0 + 0] = param.DistortionIntensity;
+
+			if (renderer->GetBackgroundTextureUVStyle() == UVStyle::VerticalFlipped)
+			{
+				pcb[4 * 1 + 0] = 1;
+				pcb[4 * 1 + 1] = -1;
+			}
+			else
+			{
+				pcb[4 * 1 + 0] = 0;
+				pcb[4 * 1 + 1] = 1;
+			}
 		}
 		else
 		{
@@ -416,7 +445,7 @@ public:
 			auto& imodel = model->InternalModels[stTime0];
 
 			// Invalid unless layout is set after buffer
-			renderer->SetVertexBuffer(imodel.VertexBuffer, sizeof(Effekseer::Model::VertexWithIndex));
+			renderer->SetVertexBuffer(imodel.VertexBuffer, model->GetVertexSize());
 			renderer->SetIndexBuffer(imodel.IndexBuffer);
 			renderer->SetLayout(shader_);
 
@@ -429,7 +458,7 @@ public:
 					vcb->ModelMatrix[num] = m_matrixes[loop+num];
 
 					// DepthOffset
-					ApplyDepthOffset(vcb->ModelMatrix[num], camera, param.DepthOffset, param.IsDepthOffsetScaledWithCamera, param.IsDepthOffsetScaledWithParticleScale, param.IsRightHand);
+					ApplyDepthOffset(vcb->ModelMatrix[num], renderer->GetCameraFrontDirection(), renderer->GetCameraPosition(), param.DepthOffset, param.IsDepthOffsetScaledWithCamera, param.IsDepthOffsetScaledWithParticleScale, param.IsRightHand);
 	
 					vcb->ModelUV[num][0] = m_uv[loop+num].X;
 					vcb->ModelUV[num][1] = m_uv[loop+num].Y;
@@ -454,7 +483,7 @@ public:
 				auto& imodel = model->InternalModels[stTime];
 
 				// Invalid unless layout is set after buffer
-				renderer->SetVertexBuffer(imodel.VertexBuffer, sizeof(Effekseer::Model::Vertex));
+				renderer->SetVertexBuffer(imodel.VertexBuffer, model->GetVertexSize());
 				renderer->SetIndexBuffer(imodel.IndexBuffer);
 				renderer->SetLayout(shader_);
 
@@ -465,7 +494,7 @@ public:
 				vcb->ModelUV[0][3] = m_uv[loop].Height;
 
 				// DepthOffset
-				ApplyDepthOffset(vcb->ModelMatrix[0], camera, param.DepthOffset, param.IsDepthOffsetScaledWithCamera, param.IsDepthOffsetScaledWithParticleScale, param.IsRightHand);
+				ApplyDepthOffset(vcb->ModelMatrix[0], renderer->GetCameraFrontDirection(), renderer->GetCameraPosition(), param.DepthOffset, param.IsDepthOffsetScaledWithCamera, param.IsDepthOffsetScaledWithParticleScale, param.IsRightHand);
 				
 				ColorToFloat4( m_colors[loop], vcb->ModelColor[0] );
 				shader_->SetConstantBuffer();

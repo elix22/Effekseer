@@ -5,6 +5,7 @@
 //----------------------------------------------------------------------------------
 #include "Effekseer.Vector3D.h"
 #include "Effekseer.Matrix43.h"
+#include "Effekseer.Matrix44.h"
 
 //----------------------------------------------------------------------------------
 //
@@ -137,12 +138,33 @@ void Matrix43::RotationXYZ( float rx, float ry, float rz )
 {
 	float cx, sx, cy, sy, cz, sz;
 	
-	if( rx != 0.0f )	::Effekseer::SinCos( rx, sx, cx );
-	else				sx = 0.0f, cx = 1.0f;
-	if( ry != 0.0f )	::Effekseer::SinCos( ry, sy, cy );
-	else				sy = 0.0f, cy = 1.0f;
-	if( rz != 0.0f )	::Effekseer::SinCos( rz, sz, cz );
-	else				sz = 0.0f, cz = 1.0f;
+	if( rx != 0.0f )
+	{
+		::Effekseer::SinCos( rx, sx, cx );
+	}
+	else
+	{
+		sx = 0.0f;
+		cx = 1.0f;
+	}
+	if( ry != 0.0f )
+	{
+		::Effekseer::SinCos( ry, sy, cy );
+	}
+	else
+	{
+		sy = 0.0f;
+		cy = 1.0f;
+	}
+	if( rz != 0.0f )
+	{
+		::Effekseer::SinCos( rz, sz, cz );
+	}
+	else
+	{
+		sz = 0.0f;
+		cz = 1.0f;
+	}
 
 	Value[0][0] = cy * cz;
 	Value[0][1] = cy * sz;
@@ -168,12 +190,33 @@ void Matrix43::RotationZXY( float rz, float rx, float ry )
 {
 	float cx, sx, cy, sy, cz, sz;
 
-	if( rx != 0.0f )	::Effekseer::SinCos( rx, sx, cx );
-	else				sx = 0.0f, cx = 1.0f;
-	if( ry != 0.0f )	::Effekseer::SinCos( ry, sy, cy );
-	else				sy = 0.0f, cy = 1.0f;
-	if( rz != 0.0f )	::Effekseer::SinCos( rz, sz, cz );
-	else				sz = 0.0f, cz = 1.0f;
+	if( rx != 0.0f )
+	{
+		::Effekseer::SinCos( rx, sx, cx );
+	}
+	else
+	{
+		sx = 0.0f;
+		cx = 1.0f;
+	}
+	if( ry != 0.0f )
+	{
+		::Effekseer::SinCos( ry, sy, cy );
+	}
+	else
+	{
+		sy = 0.0f;
+		cy = 1.0f;
+	}
+	if( rz != 0.0f )
+	{
+		::Effekseer::SinCos( rz, sz, cz );
+	}
+	else
+	{
+		sz = 0.0f;
+		cz = 1.0f;
+	}
 	
 	Value[0][0] = cz * cy + sz * sx * sy;
 	Value[0][1] = sz * cx;
@@ -486,6 +529,20 @@ void Matrix43::SetSRT( const Vector3D& s, const Matrix43& r, const Vector3D& t )
 	Value[3][0] = t.X;
 	Value[3][1] = t.Y;
 	Value[3][2] = t.Z;
+}
+
+void Matrix43::ToMatrix44(Matrix44& dst)
+{
+	for (int m = 0; m < 4; m++)
+	{
+		for (int n = 0; n < 3; n++)
+		{
+			dst.Values[m][n] = Value[m][n];
+		}
+		dst.Values[m][3] = 0.0f;
+	}
+
+	dst.Values[3][3] = 1.0f;
 }
 
 //----------------------------------------------------------------------------------

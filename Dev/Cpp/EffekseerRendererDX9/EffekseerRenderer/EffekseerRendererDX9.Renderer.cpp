@@ -157,10 +157,6 @@ RendererImplemented::RendererImplemented( int32_t squareMaxCount )
 	SetLightColor( lightColor );
 	::Effekseer::Color lightAmbient( 0, 0, 0, 0 );
 	SetLightAmbientColor( lightAmbient );
-
-#ifdef __EFFEKSEER_RENDERER_INTERNAL_LOADER__
-	EffekseerRenderer::PngTextureLoader::Initialize();
-#endif
 }
 
 //----------------------------------------------------------------------------------
@@ -168,10 +164,6 @@ RendererImplemented::RendererImplemented( int32_t squareMaxCount )
 //----------------------------------------------------------------------------------
 RendererImplemented::~RendererImplemented()
 {
-#ifdef __EFFEKSEER_RENDERER_INTERNAL_LOADER__
-	EffekseerRenderer::PngTextureLoader::Finalize();
-#endif
-
 	assert(GetRef() == 0);
 
 	ES_SAFE_DELETE(m_distortingCallback);
@@ -251,12 +243,11 @@ void RendererImplemented::GenerateIndexData()
 		m_indexBuffer->Unlock();
 	}
 
-	// ワイヤーフレーム用インデックスの生成
+	// Generate index buffer for rendering wireframes
 	if( m_indexBufferForWireframe != NULL )
 	{
 		m_indexBufferForWireframe->Lock();
 
-		// ( 標準設定で　DirectX 時計周りが表, OpenGLは反時計回りが表 )
 		for( int i = 0; i < m_squareMaxCount; i++ )
 		{
 			uint16_t* buf = (uint16_t*)m_indexBufferForWireframe->GetBufferDirect( 8 );
@@ -393,22 +384,22 @@ bool RendererImplemented::Initialize( LPDIRECT3DDEVICE9 device )
 	// 参照カウントの調整
 	Release();
 
-	m_shader->SetVertexConstantBufferSize(sizeof(Effekseer::Matrix44) * 2);
-	m_shader->SetVertexRegisterCount(8);
-	m_shader_no_texture->SetVertexConstantBufferSize(sizeof(Effekseer::Matrix44) * 2);
-	m_shader_no_texture->SetVertexRegisterCount(8);
+	m_shader->SetVertexConstantBufferSize(sizeof(Effekseer::Matrix44) * 2 + sizeof(float) * 4);
+	m_shader->SetVertexRegisterCount(8 + 1);
+	m_shader_no_texture->SetVertexConstantBufferSize(sizeof(Effekseer::Matrix44) * 2 + sizeof(float) * 4);
+	m_shader_no_texture->SetVertexRegisterCount(8 + 1);
 
-	m_shader_distortion->SetVertexConstantBufferSize(sizeof(Effekseer::Matrix44) * 2);
-	m_shader_distortion->SetVertexRegisterCount(8);
+	m_shader_distortion->SetVertexConstantBufferSize(sizeof(Effekseer::Matrix44) * 2 + sizeof(float) * 4);
+	m_shader_distortion->SetVertexRegisterCount(8 + 1);
 
-	m_shader_distortion->SetPixelConstantBufferSize(sizeof(float) * 4);
-	m_shader_distortion->SetPixelRegisterCount(1);
+	m_shader_distortion->SetPixelConstantBufferSize(sizeof(float) * 4 + sizeof(float) * 4);
+	m_shader_distortion->SetPixelRegisterCount(1 + 1);
 
-	m_shader_no_texture_distortion->SetVertexConstantBufferSize(sizeof(Effekseer::Matrix44) * 2);
-	m_shader_no_texture_distortion->SetVertexRegisterCount(8);
+	m_shader_no_texture_distortion->SetVertexConstantBufferSize(sizeof(Effekseer::Matrix44) * 2 + sizeof(float) * 4);
+	m_shader_no_texture_distortion->SetVertexRegisterCount(8 + 1);
 
-	m_shader_no_texture_distortion->SetPixelConstantBufferSize(sizeof(float) * 4);
-	m_shader_no_texture_distortion->SetPixelRegisterCount(1);
+	m_shader_no_texture_distortion->SetPixelConstantBufferSize(sizeof(float) * 4 + sizeof(float) * 4);
+	m_shader_no_texture_distortion->SetPixelRegisterCount(1 + 1);
 
 	m_standardRenderer = new EffekseerRenderer::StandardRenderer<RendererImplemented, Shader, Vertex, VertexDistortion>(
 		this, m_shader, m_shader_no_texture, m_shader_distortion, m_shader_no_texture_distortion);
@@ -726,6 +717,15 @@ const ::Effekseer::Matrix44& RendererImplemented::GetCameraMatrix() const
 //----------------------------------------------------------------------------------
 void RendererImplemented::SetCameraMatrix( const ::Effekseer::Matrix44& mat )
 {
+	m_cameraFrontDirection = ::Effekseer::Vector3D(mat.Values[0][2], mat.Values[1][2], mat.Values[2][2]);
+
+	auto localPos = ::Effekseer::Vector3D(-mat.Values[3][0], -mat.Values[3][1], -mat.Values[3][2]);
+	auto f = m_cameraFrontDirection;
+	auto r = ::Effekseer::Vector3D(mat.Values[0][0], mat.Values[1][0], mat.Values[2][0]);
+	auto u = ::Effekseer::Vector3D(mat.Values[0][1], mat.Values[1][1], mat.Values[2][1]);
+
+	m_cameraPosition = r * localPos.X + u * localPos.Y + f * localPos.Z;
+
 	m_camera = mat;
 }
 
@@ -735,6 +735,22 @@ void RendererImplemented::SetCameraMatrix( const ::Effekseer::Matrix44& mat )
 ::Effekseer::Matrix44& RendererImplemented::GetCameraProjectionMatrix()
 {
 	return m_cameraProj;
+}
+
+::Effekseer::Vector3D RendererImplemented::GetCameraFrontDirection() const
+{
+	return m_cameraFrontDirection;
+}
+
+::Effekseer::Vector3D RendererImplemented::GetCameraPosition() const
+{
+	return m_cameraPosition;
+}
+
+void RendererImplemented::SetCameraParameter(const ::Effekseer::Vector3D& front, const ::Effekseer::Vector3D& position)
+{
+	m_cameraFrontDirection = front;
+	m_cameraPosition = position;
 }
 
 //----------------------------------------------------------------------------------

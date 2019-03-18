@@ -176,9 +176,16 @@ namespace Effekseer.Binary
 
                         if (!string.IsNullOrEmpty(relative_path))
                         {
-                            relative_path = System.IO.Path.GetDirectoryName(relative_path) + "/" + System.IO.Path.GetFileNameWithoutExtension(relative_path) + ".efkmodel";
+							if(string.IsNullOrEmpty(System.IO.Path.GetDirectoryName(relative_path)))
+							{
+								relative_path = System.IO.Path.GetFileNameWithoutExtension(relative_path) + ".efkmodel";
+							}
+							else
+							{
+								relative_path = System.IO.Path.GetDirectoryName(relative_path) + "/" + System.IO.Path.GetFileNameWithoutExtension(relative_path) + ".efkmodel";
+							}
 
-                            if (relative_path != string.Empty)
+							if (relative_path != string.Empty)
                             {
                                 if (!models.Contains(relative_path))
                                 {
@@ -195,9 +202,16 @@ namespace Effekseer.Binary
 
                         if (!string.IsNullOrEmpty(relative_path))
                         {
-                            relative_path = System.IO.Path.GetDirectoryName(relative_path) + "/" + System.IO.Path.GetFileNameWithoutExtension(relative_path) + ".efkmodel";
+							if (string.IsNullOrEmpty(System.IO.Path.GetDirectoryName(relative_path)))
+							{
+								relative_path = System.IO.Path.GetFileNameWithoutExtension(relative_path) + ".efkmodel";
+							}
+							else
+							{
+								relative_path = System.IO.Path.GetDirectoryName(relative_path) + "/" + System.IO.Path.GetFileNameWithoutExtension(relative_path) + ".efkmodel";
+							}
 
-                            if (relative_path != string.Empty)
+							if (relative_path != string.Empty)
                             {
                                 if (!models.Contains(relative_path))
                                 {
@@ -302,7 +316,7 @@ namespace Effekseer.Binary
 			// Export the number of nodes
 			data.Add(BitConverter.GetBytes(snode2ind.Count));
 
-			var renderPriorityThreshold = snode2ind.Where(_ => _.Item1.DepthValues.DrawingPriority.Value <= 0).Count();
+			var renderPriorityThreshold = snode2ind.Where(_ => _.Item1.DepthValues.DrawingPriority.Value < 0).Count();
 			data.Add(BitConverter.GetBytes(renderPriorityThreshold));
 
 			// Export magnification

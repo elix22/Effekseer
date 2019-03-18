@@ -65,12 +65,27 @@ public:
 //-----------------------------------------------------------------------------------
 //
 //-----------------------------------------------------------------------------------
+
+/**
+	@brief	
+	\~english A status of UV when particles are rendered.
+	\~japanese パーティクルを描画する時のUVの状態
+*/
+enum class UVStyle
+{
+	Normal,
+	VerticalFlipped,
+};
+
 class Renderer
 	: ::Effekseer::IReference
 {
 protected:
-	Renderer() {}
-	virtual ~Renderer() {}
+	Renderer();
+	virtual ~Renderer();
+
+	class Impl;
+	Impl* impl = nullptr;
 
 public:
 	/**
@@ -164,6 +179,24 @@ public:
 	virtual ::Effekseer::Matrix44& GetCameraProjectionMatrix() = 0;
 
 	/**
+		@brief	Get a front direction of camera
+	*/
+	virtual ::Effekseer::Vector3D GetCameraFrontDirection() const = 0;
+
+	/**
+		@brief	Get a position of camera
+	*/
+	virtual ::Effekseer::Vector3D GetCameraPosition() const = 0;
+
+	/**
+		@brief	Set a front direction and position of camera manually
+		@note
+		These are set based on camera matrix automatically.
+		It is failed on some platform.
+	*/
+	virtual void SetCameraParameter(const ::Effekseer::Vector3D& front, const ::Effekseer::Vector3D& position) = 0;
+
+	/**
 		@brief	スプライトレンダラーを生成する。
 	*/
 	virtual ::Effekseer::SpriteRenderer* CreateSpriteRenderer() = 0;
@@ -250,6 +283,34 @@ public:
 	@brief	描画モードを取得する。
 	*/
 	virtual Effekseer::RenderMode GetRenderMode() = 0;
+
+	/**
+	@brief
+	\~english Get an UV Style of texture when particles are rendered.
+	\~japanese パーティクルを描画するときのUVの状態を取得する。
+	*/
+	UVStyle GetTextureUVStyle() const;
+
+	/**
+	@brief
+	\~english Set an UV Style of texture when particles are rendered.
+	\~japanese パーティクルを描画するときのUVの状態を設定する。
+	*/
+	void SetTextureUVStyle(UVStyle style);
+
+	/**
+	@brief
+	\~english Get an UV Style of background when particles are rendered.
+	\~japanese パーティクルを描画するときの背景のUVの状態を取得する。
+	*/
+	UVStyle GetBackgroundTextureUVStyle() const;
+
+	/**
+	@brief
+	\~english Set an UV Style of background when particles are rendered.
+	\~japanese パーティクルを描画するときの背景のUVの状態を設定する。
+	*/
+	void SetBackgroundTextureUVStyle(UVStyle style);
 };
 
 //----------------------------------------------------------------------------------
@@ -260,6 +321,7 @@ public:
 //
 //----------------------------------------------------------------------------------
 #endif	// __EFFEKSEERRENDERER_RENDERER_H__
+
 #ifndef	__EFFEKSEERRENDERER_DX9_RENDERER_H__
 #define	__EFFEKSEERRENDERER_DX9_RENDERER_H__
 
@@ -370,6 +432,7 @@ public:
 		, InternalModels	(nullptr)
 		, ModelCount		( 0 )
 	{
+		this->m_vertexSize = sizeof(VertexWithIndex);
 	}
 
 	virtual ~Model()

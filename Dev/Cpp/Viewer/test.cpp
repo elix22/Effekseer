@@ -13,7 +13,7 @@
 #include "GUI/efk.GUIManager.h"
 
 #include "3rdParty/imgui/imgui.h"
-#include "3rdParty/imgui_platform/imgui_impl_gl3.h"
+#include "3rdParty/imgui_platform/imgui_impl_opengl3.h"
 #include "3rdParty/imgui_platform/imgui_impl_glfw.h"
 
 #include "3rdParty/imgui_addon/imguidock/imguidock.h"
@@ -34,9 +34,9 @@
 int main_()
 {
 	auto guiManager = new efk::GUIManager();
-	guiManager->Initialize(u"Effekseer", 960, 540, true, false);
+	guiManager->Initialize(u"Effekseer", 960, 540, efk::DeviceType::OpenGL, false);
 
-	auto renderer = new ::EffekseerTool::Renderer(2000, false, true);
+	auto renderer = new ::EffekseerTool::Renderer(2000, false, efk::DeviceType::OpenGL);
 	renderer->Initialize(guiManager->GetNativeHandle(), 960, 540);
 
 	auto manager = ::Effekseer::Manager::Create(2000);
@@ -122,7 +122,7 @@ int main()
 {
 	efk::Window* window = new efk::Window();
 
-	window->Initialize(u"Effekseer", 960, 540, false, true);
+	window->Initialize(u"Effekseer", 960, 540, false, efk::DeviceType::OpenGL);
 	window->MakeCurrent();
 
 #ifdef _WIN32
@@ -130,12 +130,12 @@ int main()
 #endif
     
 	ImGui::CreateContext();
-	ImGui_ImplGlfw_Init(window->GetGLFWWindows(), true);
-	ImGui_ImplGL3_Init(window->GetGLFWWindows(), true, nullptr);
+	ImGui_ImplGlfw_InitForOpenGL(window->GetGLFWWindows(), true);
+	ImGui_ImplOpenGL3_Init(nullptr);
 	ImGui::StyleColorsClassic();
 	
 
-	auto renderer = new ::EffekseerTool::Renderer(2000, false, true);
+	auto renderer = new ::EffekseerTool::Renderer(2000, false, efk::DeviceType::OpenGL);
 	renderer->Initialize(window->GetNativeHandle(), 960, 540);
 
 	auto manager = ::Effekseer::Manager::Create(2000);
@@ -199,7 +199,7 @@ int main()
          //glBindVertexArray(0);
 #endif
         
-		ImGui_ImplGL3_NewFrame();
+		ImGui_ImplOpenGL3_NewFrame();
 		ImGui_ImplGlfw_NewFrame();
 
 		if (ImGui::BeginMainMenuBar())
@@ -287,7 +287,7 @@ int main()
 		ImGui::End();
 
 		ImGui::Render();
-		ImGui_ImplGL3_RenderDrawData(ImGui::GetDrawData());
+		ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
         
 		renderer->Present();
 		window->Present();
@@ -302,7 +302,7 @@ int main()
 	ES_SAFE_DELETE(renderer);
 
 	ImGui_ImplGlfw_Shutdown();
-	ImGui_ImplGL3_Shutdown();
+	ImGui_ImplOpenGL3_Shutdown();
 	ImGui::DestroyContext();
 
 	window->MakeNone();
@@ -316,9 +316,9 @@ int main__()
 {
 	efk::Window* window = new efk::Window();
 
-	window->Initialize(u"Effekseer", 960, 540, false, false);
+	window->Initialize(u"Effekseer", 960, 540, false, efk::DeviceType::OpenGL);
 
-	auto renderer = new ::EffekseerTool::Renderer(2000, false, false);
+	auto renderer = new ::EffekseerTool::Renderer(2000, false, efk::DeviceType::OpenGL);
 	renderer->Initialize(window->GetNativeHandle(), 960, 540);
 
 	auto manager = ::Effekseer::Manager::Create(2000);

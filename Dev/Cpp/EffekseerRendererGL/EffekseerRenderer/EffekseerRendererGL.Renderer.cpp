@@ -57,6 +57,7 @@ OUT vec4 vaPosU;
 R"(
 uniform mat4 uMatCamera;
 uniform mat4 uMatProjection;
+uniform vec4 mUVInversed;
 
 void main() {
 	vec4 cameraPos = uMatCamera * atPosition;
@@ -78,6 +79,8 @@ void main() {
 
 	vaColor = atColor;
 	vaTexCoord = atTexCoord;
+
+	vaTexCoord.y = mUVInversed.x + mUVInversed.y * vaTexCoord.y;
 }
 
 )";
@@ -127,6 +130,7 @@ OUT vec4 vaPosU;
 R"(
 uniform mat4 uMatCamera;
 uniform mat4 uMatProjection;
+uniform vec4 mUVInversed;
 
 void main() {
 
@@ -158,6 +162,8 @@ void main() {
 
 	vaColor = atColor;
 	vaTexCoord = atTexCoord;
+
+	vaTexCoord.y = mUVInversed.x + mUVInversed.y * vaTexCoord.y;
 }
 
 )";
@@ -176,6 +182,8 @@ uniform sampler2D uTexture0;
 uniform sampler2D uBackTexture0;
 
 uniform	vec4	g_scale;
+uniform	vec4	mUVInversedBack;
+
 )"
 
 R"(
@@ -191,6 +199,8 @@ void main() {
 	uv.x = (uv.x + 1.0) * 0.5;
 	uv.y = (uv.y + 1.0) * 0.5;
 	//uv.y = 1.0 - (uv.y + 1.0) * 0.5;
+
+	uv.y = mUVInversedBack.x + mUVInversedBack.y * uv.y;
 
 	color.xyz = TEX2D(uBackTexture0, uv).xyz;
 	
@@ -211,6 +221,7 @@ R"(
 uniform sampler2D uBackTexture0;
 
 uniform	vec4	g_scale;
+uniform	vec4	mUVInversedBack;
 
 )"
 
@@ -227,6 +238,8 @@ void main() {
 	uv.x = (uv.x + 1.0) * 0.5;
 	uv.y = (uv.y + 1.0) * 0.5;
 	//uv.y = 1.0 - (uv.y + 1.0) * 0.5;
+
+	uv.y = mUVInversedBack.x + mUVInversedBack.y * uv.y;
 
 	color.xyz = TEX2D(uBackTexture0, uv).xyz;
 	
@@ -305,10 +318,6 @@ RendererImplemented::RendererImplemented(int32_t squareMaxCount, OpenGLDeviceTyp
 	SetLightAmbientColor( lightAmbient );
 
 	m_background.UserID = 0;
-
-#ifdef __EFFEKSEER_RENDERER_INTERNAL_LOADER__
-	EffekseerRenderer::PngTextureLoader::Initialize();
-#endif
 }
 
 //----------------------------------------------------------------------------------
@@ -316,10 +325,6 @@ RendererImplemented::RendererImplemented(int32_t squareMaxCount, OpenGLDeviceTyp
 //----------------------------------------------------------------------------------
 RendererImplemented::~RendererImplemented()
 {
-#ifdef __EFFEKSEER_RENDERER_INTERNAL_LOADER__
-	EffekseerRenderer::PngTextureLoader::Finalize();
-#endif
-
 	assert( GetRef() == 0 );
 
 	ES_SAFE_DELETE(m_distortingCallback);
@@ -348,7 +353,7 @@ RendererImplemented::~RendererImplemented()
 	}
 	else
 	{
-		assert(GetRef() == -6);
+		assert(GetRef() == -7);
 	}
 }
 
@@ -492,7 +497,7 @@ bool RendererImplemented::Initialize()
 	// 頂点属性IDを取得
 	m_shader->GetAttribIdList(3, sprite_attribs);
 	m_shader->SetVertexSize(sizeof(Vertex));
-	m_shader->SetVertexConstantBufferSize(sizeof(Effekseer::Matrix44) * 2);
+	m_shader->SetVertexConstantBufferSize(sizeof(Effekseer::Matrix44) * 2 + sizeof(float) * 4);
 	
 	m_shader->AddVertexConstantLayout(
 		CONSTANT_TYPE_MATRIX44,
@@ -506,11 +511,17 @@ bool RendererImplemented::Initialize()
 		sizeof(Effekseer::Matrix44)
 		);
 
+	m_shader->AddVertexConstantLayout(
+		CONSTANT_TYPE_VECTOR4,
+		m_shader->GetUniformId("mUVInversed"),
+		sizeof(Effekseer::Matrix44) * 2
+	);
+
 	m_shader->SetTextureSlot(0, m_shader->GetUniformId("uTexture0"));
 
 	m_shader_no_texture->GetAttribIdList(3, sprite_attribs);
 	m_shader_no_texture->SetVertexSize(sizeof(Vertex));
-	m_shader_no_texture->SetVertexConstantBufferSize(sizeof(Effekseer::Matrix44) * 2);
+	m_shader_no_texture->SetVertexConstantBufferSize(sizeof(Effekseer::Matrix44) * 2 + sizeof(float) * 4);
 	
 	m_shader_no_texture->AddVertexConstantLayout(
 		CONSTANT_TYPE_MATRIX44,
@@ -524,6 +535,12 @@ bool RendererImplemented::Initialize()
 		sizeof(Effekseer::Matrix44)
 		);
 
+	m_shader_no_texture->AddVertexConstantLayout(
+		CONSTANT_TYPE_VECTOR4,
+		m_shader_no_texture->GetUniformId("mUVInversed"),
+		sizeof(Effekseer::Matrix44) * 2
+	);
+
 	m_vao = VertexArray::Create(this, m_shader, GetVertexBuffer(), GetIndexBuffer());
 	// 参照カウントの調整
 	if (m_vao != nullptr) Release();
@@ -535,8 +552,8 @@ bool RendererImplemented::Initialize()
 	// Distortion
 	m_shader_distortion->GetAttribIdList(5, sprite_attribs_distortion);
 	m_shader_distortion->SetVertexSize(sizeof(VertexDistortion));
-	m_shader_distortion->SetVertexConstantBufferSize(sizeof(Effekseer::Matrix44) * 2);
-	m_shader_distortion->SetPixelConstantBufferSize(sizeof(float) * 4);
+	m_shader_distortion->SetVertexConstantBufferSize(sizeof(Effekseer::Matrix44) * 2 + sizeof(float) * 4);
+	m_shader_distortion->SetPixelConstantBufferSize(sizeof(float) * 4 + sizeof(float) * 4);
 
 	m_shader_distortion->AddVertexConstantLayout(
 		CONSTANT_TYPE_MATRIX44,
@@ -550,19 +567,32 @@ bool RendererImplemented::Initialize()
 		sizeof(Effekseer::Matrix44)
 		);
 
+	m_shader_distortion->AddVertexConstantLayout(
+		CONSTANT_TYPE_VECTOR4,
+		m_shader_distortion->GetUniformId("mUVInversed"),
+		sizeof(Effekseer::Matrix44) * 2
+	);
+
 	m_shader_distortion->AddPixelConstantLayout(
 		CONSTANT_TYPE_VECTOR4,
 		m_shader_distortion->GetUniformId("g_scale"),
 		0
 		);
 
+	m_shader_distortion->AddPixelConstantLayout(
+		CONSTANT_TYPE_VECTOR4,
+		m_shader_distortion->GetUniformId("mUVInversedBack"),
+		sizeof(float) * 4
+	);
+
+
 	m_shader_distortion->SetTextureSlot(0, m_shader_distortion->GetUniformId("uTexture0"));
 	m_shader_distortion->SetTextureSlot(1, m_shader_distortion->GetUniformId("uBackTexture0"));
 
 	m_shader_no_texture_distortion->GetAttribIdList(5, sprite_attribs_distortion);
 	m_shader_no_texture_distortion->SetVertexSize(sizeof(VertexDistortion));
-	m_shader_no_texture_distortion->SetVertexConstantBufferSize(sizeof(Effekseer::Matrix44) * 2);
-	m_shader_no_texture_distortion->SetPixelConstantBufferSize(sizeof(float) * 4);
+	m_shader_no_texture_distortion->SetVertexConstantBufferSize(sizeof(Effekseer::Matrix44) * 2 + sizeof(float) * 4);
+	m_shader_no_texture_distortion->SetPixelConstantBufferSize(sizeof(float) * 4 + sizeof(float) * 4);
 
 	m_shader_no_texture_distortion->AddVertexConstantLayout(
 		CONSTANT_TYPE_MATRIX44,
@@ -576,11 +606,23 @@ bool RendererImplemented::Initialize()
 		sizeof(Effekseer::Matrix44)
 		);
 
+	m_shader_no_texture_distortion->AddVertexConstantLayout(
+		CONSTANT_TYPE_VECTOR4,
+		m_shader_no_texture_distortion->GetUniformId("mUVInversed"),
+		sizeof(Effekseer::Matrix44) * 2
+	);
+
 	m_shader_no_texture_distortion->AddPixelConstantLayout(
 		CONSTANT_TYPE_VECTOR4,
 		m_shader_distortion->GetUniformId("g_scale"),
 		0
 		);
+
+	m_shader_no_texture_distortion->AddPixelConstantLayout(
+		CONSTANT_TYPE_VECTOR4,
+		m_shader_no_texture_distortion->GetUniformId("mUVInversedBack"),
+		sizeof(float) * 4
+	);
 
 	m_shader_no_texture_distortion->SetTextureSlot(1, m_shader_no_texture_distortion->GetUniformId("uBackTexture0"));
 
@@ -867,6 +909,15 @@ const ::Effekseer::Matrix44& RendererImplemented::GetCameraMatrix() const
 //----------------------------------------------------------------------------------
 void RendererImplemented::SetCameraMatrix( const ::Effekseer::Matrix44& mat )
 {
+	m_cameraFrontDirection = ::Effekseer::Vector3D(mat.Values[0][2], mat.Values[1][2], mat.Values[2][2]);
+
+	auto localPos = ::Effekseer::Vector3D(-mat.Values[3][0], -mat.Values[3][1], -mat.Values[3][2]);
+	auto f = m_cameraFrontDirection;
+	auto r = ::Effekseer::Vector3D(mat.Values[0][0], mat.Values[1][0], mat.Values[2][0]);
+	auto u = ::Effekseer::Vector3D(mat.Values[0][1], mat.Values[1][1], mat.Values[2][1]);
+
+	m_cameraPosition = r * localPos.X + u * localPos.Y + f * localPos.Z;
+
 	m_camera = mat;
 }
 
@@ -876,6 +927,22 @@ void RendererImplemented::SetCameraMatrix( const ::Effekseer::Matrix44& mat )
 ::Effekseer::Matrix44& RendererImplemented::GetCameraProjectionMatrix()
 {
 	return m_cameraProj;
+}
+
+::Effekseer::Vector3D RendererImplemented::GetCameraFrontDirection() const
+{
+	return m_cameraFrontDirection;
+}
+
+::Effekseer::Vector3D RendererImplemented::GetCameraPosition() const
+{
+	return m_cameraPosition;
+}
+
+void RendererImplemented::SetCameraParameter(const ::Effekseer::Vector3D& front, const ::Effekseer::Vector3D& position)
+{
+	m_cameraFrontDirection = front;
+	m_cameraPosition = position;
 }
 
 //----------------------------------------------------------------------------------
@@ -1200,10 +1267,10 @@ void RendererImplemented::SetTextures(Shader* shader, Effekseer::TextureData** t
 
 	for (int32_t i = 0; i < count; i++)
 	{
-		auto id = 0;
+		GLuint id = 0;
 		if (textures[i] != nullptr)
 		{
-			id = textures[i]->UserID;
+			id = (GLuint)textures[i]->UserID;
 		}
 
 		GLExt::glActiveTexture(GL_TEXTURE0 + i);
@@ -1266,6 +1333,29 @@ Model::InternalModel::~InternalModel()
 	GLExt::glDeleteBuffers(1, &VertexBuffer);
 }
 
+bool Model::InternalModel::TryDelayLoad()
+{
+	if(VertexBuffer > 0) return false;
+	
+	GLExt::glGenBuffers(1, &VertexBuffer);
+	if (VertexBuffer > 0)
+	{
+		GLExt::glBindBuffer(GL_ARRAY_BUFFER, VertexBuffer);
+		GLExt::glBufferData(GL_ARRAY_BUFFER, delayVertexBuffer.size(), delayVertexBuffer.data(), GL_STATIC_DRAW);
+		GLExt::glBindBuffer(GL_ARRAY_BUFFER, 0);
+	}
+	
+	GLExt::glGenBuffers(1, &IndexBuffer);
+	if (IndexBuffer > 0)
+	{
+		GLExt::glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, IndexBuffer);
+		GLExt::glBufferData(GL_ELEMENT_ARRAY_BUFFER, delayIndexBuffer.size(), delayIndexBuffer.data(), GL_STATIC_DRAW);
+		GLExt::glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+	}
+
+	return true;
+}
+	
 Model::Model(void* data, int32_t size)
 	: ::Effekseer::Model(data, size)
 	, InternalModels(nullptr)
@@ -1282,18 +1372,29 @@ Model::Model(void* data, int32_t size)
 
 		InternalModels[f].VertexCount = vertexCount;
 		InternalModels[f].IndexCount = faceCount * 3;
-
+		
 		GLExt::glGenBuffers(1, &InternalModels[f].VertexBuffer);
-		GLExt::glBindBuffer(GL_ARRAY_BUFFER, InternalModels[f].VertexBuffer);
 		size_t vertexSize = vertexCount * sizeof(::Effekseer::Model::Vertex);
-		GLExt::glBufferData(GL_ARRAY_BUFFER, vertexSize, vertexData, GL_STATIC_DRAW);
-		GLExt::glBindBuffer(GL_ARRAY_BUFFER, 0);
-
+		if (InternalModels[f].VertexBuffer > 0)
+		{
+			GLExt::glBindBuffer(GL_ARRAY_BUFFER, InternalModels[f].VertexBuffer);
+			GLExt::glBufferData(GL_ARRAY_BUFFER, vertexSize, vertexData, GL_STATIC_DRAW);
+			GLExt::glBindBuffer(GL_ARRAY_BUFFER, 0);
+		}
+		InternalModels[f].delayVertexBuffer.resize(vertexSize);
+		memcpy(InternalModels[f].delayVertexBuffer.data(), vertexData, vertexSize);
+		
 		GLExt::glGenBuffers(1, &InternalModels[f].IndexBuffer);
-		GLExt::glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, InternalModels[f].IndexBuffer);
 		size_t indexSize = faceCount * sizeof(::Effekseer::Model::Face);
-		GLExt::glBufferData(GL_ELEMENT_ARRAY_BUFFER, indexSize, faceData, GL_STATIC_DRAW);
-		GLExt::glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+
+		if (InternalModels[f].IndexBuffer > 0)
+		{
+			GLExt::glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, InternalModels[f].IndexBuffer);
+			GLExt::glBufferData(GL_ELEMENT_ARRAY_BUFFER, indexSize, faceData, GL_STATIC_DRAW);
+			GLExt::glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+		}
+		InternalModels[f].delayIndexBuffer.resize(indexSize);
+		memcpy(InternalModels[f].delayIndexBuffer.data(), faceData, indexSize);
 	}
 }
 

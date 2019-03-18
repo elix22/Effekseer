@@ -1,6 +1,11 @@
 cmake_minimum_required(VERSION 2.8)
 project(Viewer CXX)
 
+# For Mac
+if(APPLE)
+	set(CMAKE_OSX_DEPLOYMENT_TARGET 10.10)
+endif()
+
 FILE(GLOB hs
 	3rdParty/imgui/*.h
 	EffekseerTool/*.h
@@ -54,7 +59,7 @@ list(APPEND cpps
 	3rdParty/nfd/nfd_cocoa.m
 	3rdParty/Boxer/boxer_osx.mm
 	3rdParty/imgui_platform/imgui_impl_glfw.cpp
-	3rdParty/imgui_platform/imgui_impl_gl3.cpp
+	3rdParty/imgui_platform/imgui_impl_opengl3.cpp
 	GUI/Platform/efk.Language_osx.mm
 )
 
@@ -72,7 +77,7 @@ list(APPEND cpps
 	3rdParty/nfd/nfd_gtk.c
 	3rdParty/Boxer/boxer_linux.cpp
 	3rdParty/imgui_platform/imgui_impl_glfw.cpp
-	3rdParty/imgui_platform/imgui_impl_gl3.cpp
+	3rdParty/imgui_platform/imgui_impl_opengl3.cpp
 	GUI/Platform/efk.Language_Other.cpp
 )
 endif()
@@ -175,6 +180,7 @@ include_directories(
 	../EffekseerRendererDX9/
 	../EffekseerRendererGL/
 	../EffekseerSoundOSMixer/
+	../
 )
 
 link_directories(

@@ -42,20 +42,7 @@ namespace Effekseer.GUI.Component
 			for(int i = 0; i < controlRows.Internal.Count; i++)
 			{
 				var c = controlRows.Internal[i].Control as IParameterControl;
-
-				//Manager.NativeManager.PushItemWidth(100);
-
-				Manager.NativeManager.Text(c.Label);
-
-				if (Manager.NativeManager.IsItemHovered())
-				{
-					Manager.NativeManager.SetTooltip(c.Description);
-				}
-
-				//Manager.NativeManager.PopItemWidth();
-
-				Manager.NativeManager.NextColumn();
-
+				
 				if(i > 0 && 
 					(controlRows[i - 1].SelectorIndent > controlRows[i].SelectorIndent ||
 					controlRows[i].IsSelector ||
@@ -63,8 +50,31 @@ namespace Effekseer.GUI.Component
 				{
 					Manager.NativeManager.Separator();
 				}
+				//Manager.NativeManager.PushItemWidth(100);
+				
+				Manager.NativeManager.SetCursorPosY(Manager.NativeManager.GetCursorPosY() + Manager.TextOffsetY);
+				Manager.NativeManager.Text(c.Label);
 
+				if (Manager.NativeManager.IsItemHovered())
+				{
+					//Manager.NativeManager.SetTooltip(c.Description);
+
+					Manager.NativeManager.BeginTooltip();
+
+					Manager.NativeManager.Text(c.Label);
+					Manager.NativeManager.Separator();
+					Manager.NativeManager.Text(c.Description);
+
+					Manager.NativeManager.EndTooltip();
+				}
+
+				//Manager.NativeManager.PopItemWidth();
+
+				Manager.NativeManager.NextColumn();
+
+				Manager.NativeManager.PushItemWidth(-1);
 				c.Update();
+				Manager.NativeManager.PopItemWidth();
 
 				Manager.NativeManager.NextColumn();
 			}

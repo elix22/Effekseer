@@ -2,7 +2,7 @@
 #ifndef	__EFFEKSEER_SERVER_IMPLEMENTED_H__
 #define	__EFFEKSEER_SERVER_IMPLEMENTED_H__
 
-#if !( defined(_PSVITA) || defined(_PS4) || defined(_SWITCH) || defined(_XBOXONE) )
+#if !( defined(_PSVITA) || defined(_SWITCH) || defined(_XBOXONE) )
 
 //----------------------------------------------------------------------------------
 // Include
@@ -11,8 +11,6 @@
 #include "Effekseer.Server.h"
 
 #include "Effekseer.Socket.h"
-#include "Effekseer.Thread.h"
-#include "Effekseer.CriticalSection.h"
 
 #include <string>
 
@@ -33,7 +31,7 @@ private:
 	class InternalClient
 	{
 	public:
-		Thread		m_threadRecv;
+		std::thread		m_threadRecv;
 		EfkSocket	m_socket;
 		ServerImplemented*		m_server;
 		bool		m_active;
@@ -41,7 +39,7 @@ private:
 		std::vector<uint8_t>	m_recvBuffer;
 
 		std::vector<std::vector<uint8_t> >	m_recvBuffers;
-		CriticalSection						m_ctrlRecvBuffers;
+		std::mutex						m_ctrlRecvBuffers;
 
 		static void RecvAsync( void* data );
 
@@ -55,8 +53,8 @@ private:
 	EfkSocket	m_socket;
 	uint16_t	m_port;
 
-	Thread		m_thread;
-	CriticalSection		m_ctrlClients;
+	std::thread		m_thread;
+	std::mutex		m_ctrlClients;
 
 	bool		m_running;
 
@@ -78,20 +76,22 @@ public:
 	ServerImplemented();
 	virtual ~ServerImplemented();
 
-	/**
-		@brief	サーバーを開始する。
-	*/
-	bool Start( uint16_t port );
+	bool Start( uint16_t port ) override;
 
-	void Stop();
+	void Stop() override;
 
-	void Regist( const EFK_CHAR* key, Effect* effect );
+	void Register(const EFK_CHAR* key, Effect* effect) override;
 
-	void Unregist( Effect* effect );
+	void Unregister(Effect* effect) override;
 
-	void Update();
+	void Update(Manager** managers, int32_t managerCount, ReloadingThreadType reloadingThreadType) override;
 
-	void SetMaterialPath( const EFK_CHAR* materialPath );
+	void SetMaterialPath( const EFK_CHAR* materialPath ) override;
+
+	void Regist(const EFK_CHAR* key, Effect* effect) override;
+
+	void Unregist(Effect* effect) override;
+
 };
 
 //----------------------------------------------------------------------------------
@@ -102,6 +102,6 @@ public:
 //
 //----------------------------------------------------------------------------------
 
-#endif	// #if !( defined(_PSVITA) || defined(_PS4) || defined(_SWITCH) || defined(_XBOXONE) )
+#endif	// #if !( defined(_PSVITA) || defined(_SWITCH) || defined(_XBOXONE) )
 
 #endif	// __EFFEKSEER_SERVER_IMPLEMENTED_H__

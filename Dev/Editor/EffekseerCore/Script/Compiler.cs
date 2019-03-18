@@ -54,9 +54,9 @@ namespace Effekseer.Script
 			CompilerParameters.ReferencedAssemblies.Add("System.Drawing.dll");
 			CompilerParameters.ReferencedAssemblies.Add("System.Windows.Forms.dll");
 
-			if(System.IO.File.Exists(entryDirectory + "EffekseerMP.exe"))
+			if(System.IO.File.Exists(entryDirectory + "Effekseer.exe"))
 			{
-				CompilerParameters.ReferencedAssemblies.Add(entryDirectory + "EffekseerMP.exe");
+				CompilerParameters.ReferencedAssemblies.Add(entryDirectory + "Effekseer.exe");
 			}
 
 			if (System.IO.File.Exists(entryDirectory + "EffekseerInterface.dll"))
@@ -102,13 +102,20 @@ namespace Effekseer.Script
 				// C#
 				var lines = System.IO.File.ReadAllText(path);
 
-                // Temp for dev
-				if (System.IO.File.Exists(entryDirectory + "EffekseerMP.exe"))
+				CompilerResults result = null;
+
+				try
 				{
-					lines = "#define MPDEF\n" + lines;
+					result = CSharpCodeProvider.CompileAssemblyFromSource(CompilerParameters, lines);
+				}
+				catch (Exception e)
+				{
+					compiled = null;
+					error = "CSharp Compile Exception : " + path + "\n";
+					error += e.ToString();
+					return ScriptLanguage.Unknown;
 				}
 
-				var result = CSharpCodeProvider.CompileAssemblyFromSource(CompilerParameters, lines);
 				if (result.Errors.HasErrors)
 				{
 					compiled = null;

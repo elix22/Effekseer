@@ -43,13 +43,8 @@ public class Native : global::System.IDisposable {
   public Native() : this(EffekseerNativePINVOKE.new_Native(), true) {
   }
 
-  public bool CreateWindow_Effekseer(System.IntPtr handle, int width, int height, bool isSRGBMode, bool isOpenGLMode) {
-    bool ret = EffekseerNativePINVOKE.Native_CreateWindow_Effekseer__SWIG_0(swigCPtr, handle, width, height, isSRGBMode, isOpenGLMode);
-    return ret;
-  }
-
-  public bool CreateWindow_Effekseer(System.IntPtr handle, int width, int height, bool isSRGBMode) {
-    bool ret = EffekseerNativePINVOKE.Native_CreateWindow_Effekseer__SWIG_1(swigCPtr, handle, width, height, isSRGBMode);
+  public bool CreateWindow_Effekseer(System.IntPtr handle, int width, int height, bool isSRGBMode, DeviceType deviceType) {
+    bool ret = EffekseerNativePINVOKE.Native_CreateWindow_Effekseer(swigCPtr, handle, width, height, isSRGBMode, (int)deviceType);
     return ret;
   }
 
@@ -269,8 +264,18 @@ public class Native : global::System.IDisposable {
     return ret;
   }
 
+  public int GetInstanceCount() {
+    int ret = EffekseerNativePINVOKE.Native_GetInstanceCount(swigCPtr);
+    return ret;
+  }
+
   public float GetFPS() {
     float ret = EffekseerNativePINVOKE.Native_GetFPS(swigCPtr);
+    return ret;
+  }
+
+  public static bool IsDebugMode() {
+    bool ret = EffekseerNativePINVOKE.Native_IsDebugMode();
     return ret;
   }
 

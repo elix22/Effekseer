@@ -87,10 +87,10 @@ namespace StandardNoTexture_Distortion_PS
 //-----------------------------------------------------------------------------------
 //
 //-----------------------------------------------------------------------------------
-::Effekseer::TextureLoader* CreateTextureLoader(ID3D11Device* device, ::Effekseer::FileInterface* fileInterface)
+::Effekseer::TextureLoader* CreateTextureLoader(ID3D11Device* device, ID3D11DeviceContext* context, ::Effekseer::FileInterface* fileInterface)
 {
 #ifdef __EFFEKSEER_RENDERER_INTERNAL_LOADER__
-	return new TextureLoader(device, fileInterface);
+	return new TextureLoader(device, context, fileInterface);
 #else
 	return NULL;
 #endif
@@ -269,10 +269,6 @@ RendererImplemented::RendererImplemented( int32_t squareMaxCount )
 	m_background.UserPtr = nullptr;
 
 	m_state = new OriginalState();
-
-#ifdef __EFFEKSEER_RENDERER_INTERNAL_LOADER__
-	EffekseerRenderer::PngTextureLoader::Initialize();
-#endif
 }
 
 //----------------------------------------------------------------------------------
@@ -280,10 +276,6 @@ RendererImplemented::RendererImplemented( int32_t squareMaxCount )
 //----------------------------------------------------------------------------------
 RendererImplemented::~RendererImplemented()
 {
-#ifdef __EFFEKSEER_RENDERER_INTERNAL_LOADER__
-	EffekseerRenderer::PngTextureLoader::Finalize();
-#endif
-
 	assert(GetRef() == 0);
 
 	ES_SAFE_DELETE(m_distortingCallback);
@@ -303,8 +295,9 @@ RendererImplemented::~RendererImplemented()
 	ES_SAFE_DELETE( m_renderState );
 	ES_SAFE_DELETE( m_vertexBuffer );
 	ES_SAFE_DELETE( m_indexBuffer );
+	ES_SAFE_DELETE(m_indexBufferForWireframe);
 
-	assert(GetRef() == -6);
+	assert(GetRef() == -7);
 }
 
 //----------------------------------------------------------------------------------
@@ -369,6 +362,32 @@ bool RendererImplemented::Initialize(ID3D11Device* device, ID3D11DeviceContext* 
 		}
 
 		m_indexBuffer->Unlock();
+	}
+
+	// 参照カウントの調整
+	Release();
+
+	// Generate index buffer for rendering wireframes
+	{
+		m_indexBufferForWireframe = IndexBuffer::Create(this, m_squareMaxCount * 8, false);
+		if (m_indexBufferForWireframe == NULL) return false;
+
+		m_indexBufferForWireframe->Lock();
+
+		for (int i = 0; i < m_squareMaxCount; i++)
+		{
+			uint16_t* buf = (uint16_t*)m_indexBufferForWireframe->GetBufferDirect(8);
+			buf[0] = 0 + 4 * i;
+			buf[1] = 1 + 4 * i;
+			buf[2] = 2 + 4 * i;
+			buf[3] = 3 + 4 * i;
+			buf[4] = 0 + 4 * i;
+			buf[5] = 2 + 4 * i;
+			buf[6] = 1 + 4 * i;
+			buf[7] = 3 + 4 * i;
+		}
+
+		m_indexBufferForWireframe->Unlock();
 	}
 
 	// 参照カウントの調整
@@ -451,22 +470,22 @@ bool RendererImplemented::Initialize(ID3D11Device* device, ID3D11DeviceContext* 
 	// 参照カウントの調整
 	Release();
 
-	m_shader->SetVertexConstantBufferSize(sizeof(Effekseer::Matrix44) * 2);
-	m_shader->SetVertexRegisterCount(8);
-	m_shader_no_texture->SetVertexConstantBufferSize(sizeof(Effekseer::Matrix44) * 2);
-	m_shader_no_texture->SetVertexRegisterCount(8);
+	m_shader->SetVertexConstantBufferSize(sizeof(Effekseer::Matrix44) * 2 + sizeof(float) * 4);
+	m_shader->SetVertexRegisterCount(8 + 1);
+	m_shader_no_texture->SetVertexConstantBufferSize(sizeof(Effekseer::Matrix44) * 2 + sizeof(float) * 4);
+	m_shader_no_texture->SetVertexRegisterCount(8 + 1);
 
-	m_shader_distortion->SetVertexConstantBufferSize(sizeof(Effekseer::Matrix44) * 2);
-	m_shader_distortion->SetVertexRegisterCount(8);
+	m_shader_distortion->SetVertexConstantBufferSize(sizeof(Effekseer::Matrix44) * 2 + sizeof(float) * 4);
+	m_shader_distortion->SetVertexRegisterCount(8 + 1);
 
-	m_shader_distortion->SetPixelConstantBufferSize(sizeof(float) * 4);
-	m_shader_distortion->SetPixelRegisterCount(1);
+	m_shader_distortion->SetPixelConstantBufferSize(sizeof(float) * 4 + sizeof(float) * 4);
+	m_shader_distortion->SetPixelRegisterCount(1 + 1);
 
-	m_shader_no_texture_distortion->SetVertexConstantBufferSize(sizeof(Effekseer::Matrix44) * 2);
-	m_shader_no_texture_distortion->SetVertexRegisterCount(8);
+	m_shader_no_texture_distortion->SetVertexConstantBufferSize(sizeof(Effekseer::Matrix44) * 2 + sizeof(float) * 4);
+	m_shader_no_texture_distortion->SetVertexRegisterCount(8+ 1);
 
-	m_shader_no_texture_distortion->SetPixelConstantBufferSize(sizeof(float) * 4);
-	m_shader_no_texture_distortion->SetPixelRegisterCount(1);
+	m_shader_no_texture_distortion->SetPixelConstantBufferSize(sizeof(float) * 4 + sizeof(float) * 4);
+	m_shader_no_texture_distortion->SetPixelRegisterCount(1 + 1);
 
 	m_standardRenderer = new EffekseerRenderer::StandardRenderer<RendererImplemented, Shader, Vertex, VertexDistortion>(
 		this, m_shader, m_shader_no_texture, m_shader_distortion, m_shader_no_texture_distortion);
@@ -564,7 +583,14 @@ VertexBuffer* RendererImplemented::GetVertexBuffer()
 //----------------------------------------------------------------------------------
 IndexBuffer* RendererImplemented::GetIndexBuffer()
 {
-	return m_indexBuffer;
+	if (m_renderMode == ::Effekseer::RenderMode::Wireframe)
+	{
+		return m_indexBufferForWireframe;
+	}
+	else
+	{
+		return m_indexBuffer;
+	}
 }
 
 //----------------------------------------------------------------------------------
@@ -658,8 +684,17 @@ const ::Effekseer::Matrix44& RendererImplemented::GetCameraMatrix() const
 //----------------------------------------------------------------------------------
 //
 //----------------------------------------------------------------------------------
-void RendererImplemented::SetCameraMatrix( const ::Effekseer::Matrix44& mat )
+void RendererImplemented::SetCameraMatrix(const ::Effekseer::Matrix44& mat)
 {
+	m_cameraFrontDirection = ::Effekseer::Vector3D(mat.Values[0][2], mat.Values[1][2], mat.Values[2][2]);
+
+	auto localPos = ::Effekseer::Vector3D(-mat.Values[3][0], -mat.Values[3][1], -mat.Values[3][2]);
+	auto f = m_cameraFrontDirection;
+	auto r = ::Effekseer::Vector3D(mat.Values[0][0], mat.Values[1][0], mat.Values[2][0]);
+	auto u = ::Effekseer::Vector3D(mat.Values[0][1], mat.Values[1][1], mat.Values[2][1]);
+
+	m_cameraPosition = r * localPos.X + u * localPos.Y + f * localPos.Z;
+
 	m_camera = mat;
 }
 
@@ -669,6 +704,22 @@ void RendererImplemented::SetCameraMatrix( const ::Effekseer::Matrix44& mat )
 ::Effekseer::Matrix44& RendererImplemented::GetCameraProjectionMatrix()
 {
 	return m_cameraProj;
+}
+
+::Effekseer::Vector3D RendererImplemented::GetCameraFrontDirection() const
+{
+	return m_cameraFrontDirection;
+}
+
+::Effekseer::Vector3D RendererImplemented::GetCameraPosition() const
+{
+	return m_cameraPosition;
+}
+
+void RendererImplemented::SetCameraParameter(const ::Effekseer::Vector3D& front, const ::Effekseer::Vector3D& position)
+{
+	m_cameraFrontDirection = front;
+	m_cameraPosition = position;
 }
 
 //----------------------------------------------------------------------------------
@@ -717,7 +768,7 @@ void RendererImplemented::SetCameraMatrix( const ::Effekseer::Matrix44& mat )
 ::Effekseer::TextureLoader* RendererImplemented::CreateTextureLoader( ::Effekseer::FileInterface* fileInterface )
 {
 #ifdef __EFFEKSEER_RENDERER_INTERNAL_LOADER__
-	return new TextureLoader(this->GetDevice(), fileInterface );
+	return new TextureLoader(this->GetDevice(), this->GetContext(), fileInterface );
 #else
 	return NULL;
 #endif
@@ -733,6 +784,12 @@ void RendererImplemented::SetCameraMatrix( const ::Effekseer::Matrix44& mat )
 #else
 	return NULL;
 #endif
+}
+
+Effekseer::TextureData* RendererImplemented::GetBackground()
+{
+	if (m_background.UserPtr == nullptr) return nullptr;
+	return &m_background;
 }
 
 void RendererImplemented::SetBackground(ID3D11ShaderResourceView* background)
@@ -798,7 +855,15 @@ void RendererImplemented::SetIndexBuffer(ID3D11Buffer* indexBuffer)
 //----------------------------------------------------------------------------------
 void RendererImplemented::SetLayout( Shader* shader )
 {
-	GetContext()->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+	if (m_renderMode == Effekseer::RenderMode::Normal)
+	{
+		GetContext()->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+	}
+	else
+	{
+		GetContext()->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_LINELIST);
+	}
+
 	GetContext()->IASetInputLayout( shader->GetLayoutInterface() );
 }
 
@@ -810,10 +875,20 @@ void RendererImplemented::DrawSprites( int32_t spriteCount, int32_t vertexOffset
 	drawcallCount++;
 	drawvertexCount += spriteCount * 4;
 
-	GetContext()->DrawIndexed(
-		spriteCount * 2 * 3,
-		0,
-		vertexOffset );
+	if (m_renderMode == Effekseer::RenderMode::Normal)
+	{
+		GetContext()->DrawIndexed(
+			spriteCount * 2 * 3,
+			0,
+			vertexOffset);
+	}
+	else
+	{
+		GetContext()->DrawIndexed(
+			spriteCount * 2 * 4,
+			0,
+			vertexOffset);
+	}
 }
 
 //----------------------------------------------------------------------------------
@@ -834,7 +909,7 @@ Shader* RendererImplemented::GetShader(bool useTexture, bool useDistortion) cons
 {
 	if (useDistortion)
 	{
-		if (useTexture /*&& m_renderMode == Effekseer::RenderMode::Normal*/)
+		if (useTexture && m_renderMode == Effekseer::RenderMode::Normal)
 		{
 			return m_shader_distortion;
 		}
@@ -845,7 +920,7 @@ Shader* RendererImplemented::GetShader(bool useTexture, bool useDistortion) cons
 	}
 	else
 	{
-		if (useTexture /*&& m_renderMode == Effekseer::RenderMode::Normal*/)
+		if (useTexture && m_renderMode == Effekseer::RenderMode::Normal)
 		{
 			return m_shader;
 		}

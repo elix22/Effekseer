@@ -232,8 +232,8 @@ bool Initialize(OpenGLDeviceType deviceType)
 	g_glBindVertexArrayOES = ::glBindVertexArrayOES;
 	g_isSupportedVertexArray = true;
 
-	g_glUnmapBuffer = ::glUnmapBuffer;
 	g_glMapBufferRangeEXT = ::glMapBufferRangeEXT;
+	g_glMapBufferOES = ::glMapBufferOES;
 	g_glUnmapBufferOES = ::glUnmapBufferOES;
 	g_isSurrpotedBufferRange = true;
 	g_isSurrpotedMapBuffer = true;
@@ -654,7 +654,19 @@ void* glMapBufferRange(GLenum target, GLintptr offset, GLsizeiptr length, GLbitf
 #elif defined(__EFFEKSEER_RENDERER_GLES2__)
 	return g_glMapBufferRangeEXT(target, offset, length, access);
 #else
+
+#if defined(__APPLE__)
+
+#if defined(GL_ARB_map_buffer_range)
 	return ::glMapBufferRange(target, offset, length, access);
+#else
+	return nullptr;
+#endif
+
+#else
+	return ::glMapBufferRange(target, offset, length, access);
+#endif
+
 #endif
 }
 
@@ -675,7 +687,7 @@ void glCompressedTexImage2D(GLenum target, GLint level, GLenum internalformat, G
 	g_glCompressedTexImage2D(target, level,internalformat, width, height, border,imageSize, data);
 #elif defined(__EFFEKSEER_RENDERER_GLES2__) || defined(__EFFEKSEER_RENDERER_GL2__)
 #else
-	glCompressedTexImage2D(target, level,internalformat, width, height, border,imageSize, data);
+	::glCompressedTexImage2D(target, level,internalformat, width, height, border,imageSize, data);
 #endif
 }
 

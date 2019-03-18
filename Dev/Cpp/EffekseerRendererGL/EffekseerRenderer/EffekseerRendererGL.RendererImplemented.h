@@ -10,18 +10,6 @@
 #include "../../EffekseerRendererCommon/EffekseerRenderer.RenderStateBase.h"
 #include "../../EffekseerRendererCommon/EffekseerRenderer.StandardRenderer.h"
 
-#if defined(_M_IX86) || defined(__x86__)
-#define EFK_SSE2
-#include <emmintrin.h>
-#elif defined(__ARM_NEON__)
-#define EFK_NEON
-#include <arm_neon.h>
-#endif
-
-#ifdef _MSC_VER
-#include <xmmintrin.h>
-#endif
-
 //----------------------------------------------------------------------------------
 // Lib
 //----------------------------------------------------------------------------------
@@ -60,282 +48,6 @@ struct VertexDistortion
 		Col = color;
 	}
 };
-
-//----------------------------------------------------------------------------------
-//
-//----------------------------------------------------------------------------------
-inline void TransformVertexes( Vertex* vertexes, int32_t count, const ::Effekseer::Matrix43& mat )
-{
-	#ifdef EFK_SSE2
-		__m128 r0 = _mm_loadu_ps( mat.Value[0] );
-		__m128 r1 = _mm_loadu_ps( mat.Value[1] );
-		__m128 r2 = _mm_loadu_ps( mat.Value[2] );
-		__m128 r3 = _mm_loadu_ps( mat.Value[3] );
-
-		float tmp_out[4];
-		::Effekseer::Vector3D* inout_prev;
-
-		// １ループ目
-		{
-			::Effekseer::Vector3D* inout_cur = &vertexes[0].Pos;
-			__m128 v = _mm_loadu_ps( (const float*)inout_cur );
-
-			__m128 x = _mm_shuffle_ps( v, v, _MM_SHUFFLE(0,0,0,0) );
-			__m128 a0 = _mm_mul_ps( r0, x );
-			__m128 y = _mm_shuffle_ps( v, v, _MM_SHUFFLE(1,1,1,1) );
-			__m128 a1 = _mm_mul_ps( r1, y );
-			__m128 z = _mm_shuffle_ps( v, v, _MM_SHUFFLE(2,2,2,2) );
-			__m128 a2 = _mm_mul_ps( r2, z );
-
-			__m128 a01 = _mm_add_ps( a0, a1 );
-			__m128 a23 = _mm_add_ps( a2, r3 );
-			__m128 a = _mm_add_ps( a01, a23 );
-
-			// 今回の結果をストアしておく
-			_mm_storeu_ps( tmp_out, a );
-			inout_prev = inout_cur;
-		}
-
-		for( int i = 1; i < count; i++ )
-		{
-			::Effekseer::Vector3D* inout_cur = &vertexes[i].Pos;
-			__m128 v = _mm_loadu_ps( (const float*)inout_cur );
-
-			__m128 x = _mm_shuffle_ps( v, v, _MM_SHUFFLE(0,0,0,0) );
-			__m128 a0 = _mm_mul_ps( r0, x );
-			__m128 y = _mm_shuffle_ps( v, v, _MM_SHUFFLE(1,1,1,1) );
-			__m128 a1 = _mm_mul_ps( r1, y );
-			__m128 z = _mm_shuffle_ps( v, v, _MM_SHUFFLE(2,2,2,2) );
-			__m128 a2 = _mm_mul_ps( r2, z );
-
-			__m128 a01 = _mm_add_ps( a0, a1 );
-			__m128 a23 = _mm_add_ps( a2, r3 );
-			__m128 a = _mm_add_ps( a01, a23 );
-
-			// 直前のループの結果を書き込みます
-			inout_prev->X = tmp_out[0];
-			inout_prev->Y = tmp_out[1];
-			inout_prev->Z = tmp_out[2];
-
-			// 今回の結果をストアしておく
-			_mm_storeu_ps( tmp_out, a );
-			inout_prev = inout_cur;
-		}
-
-		// 最後のループの結果を書き込み
-		{
-			inout_prev->X = tmp_out[0];
-			inout_prev->Y = tmp_out[1];
-			inout_prev->Z = tmp_out[2];
-		}
-	#elif defined(EFK_NEON)
-		float32x4_t r0 = vld1q_f32( mat.Value[0] );
-		float32x4_t r1 = vld1q_f32( mat.Value[1] );
-		float32x4_t r2 = vld1q_f32( mat.Value[2] );
-		float32x4_t r3 = vld1q_f32( mat.Value[3] );
-	
-		float tmp_out[4];
-		::Effekseer::Vector3D* inout_prev;
-	
-		// １ループ目
-		{
-			::Effekseer::Vector3D* inout_cur = &vertexes[0].Pos;
-			float32x4_t v = vld1q_f32( (const float*)inout_cur );
-			
-			float32x4_t a = vmlaq_lane_f32( r3, r0, vget_low_f32(v), 0 );
-			a = vmlaq_lane_f32( a, r1, vget_low_f32(v), 1 );
-			a = vmlaq_lane_f32( a, r2, vget_high_f32(v), 0 );
-			
-			// 今回の結果をストアしておく
-			vst1q_f32( tmp_out, a );
-			inout_prev = inout_cur;
-		}
-	
-		for( int i = 1; i < count; i++ )
-		{
-			::Effekseer::Vector3D* inout_cur = &vertexes[i].Pos;
-			float32x4_t v = vld1q_f32( (const float*)inout_cur );
-			
-			float32x4_t a = vmlaq_lane_f32( r3, r0, vget_low_f32(v), 0 );
-			a = vmlaq_lane_f32( a, r1, vget_low_f32(v), 1 );
-			a = vmlaq_lane_f32( a, r2, vget_high_f32(v), 0 );
-			
-			// 直前のループの結果を書き込みます
-			inout_prev->X = tmp_out[0];
-			inout_prev->Y = tmp_out[1];
-			inout_prev->Z = tmp_out[2];
-			
-			// 今回の結果をストアしておく
-			vst1q_f32( tmp_out, a );
-			inout_prev = inout_cur;
-		}
-	
-		// 最後のループの結果を書き込み
-		{
-			inout_prev->X = tmp_out[0];
-			inout_prev->Y = tmp_out[1];
-			inout_prev->Z = tmp_out[2];
-		}
-	#else
-		for( int i = 0; i < count; i++ )
-		{
-			::Effekseer::Vector3D::Transform(
-			vertexes[i].Pos,
-			vertexes[i].Pos,
-			mat );
-		}
-	#endif
-}
-
-//----------------------------------------------------------------------------------
-//
-//----------------------------------------------------------------------------------
-inline void TransformVertexes(VertexDistortion* vertexes, int32_t count, const ::Effekseer::Matrix43& mat)
-{
-#ifdef EFK_SSE2
-	__m128 r0 = _mm_loadu_ps(mat.Value[0]);
-	__m128 r1 = _mm_loadu_ps(mat.Value[1]);
-	__m128 r2 = _mm_loadu_ps(mat.Value[2]);
-	__m128 r3 = _mm_loadu_ps(mat.Value[3]);
-
-	float tmp_out[4];
-	::Effekseer::Vector3D* inout_prev;
-
-	// １ループ目
-	{
-		::Effekseer::Vector3D* inout_cur = &vertexes[0].Pos;
-		__m128 v = _mm_loadu_ps((const float*) inout_cur);
-
-		__m128 x = _mm_shuffle_ps(v, v, _MM_SHUFFLE(0, 0, 0, 0));
-		__m128 a0 = _mm_mul_ps(r0, x);
-		__m128 y = _mm_shuffle_ps(v, v, _MM_SHUFFLE(1, 1, 1, 1));
-		__m128 a1 = _mm_mul_ps(r1, y);
-		__m128 z = _mm_shuffle_ps(v, v, _MM_SHUFFLE(2, 2, 2, 2));
-		__m128 a2 = _mm_mul_ps(r2, z);
-
-		__m128 a01 = _mm_add_ps(a0, a1);
-		__m128 a23 = _mm_add_ps(a2, r3);
-		__m128 a = _mm_add_ps(a01, a23);
-
-		// 今回の結果をストアしておく
-		_mm_storeu_ps(tmp_out, a);
-		inout_prev = inout_cur;
-	}
-
-	for (int i = 1; i < count; i++)
-	{
-		::Effekseer::Vector3D* inout_cur = &vertexes[i].Pos;
-		__m128 v = _mm_loadu_ps((const float*) inout_cur);
-
-		__m128 x = _mm_shuffle_ps(v, v, _MM_SHUFFLE(0, 0, 0, 0));
-		__m128 a0 = _mm_mul_ps(r0, x);
-		__m128 y = _mm_shuffle_ps(v, v, _MM_SHUFFLE(1, 1, 1, 1));
-		__m128 a1 = _mm_mul_ps(r1, y);
-		__m128 z = _mm_shuffle_ps(v, v, _MM_SHUFFLE(2, 2, 2, 2));
-		__m128 a2 = _mm_mul_ps(r2, z);
-
-		__m128 a01 = _mm_add_ps(a0, a1);
-		__m128 a23 = _mm_add_ps(a2, r3);
-		__m128 a = _mm_add_ps(a01, a23);
-
-		// 直前のループの結果を書き込みます
-		inout_prev->X = tmp_out[0];
-		inout_prev->Y = tmp_out[1];
-		inout_prev->Z = tmp_out[2];
-
-		// 今回の結果をストアしておく
-		_mm_storeu_ps(tmp_out, a);
-		inout_prev = inout_cur;
-	}
-
-	// 最後のループの結果を書き込み
-		{
-			inout_prev->X = tmp_out[0];
-			inout_prev->Y = tmp_out[1];
-			inout_prev->Z = tmp_out[2];
-		}
-#elif defined(EFK_NEON)
-	float32x4_t r0 = vld1q_f32(mat.Value[0]);
-	float32x4_t r1 = vld1q_f32(mat.Value[1]);
-	float32x4_t r2 = vld1q_f32(mat.Value[2]);
-	float32x4_t r3 = vld1q_f32(mat.Value[3]);
-	
-	float tmp_out[4];
-	::Effekseer::Vector3D* inout_prev;
-	
-	// １ループ目
-	{
-		::Effekseer::Vector3D* inout_cur = &vertexes[0].Pos;
-		float32x4_t v = vld1q_f32((const float*) inout_cur);
-		
-		float32x4_t a = vmlaq_lane_f32( r3, r0, vget_low_f32(v), 0 );
-		a = vmlaq_lane_f32( a, r1, vget_low_f32(v), 1 );
-		a = vmlaq_lane_f32( a, r2, vget_high_f32(v), 0 );
-		
-		// 今回の結果をストアしておく
-		vst1q_f32(tmp_out, a);
-		inout_prev = inout_cur;
-	}
-	
-	for (int i = 1; i < count; i++)
-	{
-		::Effekseer::Vector3D* inout_cur = &vertexes[i].Pos;
-		float32x4_t v = vld1q_f32((const float*) inout_cur);
-		
-		float32x4_t a = vmlaq_lane_f32( r3, r0, vget_low_f32(v), 0 );
-		a = vmlaq_lane_f32( a, r1, vget_low_f32(v), 1 );
-		a = vmlaq_lane_f32( a, r2, vget_high_f32(v), 0 );
-		
-		// 直前のループの結果を書き込みます
-		inout_prev->X = tmp_out[0];
-		inout_prev->Y = tmp_out[1];
-		inout_prev->Z = tmp_out[2];
-		
-		// 今回の結果をストアしておく
-		vst1q_f32(tmp_out, a);
-		inout_prev = inout_cur;
-	}
-	
-	// 最後のループの結果を書き込み
-	{
-		inout_prev->X = tmp_out[0];
-		inout_prev->Y = tmp_out[1];
-		inout_prev->Z = tmp_out[2];
-	}
-#else
-	for (int i = 0; i < count; i++)
-	{
-		::Effekseer::Vector3D::Transform(
-			vertexes[i].Pos,
-			vertexes[i].Pos,
-			mat);
-	}
-#endif
-
-	for (int i = 0; i < count; i++)
-	{
-		auto vs = &vertexes[i];
-
-		::Effekseer::Vector3D::Transform(
-			vs->Tangent,
-			vs->Tangent,
-			mat);
-
-		::Effekseer::Vector3D::Transform(
-			vs->Binormal,
-			vs->Binormal,
-			mat);
-
-		Effekseer::Vector3D zero;
-		::Effekseer::Vector3D::Transform(
-			zero,
-			zero,
-			mat);
-
-		::Effekseer::Vector3D::Normal(vs->Tangent, vs->Tangent - zero);
-		::Effekseer::Vector3D::Normal(vs->Binormal, vs->Binormal - zero);
-	}
-}
 
 //----------------------------------------------------------------------------------
 //
@@ -401,6 +113,9 @@ private:
 	::Effekseer::Matrix44	m_camera;
 	::Effekseer::Matrix44	m_cameraProj;
 
+	::Effekseer::Vector3D	m_cameraPosition;
+	::Effekseer::Vector3D	m_cameraFrontDirection;
+
 	::EffekseerRenderer::RenderStateBase*		m_renderState;
 
 	Effekseer::TextureData	m_background;
@@ -434,27 +149,27 @@ public:
 	*/
 	~RendererImplemented();
 
-	void OnLostDevice();
-	void OnResetDevice();
+	void OnLostDevice() override;
+	void OnResetDevice() override;
 
 	/**
 		@brief	初期化
 	*/
 	bool Initialize();
 
-	void Destroy();
+	void Destroy() override;
 
-	void SetRestorationOfStatesFlag(bool flag);
+	void SetRestorationOfStatesFlag(bool flag) override;
 
 	/**
 		@brief	描画開始
 	*/
-	bool BeginRendering();
+	bool BeginRendering() override;
 
 	/**
 		@brief	描画終了
 	*/
-	bool EndRendering();
+	bool EndRendering() override;
 
 	/**
 		@brief	頂点バッファ取得
@@ -469,7 +184,7 @@ public:
 	/**
 		@brief	最大描画スプライト数
 	*/
-	int32_t GetSquareMaxCount() const;
+	int32_t GetSquareMaxCount() const override;
 
 	void SetSquareMaxCount(int32_t count) override;
 
@@ -529,6 +244,12 @@ public:
 		@brief	カメラプロジェクション行列を取得する。
 	*/
 	::Effekseer::Matrix44& GetCameraProjectionMatrix() override;
+
+	::Effekseer::Vector3D GetCameraFrontDirection() const override;
+
+	::Effekseer::Vector3D GetCameraPosition() const  override;
+
+	void SetCameraParameter(const ::Effekseer::Vector3D& front, const ::Effekseer::Vector3D& position)  override;
 
 	/**
 		@brief	スプライトレンダラーを生成する。
@@ -617,7 +338,7 @@ public:
 
 	void SetTextures(Shader* shader, Effekseer::TextureData** textures, int32_t count);
 
-	void ResetRenderState();
+	void ResetRenderState() override;
 
 	int32_t GetDrawCallCount() const override;
 
@@ -631,9 +352,9 @@ public:
 
 	OpenGLDeviceType GetDeviceType() { return m_deviceType; }
 
-	virtual int GetRef() { return ::Effekseer::ReferenceObject::GetRef(); }
-	virtual int AddRef() { return ::Effekseer::ReferenceObject::AddRef(); }
-	virtual int Release() { return ::Effekseer::ReferenceObject::Release(); }
+	virtual int GetRef() override { return ::Effekseer::ReferenceObject::GetRef(); }
+	virtual int AddRef() override { return ::Effekseer::ReferenceObject::AddRef(); }
+	virtual int Release() override { return ::Effekseer::ReferenceObject::Release(); }
 
 private:
 	void GenerateIndexData();

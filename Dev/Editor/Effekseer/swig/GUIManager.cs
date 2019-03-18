@@ -43,8 +43,8 @@ public class GUIManager : global::System.IDisposable {
   public GUIManager() : this(EffekseerNativePINVOKE.new_GUIManager(), true) {
   }
 
-  public bool Initialize(string title, int width, int height, bool isOpenGLMode, bool isSRGBMode) {
-    bool ret = EffekseerNativePINVOKE.GUIManager_Initialize(swigCPtr, title, width, height, isOpenGLMode, isSRGBMode);
+  public bool Initialize(string title, int width, int height, DeviceType deviceType, bool isSRGBMode) {
+    bool ret = EffekseerNativePINVOKE.GUIManager_Initialize(swigCPtr, title, width, height, (int)deviceType, isSRGBMode);
     return ret;
   }
 
@@ -54,6 +54,10 @@ public class GUIManager : global::System.IDisposable {
 
   public void SetTitle(string title) {
     EffekseerNativePINVOKE.GUIManager_SetTitle(swigCPtr, title);
+  }
+
+  public void SetWindowIcon(string iconPath) {
+    EffekseerNativePINVOKE.GUIManager_SetWindowIcon(swigCPtr, iconPath);
   }
 
   public Vec2 GetSize() {
@@ -105,8 +109,12 @@ public class GUIManager : global::System.IDisposable {
     EffekseerNativePINVOKE.GUIManager_ResetGUI(swigCPtr);
   }
 
+  public void RenderGUI(bool isValid) {
+    EffekseerNativePINVOKE.GUIManager_RenderGUI__SWIG_0(swigCPtr, isValid);
+  }
+
   public void RenderGUI() {
-    EffekseerNativePINVOKE.GUIManager_RenderGUI(swigCPtr);
+    EffekseerNativePINVOKE.GUIManager_RenderGUI__SWIG_1(swigCPtr);
   }
 
   public System.IntPtr GetNativeHandle() { return EffekseerNativePINVOKE.GUIManager_GetNativeHandle(swigCPtr); }
@@ -226,6 +234,16 @@ public class GUIManager : global::System.IDisposable {
     return ret;
   }
 
+  public float GetFrameHeight() {
+    float ret = EffekseerNativePINVOKE.GUIManager_GetFrameHeight(swigCPtr);
+    return ret;
+  }
+
+  public float GetFrameHeightWithSpacing() {
+    float ret = EffekseerNativePINVOKE.GUIManager_GetFrameHeightWithSpacing(swigCPtr);
+    return ret;
+  }
+
   public void Columns(int count, string id, bool border) {
     EffekseerNativePINVOKE.GUIManager_Columns__SWIG_0(swigCPtr, count, id, border);
   }
@@ -282,8 +300,18 @@ public class GUIManager : global::System.IDisposable {
     EffekseerNativePINVOKE.GUIManager_TextWrapped(swigCPtr, text);
   }
 
+  public bool Button(string label, float size_x, float size_y) {
+    bool ret = EffekseerNativePINVOKE.GUIManager_Button__SWIG_0(swigCPtr, label, size_x, size_y);
+    return ret;
+  }
+
+  public bool Button(string label, float size_x) {
+    bool ret = EffekseerNativePINVOKE.GUIManager_Button__SWIG_1(swigCPtr, label, size_x);
+    return ret;
+  }
+
   public bool Button(string label) {
-    bool ret = EffekseerNativePINVOKE.GUIManager_Button(swigCPtr, label);
+    bool ret = EffekseerNativePINVOKE.GUIManager_Button__SWIG_2(swigCPtr, label);
     return ret;
   }
 
@@ -895,6 +923,14 @@ public class GUIManager : global::System.IDisposable {
     EffekseerNativePINVOKE.GUIManager_SetTooltip(swigCPtr, text);
   }
 
+  public void BeginTooltip() {
+    EffekseerNativePINVOKE.GUIManager_BeginTooltip(swigCPtr);
+  }
+
+  public void EndTooltip() {
+    EffekseerNativePINVOKE.GUIManager_EndTooltip(swigCPtr);
+  }
+
   public bool BeginMainMenuBar() {
     bool ret = EffekseerNativePINVOKE.GUIManager_BeginMainMenuBar(swigCPtr);
     return ret;
@@ -1053,6 +1089,11 @@ public class GUIManager : global::System.IDisposable {
     return ret;
   }
 
+  public bool IsMouseDown(int button) {
+    bool ret = EffekseerNativePINVOKE.GUIManager_IsMouseDown(swigCPtr, button);
+    return ret;
+  }
+
   public bool IsMouseDoubleClicked(int button) {
     bool ret = EffekseerNativePINVOKE.GUIManager_IsMouseDoubleClicked(swigCPtr, button);
     return ret;
@@ -1153,24 +1194,29 @@ public class GUIManager : global::System.IDisposable {
     EffekseerNativePINVOKE.GUIManager_SetNextDockTabToolTip(swigCPtr, popup);
   }
 
+  public bool GetDockActive() {
+    bool ret = EffekseerNativePINVOKE.GUIManager_GetDockActive(swigCPtr);
+    return ret;
+  }
+
   public void SetDockActive() {
     EffekseerNativePINVOKE.GUIManager_SetDockActive(swigCPtr);
   }
 
-  public bool BeginFCurve(int id, Vec2 size, Vec2 scale, float min_value, float max_value) {
-    bool ret = EffekseerNativePINVOKE.GUIManager_BeginFCurve__SWIG_0(swigCPtr, id, Vec2.getCPtr(size), Vec2.getCPtr(scale), min_value, max_value);
+  public bool BeginFCurve(int id, Vec2 size, float current, Vec2 scale, float min_value, float max_value) {
+    bool ret = EffekseerNativePINVOKE.GUIManager_BeginFCurve__SWIG_0(swigCPtr, id, Vec2.getCPtr(size), current, Vec2.getCPtr(scale), min_value, max_value);
     if (EffekseerNativePINVOKE.SWIGPendingException.Pending) throw EffekseerNativePINVOKE.SWIGPendingException.Retrieve();
     return ret;
   }
 
-  public bool BeginFCurve(int id, Vec2 size, Vec2 scale, float min_value) {
-    bool ret = EffekseerNativePINVOKE.GUIManager_BeginFCurve__SWIG_1(swigCPtr, id, Vec2.getCPtr(size), Vec2.getCPtr(scale), min_value);
+  public bool BeginFCurve(int id, Vec2 size, float current, Vec2 scale, float min_value) {
+    bool ret = EffekseerNativePINVOKE.GUIManager_BeginFCurve__SWIG_1(swigCPtr, id, Vec2.getCPtr(size), current, Vec2.getCPtr(scale), min_value);
     if (EffekseerNativePINVOKE.SWIGPendingException.Pending) throw EffekseerNativePINVOKE.SWIGPendingException.Retrieve();
     return ret;
   }
 
-  public bool BeginFCurve(int id, Vec2 size, Vec2 scale) {
-    bool ret = EffekseerNativePINVOKE.GUIManager_BeginFCurve__SWIG_2(swigCPtr, id, Vec2.getCPtr(size), Vec2.getCPtr(scale));
+  public bool BeginFCurve(int id, Vec2 size, float current, Vec2 scale) {
+    bool ret = EffekseerNativePINVOKE.GUIManager_BeginFCurve__SWIG_2(swigCPtr, id, Vec2.getCPtr(size), current, Vec2.getCPtr(scale));
     if (EffekseerNativePINVOKE.SWIGPendingException.Pending) throw EffekseerNativePINVOKE.SWIGPendingException.Retrieve();
     return ret;
   }
@@ -1215,6 +1261,15 @@ public class GUIManager : global::System.IDisposable {
   public static DialogSelection show(string message, string title, DialogStyle style, DialogButtons buttons) {
     DialogSelection ret = (DialogSelection)EffekseerNativePINVOKE.GUIManager_show(message, title, (int)style, (int)buttons);
     return ret;
+  }
+
+  public static bool IsMacOSX() {
+    bool ret = EffekseerNativePINVOKE.GUIManager_IsMacOSX();
+    return ret;
+  }
+
+  public static void SetIniFilename(string filename) {
+    EffekseerNativePINVOKE.GUIManager_SetIniFilename(filename);
   }
 
   public static int GetLanguage() {

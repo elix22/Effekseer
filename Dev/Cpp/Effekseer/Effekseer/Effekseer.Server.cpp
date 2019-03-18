@@ -1,17 +1,19 @@
 ﻿
-#if !( defined(_PSVITA) || defined(_PS4) || defined(_SWITCH) || defined(_XBOXONE) )
+#if !( defined(_PSVITA) || defined(_XBOXONE) )
 
 //----------------------------------------------------------------------------------
 // Include
 //----------------------------------------------------------------------------------
+#include <thread>
 #include "Effekseer.ServerImplemented.h"
 #include "Effekseer.Effect.h"
 
-#ifdef _WIN32
+#include <string.h>
+
+#if defined(_WIN32) && !defined(_PS4) 
 #else
 #include <unistd.h>
 #endif
-
 
 //----------------------------------------------------------------------------------
 //
@@ -34,12 +36,12 @@ void ServerImplemented::InternalClient::RecvAsync( void* data )
 		restSize = 4;
 		while(restSize > 0)
 		{
-			int32_t recvSize = ::recv( client->m_socket, (char*)(&size), restSize, 0 );
+			auto recvSize = ::recv( client->m_socket, (char*)(&size), restSize, 0 );
 			restSize -= recvSize;
 
 			if( recvSize == 0 || recvSize == -1 )
 			{
-				/* 失敗 */
+				// Failed
 				client->m_server->RemoveClient( client );
 				client->ShutDown();
 				return;
@@ -51,12 +53,12 @@ void ServerImplemented::InternalClient::RecvAsync( void* data )
 		{
 			uint8_t buf[256];
 
-			int32_t recvSize = ::recv( client->m_socket, (char*)(buf), Min(restSize,256), 0 );
+			auto recvSize = ::recv( client->m_socket, (char*)(buf), Min(restSize,256), 0 );
 			restSize -= recvSize;
 
 			if( recvSize == 0 || recvSize == -1 )
 			{
-				/* 失敗 */
+				// Failed
 				client->m_server->RemoveClient( client );
 				client->ShutDown();
 				return;
@@ -68,10 +70,10 @@ void ServerImplemented::InternalClient::RecvAsync( void* data )
 			}
 		}
 
-		/* 受信処理 */
-		client->m_ctrlRecvBuffers.Enter();
+		// recieve buffer
+		client->m_ctrlRecvBuffers.lock();
 		client->m_recvBuffers.push_back(client->m_recvBuffer);
-		client->m_ctrlRecvBuffers.Leave();
+		client->m_ctrlRecvBuffers.unlock();
 	}
 }
 
@@ -83,7 +85,11 @@ ServerImplemented::InternalClient::InternalClient( EfkSocket socket_, ServerImpl
 	, m_server	( server )
 	, m_active	( true )
 {
-	m_threadRecv.Create( RecvAsync, this );
+	m_threadRecv = std::thread(
+		[this]() 
+	{
+		RecvAsync(this);
+	});
 }
 
 //----------------------------------------------------------------------------------
@@ -91,7 +97,7 @@ ServerImplemented::InternalClient::InternalClient( EfkSocket socket_, ServerImpl
 //----------------------------------------------------------------------------------
 ServerImplemented::InternalClient::~InternalClient()
 {
-	m_threadRecv.Wait();
+	m_threadRecv.join();
 }
 
 //----------------------------------------------------------------------------------
@@ -140,9 +146,8 @@ Server* Server::Create()
 //----------------------------------------------------------------------------------
 void ServerImplemented::AddClient( InternalClient* client )
 {
-	m_ctrlClients.Enter();
+	std::lock_guard<std::mutex> lock(m_ctrlClients);
 	m_clients.insert( client );
-	m_ctrlClients.Leave();
 }
 
 //----------------------------------------------------------------------------------
@@ -150,13 +155,12 @@ void ServerImplemented::AddClient( InternalClient* client )
 //----------------------------------------------------------------------------------
 void ServerImplemented::RemoveClient( InternalClient* client )
 {
-	m_ctrlClients.Enter();
+	std::lock_guard<std::mutex> lock(m_ctrlClients);
 	if( m_clients.count( client ) > 0 )
 	{
 		m_clients.erase( client );
 		m_removedClients.insert( client );
 	}
-	m_ctrlClients.Leave();
 }
 
 //----------------------------------------------------------------------------------
@@ -181,7 +185,7 @@ void ServerImplemented::AcceptAsync( void* data )
 			break;
 		}
 
-		/* 接続追加 */
+		// Accept and add an internal client
 		server->AddClient( new InternalClient( socket_, server ) );
 
 		EffekseerPrintDebug("Server : AcceptClient\n");
@@ -209,12 +213,10 @@ bool ServerImplemented::Start( uint16_t port )
 		return false;
 	}
 
-	/* 接続用データ生成 */
 	memset( &sockAddr, 0, sizeof(SOCKADDR_IN));
 	sockAddr.sin_family	= AF_INET;
 	sockAddr.sin_port	= htons( port );
 
-	/* 関連付け */
 	returnCode = ::bind( socket_, (sockaddr*)&sockAddr, sizeof(sockaddr_in) );
 	if ( returnCode == SocketError )
 	{
@@ -225,7 +227,7 @@ bool ServerImplemented::Start( uint16_t port )
 		return false;
 	}
 
-	/* 接続 */
+	// Connect
 	if ( !Socket::Listen( socket_, 30 ) )
 	{
 		if ( socket_ != InvalidSocket )
@@ -238,7 +240,12 @@ bool ServerImplemented::Start( uint16_t port )
 	m_running = true;
 	m_socket = socket_;
 	m_port = port;
-	m_thread.Create( AcceptAsync, this );
+
+	m_thread = std::thread(
+		[this]()
+	{
+		AcceptAsync(this);
+	});
 
 	EffekseerPrintDebug("Server : Start\n");
 
@@ -258,35 +265,35 @@ void ServerImplemented::Stop()
 	
 	m_running = false;
 
-	m_thread.Wait();
+	m_thread.join();
 
-	/* クライアント停止 */
-	m_ctrlClients.Enter();
+	// Stop clients
+	m_ctrlClients.lock();
 	for( std::set<InternalClient*>::iterator it = m_clients.begin(); it != m_clients.end(); ++it )
 	{
 		(*it)->ShutDown();
 	}
-	m_ctrlClients.Leave();
+	m_ctrlClients.unlock();
 	
 
-	/* クライアントの消滅待ち */
+	// Wait clients to be removed
 	while(true)
 	{
-		m_ctrlClients.Enter();
-		int32_t size = m_clients.size();
-		m_ctrlClients.Leave();
+		m_ctrlClients.lock();
+		int32_t size = (int32_t)m_clients.size();
+		m_ctrlClients.unlock();
 	
 		if( size == 0 ) break;
 
-		Sleep_(1);
+		std::this_thread::sleep_for(std::chrono::milliseconds(1));
 	}
 
-	/* 破棄 */
+	// Delete clients
 	for( std::set<InternalClient*>::iterator it = m_removedClients.begin(); it != m_removedClients.end(); ++it )
 	{
 		while( (*it)->m_active )
 		{
-			Sleep_(1);
+			std::this_thread::sleep_for(std::chrono::milliseconds(1));
 		}
 		delete (*it);
 	}
@@ -295,7 +302,7 @@ void ServerImplemented::Stop()
 //----------------------------------------------------------------------------------
 //
 //----------------------------------------------------------------------------------
-void ServerImplemented::Regist( const EFK_CHAR* key, Effect* effect )
+void ServerImplemented::Register( const EFK_CHAR* key, Effect* effect )
 {
 	if( effect == NULL ) return;
 
@@ -313,11 +320,11 @@ void ServerImplemented::Regist( const EFK_CHAR* key, Effect* effect )
 	{
 		if( m_materialPath.size() > 1 )
 		{
-			m_effects[key_]->Reload( &(m_data[key_][0]), m_data.size(), &(m_materialPath[0]) );
+			m_effects[key_]->Reload( &(m_data[key_][0]), (int32_t)m_data.size(), &(m_materialPath[0]) );
 		}
 		else
 		{
-			m_effects[key_]->Reload( &(m_data[key_][0]), m_data.size() );
+			m_effects[key_]->Reload( &(m_data[key_][0]), (int32_t)m_data.size() );
 		}
 	}
 }
@@ -325,7 +332,7 @@ void ServerImplemented::Regist( const EFK_CHAR* key, Effect* effect )
 //----------------------------------------------------------------------------------
 //
 //----------------------------------------------------------------------------------
-void ServerImplemented::Unregist( Effect* effect )
+void ServerImplemented::Unregister( Effect* effect )
 {
 	if( effect == NULL ) return;
 
@@ -348,15 +355,15 @@ void ServerImplemented::Unregist( Effect* effect )
 //----------------------------------------------------------------------------------
 //
 //----------------------------------------------------------------------------------
-void ServerImplemented::Update()
+void ServerImplemented::Update(Manager** managers, int32_t managerCount, ReloadingThreadType reloadingThreadType)
 {
-	m_ctrlClients.Enter();
+	m_ctrlClients.lock();
 
 	for( std::set<InternalClient*>::iterator it = m_removedClients.begin(); it != m_removedClients.end(); ++it )
 	{
 		while( (*it)->m_active )
 		{
-			Sleep_(1);
+			std::this_thread::sleep_for(std::chrono::milliseconds(1));
 		}
 		delete (*it);
 	}
@@ -364,7 +371,7 @@ void ServerImplemented::Update()
 
 	for( std::set<InternalClient*>::iterator it = m_clients.begin(); it != m_clients.end(); ++it )
 	{
-		(*it)->m_ctrlRecvBuffers.Enter();
+		(*it)->m_ctrlRecvBuffers.lock();
 
 		for( size_t i = 0; i < (*it)->m_recvBuffers.size(); i++ )
 		{
@@ -383,8 +390,8 @@ void ServerImplemented::Update()
 				p += sizeof(char16_t);
 			}
 
-			uint8_t* data = p;
-			int32_t datasize = buf.size() - (p-&(buf[0]));
+			uint8_t* recv_data = p;
+			auto datasize = (int32_t)buf.size() - (p-&(buf[0]));
 		
 			if( m_data.count( key ) > 0 )
 			{
@@ -393,27 +400,46 @@ void ServerImplemented::Update()
 
 			for( int32_t d = 0; d < datasize; d++ )
 			{
-				m_data[key].push_back( data[d] );
+				m_data[key].push_back( recv_data[d] );
 			}
 
 			if( m_effects.count( key ) > 0 )
 			{
-				if( m_materialPath.size() > 1 )
+				if (managers != nullptr)
 				{
-					m_effects[key]->Reload( &(m_data[key][0]), m_data.size(), &(m_materialPath[0]) );
+					auto& data_ = m_data[key];
+
+					if (m_materialPath.size() > 1)
+					{
+						m_effects[key]->Reload(managers, managerCount, data_.data(), (int32_t)data_.size(), &(m_materialPath[0]), reloadingThreadType);
+					}
+					else
+					{
+						m_effects[key]->Reload(managers, managerCount, data_.data(), (int32_t)data_.size(), nullptr, reloadingThreadType);
+					}
 				}
 				else
 				{
-					m_effects[key]->Reload( &(m_data[key][0]), m_data.size() );
+					auto& data_ = m_data[key];
+
+					if (m_materialPath.size() > 1)
+					{
+						m_effects[key]->Reload(data_.data(), (int32_t)data_.size(), &(m_materialPath[0]), reloadingThreadType);
+					}
+					else
+					{
+						m_effects[key]->Reload(data_.data(), (int32_t)data_.size(), nullptr, reloadingThreadType);
+					}
 				}
+				
 			}
 		}
 
 		(*it)->m_recvBuffers.clear();
-		(*it)->m_ctrlRecvBuffers.Leave();
+		(*it)->m_ctrlRecvBuffers.unlock();
 
 	}
-	m_ctrlClients.Leave();
+	m_ctrlClients.unlock();
 	
 }
 
@@ -433,6 +459,16 @@ void ServerImplemented::SetMaterialPath( const EFK_CHAR* materialPath )
 	m_materialPath.push_back(0);
 }
 
+void ServerImplemented::Regist(const EFK_CHAR* key, Effect* effect)
+{
+	Register(key, effect);
+}
+
+void ServerImplemented::Unregist(Effect* effect)
+{
+	Unregister(effect);
+}
+
 //----------------------------------------------------------------------------------
 //
 //----------------------------------------------------------------------------------
@@ -441,4 +477,4 @@ void ServerImplemented::SetMaterialPath( const EFK_CHAR* materialPath )
 //
 //----------------------------------------------------------------------------------
 
-#endif	// #if !( defined(_PSVITA) || defined(_PS4) || defined(_SWITCH) || defined(_XBOXONE) )
+#endif	// #if !( defined(_PSVITA) || defined(_XBOXONE) )

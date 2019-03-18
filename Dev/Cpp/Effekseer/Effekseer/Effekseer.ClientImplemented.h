@@ -11,9 +11,6 @@
 #include "Effekseer.Client.h"
 
 #include "Effekseer.Socket.h"
-#include "Effekseer.Thread.h"
-#include "Effekseer.CriticalSection.h"
-
 #include <vector>
 #include <set>
 
@@ -27,17 +24,20 @@ namespace Effekseer {
 class ClientImplemented : public Client
 {
 private:
-	Thread		m_threadRecv;
+	bool isThreadRunning = false;
+	std::thread	m_threadRecv;
 
 	EfkSocket	m_socket;
 	uint16_t	m_port;
 	std::vector<uint8_t>	m_sendBuffer;
 
 	bool		m_running;
+	std::mutex	mutexStop;
 
-	HOSTENT* GetHostEntry( const char* host );
+	bool GetAddr( const char* host, IN_ADDR* addr);
 
 	static void RecvAsync( void* data );
+	void StopInternal();
 public:
 	ClientImplemented();
 	~ClientImplemented();

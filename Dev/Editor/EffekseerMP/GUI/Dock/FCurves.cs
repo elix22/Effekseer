@@ -36,9 +36,11 @@ namespace Effekseer.GUI.Dock
 		Component.Enum endCurve = new Component.Enum();
 		Component.Enum type = new Component.Enum();
 
-		bool isAutoZoomMode = true;
-		float autoZoomRangeMin = 0;
-		float autoZoomRangeMax = 0;
+		bool isAutoZoomMode = false;
+		float autoZoomRangeMin = float.MaxValue;
+		float autoZoomRangeMax = float.MinValue;
+
+		bool isFirstUpdate = true;
 
 		Action<float, float> moved = null;
 
@@ -97,7 +99,6 @@ namespace Effekseer.GUI.Dock
 			var invalidValue = "/";
 			var selectedInd = selected.Item1 != null ? selected.Item2.GetSelectedIndex() : -1;
 
-			
 			// line 1
 			Manager.NativeManager.Columns(5);
 
@@ -106,8 +107,13 @@ namespace Effekseer.GUI.Dock
 				var frameKey = new int[] { (int)selected.Item2.Keys[selectedInd] };
 				if (Manager.NativeManager.DragInt(frame_text, frameKey))
 				{
+					var diff = frameKey[0] - selected.Item2.Keys[selectedInd];
+
 					selected.Item2.Keys[selectedInd] = (int)frameKey[0];
+					selected.Item2.LeftKeys[selectedInd] += diff;
+					selected.Item2.RightKeys[selectedInd] += diff;
 					selected.Item2.IsDirtied = true;
+					selected.Item2.SolveContradiction();
 				}
 
 				if (Manager.NativeManager.IsItemActive()) canControl = false;
@@ -124,7 +130,11 @@ namespace Effekseer.GUI.Dock
 				var frameValue = new float[] { selected.Item2.Values[selectedInd] };
 				if (Manager.NativeManager.DragFloat(value_text, frameValue))
 				{
+					var diff = frameValue[0] - selected.Item2.Values[selectedInd];
+
 					selected.Item2.Values[selectedInd] = frameValue[0];
+					selected.Item2.LeftValues[selectedInd] += diff;
+					selected.Item2.RightValues[selectedInd] += diff;
 					selected.Item2.IsDirtied = true;
 				}
 
@@ -320,10 +330,25 @@ namespace Effekseer.GUI.Dock
 
 			Manager.NativeManager.Columns(2);
 
-			Manager.NativeManager.SetColumnWidth(0, 200);
+			// hot key
+			if (IsDockActive() && canControl)
+			{
+				int delete_num = 261;
+
+				if(Manager.NativeManager.IsKeyDown(delete_num))
+				{
+					// todo canControl = false;
+				}
+			}
+
+
+			if (isFirstUpdate)
+			{
+				Manager.NativeManager.SetColumnWidth(0, 200);
+			}
 			//Manager.NativeManager.BeginChild("##FCurveGroup_Tree");
 
-			if(treeNodes != null)
+			if (treeNodes != null)
 			{
 				UpdateTreeNode(treeNodes);
 			}
@@ -347,8 +372,8 @@ namespace Effekseer.GUI.Dock
 			}
 			else
 			{
-				autoZoomRangeMin = float.MaxValue;
-				autoZoomRangeMax = float.MinValue;
+				//autoZoomRangeMin = float.MaxValue;
+				//autoZoomRangeMax = float.MinValue;
 			}
 
 			var graphSize = Manager.NativeManager.GetContentRegionAvail();
@@ -358,10 +383,14 @@ namespace Effekseer.GUI.Dock
 
 			var scale = new swig.Vec2(12, 4);
 
-			if (Manager.NativeManager.BeginFCurve(1, graphSize, scale, autoZoomRangeMin, autoZoomRangeMax))
+			if (Manager.NativeManager.BeginFCurve(1, graphSize, Manager.Viewer.Current, scale, autoZoomRangeMin, autoZoomRangeMax))
 			{
 				UpdateGraph(treeNodes);
 			}
+
+			// Reset area
+			autoZoomRangeMin = float.MaxValue;
+			autoZoomRangeMax = float.MinValue;
 
 			Manager.NativeManager.EndFCurve();
 
@@ -371,6 +400,7 @@ namespace Effekseer.GUI.Dock
 
 			Manager.NativeManager.Columns(1);
 
+			/*
 			if (isAutoZoomMode)
 			{
 				if (Manager.NativeManager.ImageButton(Images.GetIcon("AutoZoom_On"), 24, 24))
@@ -385,15 +415,18 @@ namespace Effekseer.GUI.Dock
 					isAutoZoomMode = true;
 				}
 			}
+			*/
 
-			if (Manager.NativeManager.IsItemHovered())
-			{
-				Manager.NativeManager.SetTooltip(Resources.GetString("AutoZoom") + "\n" + Resources.GetString("AutoZoom_Desc"));
-			}
+			//if (Manager.NativeManager.IsItemHovered())
+			//{
+			//	Manager.NativeManager.SetTooltip(Resources.GetString("AutoZoom") + "\n" + Resources.GetString("AutoZoom_Desc"));
+			//}
 
-			Manager.NativeManager.SameLine();
+			//Manager.NativeManager.SameLine();
 
 			Manager.NativeManager.Text(Resources.GetString("FCurveCtrl_Desc"));
+
+			isFirstUpdate = false;
 		}
 
 		public override void OnDisposed()
@@ -595,6 +628,12 @@ namespace Effekseer.GUI.Dock
 				treeNodes = new TreeNode(this, paramTreeNodes);
 			}
 
+			if (treeNodes.ParamTreeNode.Node != paramTreeNodes.Node ||
+				treeNodes.ParamTreeNode.Children.Length != paramTreeNodes.Node.Children.Count)
+			{
+				treeNodes = new TreeNode(this, paramTreeNodes);
+			}
+
 			// compare node structures
 			if (treeNodes.ParamTreeNode.Node != paramTreeNodes.Node)
 			{
@@ -606,7 +645,9 @@ namespace Effekseer.GUI.Dock
 				refleshNodes = (ptn, tn) =>
 				{
 					// check whether modification doesn't exist
-					bool nochange = tn.Children.Count() == ptn.Children.Count();
+					bool nochange = tn.Children.Count() == ptn.Children.Count() && 
+					tn.Children.Select(_=>_.ParamTreeNode.Node).SequenceEqual(ptn.Children.Select(_=>_.Node));
+
 					for (int i = 0; i < ptn.Children.Count() && nochange; i++)
 					{
 						if (tn.Children[i].ParamTreeNode.Node != ptn.Children[i].Node)
@@ -615,7 +656,14 @@ namespace Effekseer.GUI.Dock
 							break;
 						}
 					}
-					if (nochange) return;
+					if (nochange)
+					{
+						for (int i = 0; i < ptn.Children.Count(); i++)
+						{
+							refleshNodes(ptn.Children[i], tn.Children[i]);
+						}
+						return;
+					}
 
 					// if moditications exsist
 					var a = new TreeNode[ptn.Children.Count()];
@@ -1113,17 +1161,39 @@ namespace Effekseer.GUI.Dock
 
 				for(int i = 0; i < properties.Length; i++)
 				{
-					if (Manager.NativeManager.Selectable(Name + " : " + names[i], properties[i].IsShown))
+					var value = this.fcurves[i].GetValue(Manager.Viewer.Current);
+
+					if (Manager.NativeManager.Selectable(Name + " : " + names[i] + " (" + value + ")", properties[i].IsShown, swig.SelectableFlags.AllowDoubleClick))
 					{
-						if (Manager.NativeManager.IsKeyDown(LEFT_SHIFT) || Manager.NativeManager.IsKeyDown(RIGHT_SHIFT))
+						if(Manager.NativeManager.IsMouseDoubleClicked(0))
 						{
+							properties[i].IsShown = true;
+
+							if(this.fcurves[i].Keys.Count() > 0)
+							{
+								var max = this.fcurves[i].Keys.Max(_ => _.ValueAsFloat);
+								var min = this.fcurves[i].Keys.Min(_ => _.ValueAsFloat);
+								window.autoZoomRangeMax = max + 10;
+								window.autoZoomRangeMin = min - 10;
+							}
+							else
+							{
+								window.autoZoomRangeMax = defaultValue + 10;
+								window.autoZoomRangeMin = -10;
+							}
 						}
 						else
 						{
-							window.HideAll();
+							if (Manager.NativeManager.IsKeyDown(LEFT_SHIFT) || Manager.NativeManager.IsKeyDown(RIGHT_SHIFT))
+							{
+								properties[i].IsShown = !properties[i].IsShown;
+							}
+							else
+							{
+								window.HideAll();
+								properties[i].IsShown = true;
+							}
 						}
-
-						properties[i].IsShown = true;
 					}
 				}
 			}
@@ -1134,7 +1204,10 @@ namespace Effekseer.GUI.Dock
 				{
 					if (!properties[i].IsShown) continue;
 
-					properties[i].Update(fcurves[i]);
+					if(!properties[i].IsDirtied)
+					{
+						properties[i].CopyValuesFromDataIfSizeDifferent(fcurves[i]);
+					}
 
 					int newCount = -1;
 					float movedX = 0;
@@ -1299,6 +1372,9 @@ namespace Effekseer.GUI.Dock
 			{
 				foreach (var prop in properties)
 				{
+					if (!prop.IsShown) continue;
+					if (!prop.Selected) continue;
+
 					for (int i = 0; i < prop.KVSelected.Length - 1; i++)
 					{
 						if (prop.KVSelected[i] == 0) continue;
@@ -1318,6 +1394,9 @@ namespace Effekseer.GUI.Dock
 			{
 				foreach(var prop in properties)
 				{
+					if (!prop.IsShown) continue;
+					if (!prop.Selected) continue;
+
 					for (int i = 0; i < prop.KVSelected.Length - 1; i++)
 					{
 						if (prop.KVSelected[i] == 0) continue;
@@ -1370,15 +1449,17 @@ namespace Effekseer.GUI.Dock
 			public override void OnAdded()
 			{
 				fcurves[0].OnChanged += OnChanged_1;
-				fcurves[1].OnChanged += OnChanged_2;
-				fcurves[2].OnChanged += OnChanged_3;
+				if (fcurves.Length >= 2) fcurves[1].OnChanged += OnChanged_2;
+				if (fcurves.Length >= 3) fcurves[2].OnChanged += OnChanged_3;
+				if (fcurves.Length >= 4) fcurves[3].OnChanged += OnChanged_4;
 			}
 
 			public override void OnRemoved()
 			{
 				fcurves[0].OnChanged -= OnChanged_1;
-				fcurves[1].OnChanged -= OnChanged_2;
-				fcurves[2].OnChanged -= OnChanged_3;
+				if (fcurves.Length >= 2) fcurves[1].OnChanged -= OnChanged_2;
+				if (fcurves.Length >= 3) fcurves[2].OnChanged -= OnChanged_3;
+				if (fcurves.Length >= 4) fcurves[3].OnChanged -= OnChanged_4;
 			}
 
 			void OnChanged_1(object sender, ChangedValueEventArgs e)
@@ -1396,6 +1477,11 @@ namespace Effekseer.GUI.Dock
 				OnChanged(2);
 			}
 
+			void OnChanged_4(object sender, ChangedValueEventArgs e)
+			{
+				OnChanged(3);
+			}
+
 			void OnChanged(int i)
 			{
 				properties[i].Keys = new float[0];
@@ -1406,7 +1492,7 @@ namespace Effekseer.GUI.Dock
 				properties[i].RightValues = new float[0];
 				properties[i].Interpolations = new int[0];
 				//properties[i].KVSelected = new byte[0];
-				properties[i].Update(fcurves[i]);
+				properties[i].CopyValuesFromDataIfSizeDifferent(fcurves[i]);
 			}
 
 			public override void Unselect()
@@ -1443,7 +1529,7 @@ namespace Effekseer.GUI.Dock
 					for (int j = 1; j < properties[i].Keys.Length - 2; j++)
 					{
 						var new_left = Math.Max(properties[i].LeftKeys[j], properties[i].Keys[j - 1]);
-						var new_right = Math.Max(properties[i].RightKeys[j], properties[i].Keys[j + 1]);
+						var new_right = Math.Min(properties[i].RightKeys[j], properties[i].Keys[j + 1]);
 						properties[i].LeftKeys[j] = new_left;
 						properties[i].RightKeys[j] = new_right;
 					}
@@ -1510,6 +1596,46 @@ namespace Effekseer.GUI.Dock
 
 			public Data.Value.FCurveEdge EndEdge = Data.Value.FCurveEdge.Constant;
 
+			public void SolveContradiction()
+			{
+				List<Tuple<float, int>> kis = new List<Tuple<float, int>>();
+
+				for (int i = 0; i < Keys.Length - 1; i++)
+				{
+					Tuple<float, int> ki = Tuple.Create(Keys[i], i);
+
+					kis.Add(ki);
+				}
+
+				kis = kis.OrderBy(_ => _.Item1).ToList();
+
+				var temp_k = Keys.ToArray();
+				var temp_v = Values.ToArray();
+				var temp_lk = LeftKeys.ToArray();
+				var temp_lv = LeftValues.ToArray();
+				var temp_rk = RightKeys.ToArray();
+				var temp_rv = RightValues.ToArray();
+				var temp_in = Interpolations.ToArray();
+				var temp_sl = KVSelected.ToArray();
+
+				for (int k = 0; k < Keys.Length - 1; k++)
+				{
+					Keys[k] = temp_k[kis[k].Item2];
+					Values[k] = temp_v[kis[k].Item2];
+					LeftKeys[k] = temp_lk[kis[k].Item2];
+					LeftValues[k] = temp_lv[kis[k].Item2];
+					RightKeys[k] = temp_rk[kis[k].Item2];
+					RightValues[k] = temp_rv[kis[k].Item2];
+					Interpolations[k] = temp_in[kis[k].Item2];
+					KVSelected[k] = temp_sl[kis[k].Item2];
+				}
+
+				for (int k = 0; k < Keys.Length - 1; k++)
+				{
+					Clip(k);
+				}
+			}
+
 			/// <summary>
 			/// Clip left and right values
 			/// </summary>
@@ -1545,41 +1671,41 @@ namespace Effekseer.GUI.Dock
 				return -1;
 			}
 
-			public void Update<T>(Data.Value.FCurve<T> fcurve) where T : struct, IComparable<T>, IEquatable<T>
+			public void CopyValuesFromDataIfSizeDifferent<T>(Data.Value.FCurve<T> fcurve) where T : struct, IComparable<T>, IEquatable<T>
 			{
 				var plength = fcurve.Keys.Count() + 1;
 
-				if (Keys.Length < plength)
+				if (Keys.Length != plength)
 				{
 					var keyFrames = fcurve.Keys.ToArray();
 					Keys = keyFrames.Select(_ => (float)_.Frame).Concat(new float[] { 0.0f }).ToArray();
 				}
 
-				if (Values.Length < plength)
+				if (Values.Length != plength)
 				{
 					var keyFrames = fcurve.Keys.ToArray();
 					Values = keyFrames.Select(_ => _.ValueAsFloat).Concat(new float[] { 0.0f }).ToArray();
 				}
 
-				if (LeftKeys.Length < plength)
+				if (LeftKeys.Length != plength)
 				{
 					var keyFrames = fcurve.Keys.ToArray();
 					LeftKeys = keyFrames.Select(_ => _.LeftX).Concat(new float[] { 0.0f }).ToArray();
 				}
 
-				if (LeftValues.Length < plength)
+				if (LeftValues.Length != plength)
 				{
 					var keyFrames = fcurve.Keys.ToArray();
 					LeftValues = keyFrames.Select(_ => _.LeftY).Concat(new float[] { 0.0f }).ToArray();
 				}
 
-				if (RightKeys.Length < plength)
+				if (RightKeys.Length != plength)
 				{
 					var keyFrames = fcurve.Keys.ToArray();
 					RightKeys = keyFrames.Select(_ => _.RightX).Concat(new float[] { 0.0f }).ToArray();
 				}
 
-				if (RightValues.Length < plength)
+				if (RightValues.Length != plength)
 				{
 					var keyFrames = fcurve.Keys.ToArray();
 					RightValues = keyFrames.Select(_ => _.RightY).Concat(new float[] { 0.0f }).ToArray();
@@ -1592,7 +1718,7 @@ namespace Effekseer.GUI.Dock
 					KVSelected = new_selected;
 				}
 
-				if (Interpolations.Length < plength)
+				if (Interpolations.Length != plength)
 				{
 					var keyFrames = fcurve.Keys.ToArray();
 

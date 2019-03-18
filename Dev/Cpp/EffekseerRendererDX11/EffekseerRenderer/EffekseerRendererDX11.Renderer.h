@@ -20,7 +20,7 @@ namespace EffekseerRendererDX11
 /**
 @brief	テクスチャ読込クラスを生成する。
 */
-::Effekseer::TextureLoader* CreateTextureLoader(ID3D11Device* device, ::Effekseer::FileInterface* fileInterface = NULL);
+::Effekseer::TextureLoader* CreateTextureLoader(ID3D11Device* device, ID3D11DeviceContext* context, ::Effekseer::FileInterface* fileInterface = NULL);
 
 /**
 @brief	モデル読込クラスを生成する。
@@ -53,10 +53,9 @@ public:
 		int32_t squareMaxCount, 
 		D3D11_COMPARISON_FUNC depthFunc = D3D11_COMPARISON_LESS);
 
-	/**
-		@brief	デバイスを取得する。
-	*/
 	virtual ID3D11Device* GetDevice() = 0;
+
+	virtual ID3D11DeviceContext* GetContext() = 0;
 
 	/**
 		@brief	\~English	Get background
@@ -117,6 +116,7 @@ public:
 		, InternalModels(nullptr)
 		, ModelCount(0)
 	{
+		this->m_vertexSize = sizeof(VertexWithIndex);
 	}
 
 	virtual ~Model()

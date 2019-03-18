@@ -12,6 +12,7 @@ with aceutils.CurrentDir('../Downloads'):
 	aceutils.editCmakeForACE(pathname + r'/CMakeLists.txt')
 	aceutils.mkdir(r"glfw_bin")
 	aceutils.mkdir(r"glfw_bin_x64")
+	aceutils.mkdir(r'glfw_bin/i386')
 
 	with aceutils.CurrentDir('glfw_bin'):
 		if aceutils.isWin():
@@ -19,7 +20,7 @@ with aceutils.CurrentDir('../Downloads'):
 			aceutils.call(aceutils.cmd_compile + r'ALL_BUILD.vcxproj /p:configuration=Debug')
 			aceutils.call(aceutils.cmd_compile + r'ALL_BUILD.vcxproj /p:configuration=Release')
 		elif aceutils.isMac():
-			aceutils.call(r'cmake -G "Unix Makefiles" -D BUILD_SHARED_LIBS:BOOL=OFF -D CMAKE_INSTALL_PREFIX:PATH=../../Dev/Cpp "-DCMAKE_OSX_ARCHITECTURES=x86_64;i386" ../' + pathname + '/')
+			aceutils.call(r'cmake -G "Unix Makefiles" -D BUILD_SHARED_LIBS:BOOL=OFF -D CMAKE_INSTALL_PREFIX:PATH=../../Dev/Cpp "-DCMAKE_OSX_ARCHITECTURES=x86_64;i386" "-DCMAKE_OSX_DEPLOYMENT_TARGET=10.10" -D CMAKE_BUILD_TYPE=Release ../' + pathname + '/')
 			aceutils.call(r'make install')
 		else:
 			aceutils.call(r'cmake -G "Unix Makefiles" -D BUILD_SHARED_LIBS:BOOL=OFF -D CMAKE_INSTALL_PREFIX=../../Dev/Cpp ../' + pathname + '/')

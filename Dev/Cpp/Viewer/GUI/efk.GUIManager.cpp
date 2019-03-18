@@ -26,6 +26,12 @@ namespace ImGui
 		return ImVec2(lhs.x + rhs.x, lhs.y + rhs.y);
 	}
 
+	static ImVec2 operator * (const ImVec2& lhs, const float& rhs)
+	{
+		return ImVec2(lhs.x * rhs, lhs.y * rhs);
+	}
+
+
 	bool TreeNodeBehavior(ImGuiID id, ImGuiTreeNodeFlags flags, bool* v, ImTextureID user_texture, const char* label, const char* label_end)
 	{
 		ImGuiWindow* window = GetCurrentWindow();
@@ -192,6 +198,346 @@ namespace ImGui
 
 		return TreeNodeBehavior(window->GetID(label), flags, v, user_texture, label, NULL);
 	}
+
+	bool ImageButton_(ImTextureID user_texture_id, const ImVec2& size, const ImVec2& uv0, const ImVec2& uv1, int frame_padding, const ImVec4& bg_col, const ImVec4& tint_col)
+	{
+		ImGuiWindow* window = GetCurrentWindow();
+		if (window->SkipItems)
+			return false;
+
+		ImGuiContext& g = *GImGui;
+		const ImGuiStyle& style = g.Style;
+
+		// Default to using texture ID as ID. User can still push string/integer prefixes.
+		// We could hash the size/uv to create a unique ID but that would prevent the user from animating UV.
+		PushID((void *)user_texture_id);
+		const ImGuiID id = window->GetID("#image");
+		PopID();
+
+		const ImVec2 padding = (frame_padding >= 0) ? ImVec2((float)frame_padding, (float)frame_padding) : style.FramePadding;
+		const ImRect bb(window->DC.CursorPos, window->DC.CursorPos + size + padding * 2);
+		const ImRect image_bb(window->DC.CursorPos + padding, window->DC.CursorPos + padding + size);
+		ItemSize(bb);
+		if (!ItemAdd(bb, id))
+			return false;
+
+		bool hovered, held;
+		bool pressed = ButtonBehavior(bb, id, &hovered, &held, ImGuiButtonFlags_PressedOnClick);
+
+		// Render
+		const ImU32 col = GetColorU32((held && hovered) ? ImGuiCol_ButtonActive : hovered ? ImGuiCol_ButtonHovered : ImGuiCol_Button);
+		RenderNavHighlight(bb, id);
+		RenderFrame(bb.Min, bb.Max, col, true, ImClamp((float)ImMin(padding.x, padding.y), 0.0f, style.FrameRounding));
+		if (bg_col.w > 0.0f)
+			window->DrawList->AddRectFilled(image_bb.Min, image_bb.Max, GetColorU32(bg_col));
+		window->DrawList->AddImage(user_texture_id, image_bb.Min, image_bb.Max, uv0, uv1, GetColorU32(tint_col));
+
+		return pressed;
+	}
+
+	#define IM_F32_TO_INT8_UNBOUND(_VAL)    ((int)((_VAL) * 255.0f + ((_VAL)>=0 ? 0.5f : -0.5f)))   // Unsaturated, for display purpose
+
+	/**
+		@brief support raw HSV
+	*/
+#define RAW_HSV 1
+
+	bool ColorEdit4_(const char* label, float col[4], ImGuiColorEditFlags flags)
+	{
+		ImGuiWindow* window = GetCurrentWindow();
+		if (window->SkipItems)
+			return false;
+
+		ImGuiContext& g = *GImGui;
+		const ImGuiStyle& style = g.Style;
+		const float square_sz = GetFrameHeight();
+		const float w_extra = (flags & ImGuiColorEditFlags_NoSmallPreview) ? 0.0f : (square_sz + style.ItemInnerSpacing.x);
+		const float w_items_all = CalcItemWidth() - w_extra;
+		const char* label_display_end = FindRenderedTextEnd(label);
+
+		BeginGroup();
+		PushID(label);
+
+		// If we're not showing any slider there's no point in doing any HSV conversions
+		const ImGuiColorEditFlags flags_untouched = flags;
+		if (flags & ImGuiColorEditFlags_NoInputs)
+			flags = (flags & (~ImGuiColorEditFlags__InputsMask)) | ImGuiColorEditFlags_RGB | ImGuiColorEditFlags_NoOptions;
+
+#ifdef RAW_HSV
+		const bool alpha = (flags & ImGuiColorEditFlags_NoAlpha) == 0;
+		float col_rgb_[4] = { col[0], col[1], col[2], alpha ? col[3] : 1.0f };
+		if (flags & ImGuiColorEditFlags_HSV)
+			ColorConvertHSVtoRGB(col_rgb_[0], col_rgb_[1], col_rgb_[2], col_rgb_[0], col_rgb_[1], col_rgb_[2]);
+
+		// Context menu: display and modify options (before defaults are applied)
+		if (!(flags & ImGuiColorEditFlags_NoOptions))
+			ColorEditOptionsPopup(col_rgb_, flags);
+#else
+		// Context menu: display and modify options (before defaults are applied)
+		if (!(flags & ImGuiColorEditFlags_NoOptions))
+			ColorEditOptionsPopup(col, flags);
+#endif
+
+		// Read stored options
+		if (!(flags & ImGuiColorEditFlags__InputsMask))
+			flags |= (g.ColorEditOptions & ImGuiColorEditFlags__InputsMask);
+		if (!(flags & ImGuiColorEditFlags__DataTypeMask))
+			flags |= (g.ColorEditOptions & ImGuiColorEditFlags__DataTypeMask);
+		if (!(flags & ImGuiColorEditFlags__PickerMask))
+			flags |= (g.ColorEditOptions & ImGuiColorEditFlags__PickerMask);
+		flags |= (g.ColorEditOptions & ~(ImGuiColorEditFlags__InputsMask | ImGuiColorEditFlags__DataTypeMask | ImGuiColorEditFlags__PickerMask));
+
+#ifndef RAW_HSV
+		const bool alpha = (flags & ImGuiColorEditFlags_NoAlpha) == 0;
+#endif
+		const bool hdr = (flags & ImGuiColorEditFlags_HDR) != 0;
+		const int components = alpha ? 4 : 3;
+
+		// Convert to the formats we need
+		float f[4] = { col[0], col[1], col[2], alpha ? col[3] : 1.0f };
+#ifndef RAW_HSV
+		if (flags & ImGuiColorEditFlags_HSV)
+			ColorConvertRGBtoHSV(f[0], f[1], f[2], f[0], f[1], f[2]);
+#endif
+		int i[4] = { IM_F32_TO_INT8_UNBOUND(f[0]), IM_F32_TO_INT8_UNBOUND(f[1]), IM_F32_TO_INT8_UNBOUND(f[2]), IM_F32_TO_INT8_UNBOUND(f[3]) };
+
+		bool value_changed = false;
+		bool value_changed_as_float = false;
+
+		if ((flags & (ImGuiColorEditFlags_RGB | ImGuiColorEditFlags_HSV)) != 0 && (flags & ImGuiColorEditFlags_NoInputs) == 0)
+		{
+			// RGB/HSV 0..255 Sliders
+			const float w_item_one = ImMax(1.0f, (float)(int)((w_items_all - (style.ItemInnerSpacing.x) * (components - 1)) / (float)components));
+			const float w_item_last = ImMax(1.0f, (float)(int)(w_items_all - (w_item_one + style.ItemInnerSpacing.x) * (components - 1)));
+
+			const bool hide_prefix = (w_item_one <= CalcTextSize((flags & ImGuiColorEditFlags_Float) ? "M:0.000" : "M:000").x);
+			const char* ids[4] = { "##X", "##Y", "##Z", "##W" };
+			const char* fmt_table_int[3][4] =
+			{
+				{ "%3d",   "%3d",   "%3d",   "%3d" }, // Short display
+				{ "R:%3d", "G:%3d", "B:%3d", "A:%3d" }, // Long display for RGBA
+				{ "H:%3d", "S:%3d", "V:%3d", "A:%3d" }  // Long display for HSVA
+			};
+			const char* fmt_table_float[3][4] =
+			{
+				{ "%0.3f",   "%0.3f",   "%0.3f",   "%0.3f" }, // Short display
+				{ "R:%0.3f", "G:%0.3f", "B:%0.3f", "A:%0.3f" }, // Long display for RGBA
+				{ "H:%0.3f", "S:%0.3f", "V:%0.3f", "A:%0.3f" }  // Long display for HSVA
+			};
+			const int fmt_idx = hide_prefix ? 0 : (flags & ImGuiColorEditFlags_HSV) ? 2 : 1;
+
+			PushItemWidth(w_item_one);
+			for (int n = 0; n < components; n++)
+			{
+				if (n > 0)
+					SameLine(0, style.ItemInnerSpacing.x);
+				if (n + 1 == components)
+					PushItemWidth(w_item_last);
+				if (flags & ImGuiColorEditFlags_Float)
+					value_changed = value_changed_as_float = value_changed | DragFloat(ids[n], &f[n], 1.0f / 255.0f, 0.0f, hdr ? 0.0f : 1.0f, fmt_table_float[fmt_idx][n]);
+				else
+					value_changed |= DragInt(ids[n], &i[n], 1.0f, 0, hdr ? 0 : 255, fmt_table_int[fmt_idx][n]);
+				if (!(flags & ImGuiColorEditFlags_NoOptions))
+					OpenPopupOnItemClick("context");
+			}
+			PopItemWidth();
+			PopItemWidth();
+		}
+		else if ((flags & ImGuiColorEditFlags_HEX) != 0 && (flags & ImGuiColorEditFlags_NoInputs) == 0)
+		{
+			// RGB Hexadecimal Input
+			char buf[64];
+			if (alpha)
+				ImFormatString(buf, IM_ARRAYSIZE(buf), "#%02X%02X%02X%02X", ImClamp(i[0], 0, 255), ImClamp(i[1], 0, 255), ImClamp(i[2], 0, 255), ImClamp(i[3], 0, 255));
+			else
+				ImFormatString(buf, IM_ARRAYSIZE(buf), "#%02X%02X%02X", ImClamp(i[0], 0, 255), ImClamp(i[1], 0, 255), ImClamp(i[2], 0, 255));
+			PushItemWidth(w_items_all);
+			if (InputText("##Text", buf, IM_ARRAYSIZE(buf), ImGuiInputTextFlags_CharsHexadecimal | ImGuiInputTextFlags_CharsUppercase))
+			{
+				value_changed = true;
+				char* p = buf;
+				while (*p == '#' || ImCharIsBlankA(*p))
+					p++;
+				i[0] = i[1] = i[2] = i[3] = 0;
+				if (alpha)
+					sscanf(p, "%02X%02X%02X%02X", (unsigned int*)&i[0], (unsigned int*)&i[1], (unsigned int*)&i[2], (unsigned int*)&i[3]); // Treat at unsigned (%X is unsigned)
+				else
+					sscanf(p, "%02X%02X%02X", (unsigned int*)&i[0], (unsigned int*)&i[1], (unsigned int*)&i[2]);
+			}
+			if (!(flags & ImGuiColorEditFlags_NoOptions))
+				OpenPopupOnItemClick("context");
+			PopItemWidth();
+		}
+
+		ImGuiWindow* picker_active_window = NULL;
+		if (!(flags & ImGuiColorEditFlags_NoSmallPreview))
+		{
+			if (!(flags & ImGuiColorEditFlags_NoInputs))
+				SameLine(0, style.ItemInnerSpacing.x);
+
+#ifdef RAW_HSV
+			const ImVec4 col_v4(col_rgb_[0], col_rgb_[1], col_rgb_[2], alpha ? col_rgb_[3] : 1.0f);
+#else
+			const ImVec4 col_v4(col[0], col[1], col[2], alpha ? col[3] : 1.0f);
+#endif
+			if (ColorButton("##ColorButton", col_v4, flags))
+			{
+				if (!(flags & ImGuiColorEditFlags_NoPicker))
+				{
+					// Store current color and open a picker
+					g.ColorPickerRef = col_v4;
+					OpenPopup("picker");
+					SetNextWindowPos(window->DC.LastItemRect.GetBL() + ImVec2(-1, style.ItemSpacing.y));
+				}
+			}
+			if (!(flags & ImGuiColorEditFlags_NoOptions))
+				OpenPopupOnItemClick("context");
+
+			if (BeginPopup("picker"))
+			{
+				picker_active_window = g.CurrentWindow;
+				if (label != label_display_end)
+				{
+					TextUnformatted(label, label_display_end);
+					Separator();
+				}
+				ImGuiColorEditFlags picker_flags_to_forward = ImGuiColorEditFlags__DataTypeMask | ImGuiColorEditFlags__PickerMask | ImGuiColorEditFlags_HDR | ImGuiColorEditFlags_NoAlpha | ImGuiColorEditFlags_AlphaBar;
+				ImGuiColorEditFlags picker_flags = (flags_untouched & picker_flags_to_forward) | ImGuiColorEditFlags__InputsMask | ImGuiColorEditFlags_NoLabel | ImGuiColorEditFlags_AlphaPreviewHalf;
+				PushItemWidth(square_sz * 12.0f); // Use 256 + bar sizes?
+
+#ifdef RAW_HSV
+				auto picker_changed = ColorPicker4("##picker", col_rgb_, picker_flags, &g.ColorPickerRef.x);
+				value_changed |= picker_changed;
+
+				if (picker_changed)
+				{
+					float col_raw[4] = { col_rgb_[0], col_rgb_[1], col_rgb_[2], col_rgb_[3] };
+
+					if (flags & ImGuiColorEditFlags_HSV)
+						ColorConvertRGBtoHSV(col_raw[0], col_raw[1], col_raw[2], col_raw[0], col_raw[1], col_raw[2]);
+
+					f[0] = col_raw[0];
+					f[1] = col_raw[1];
+					f[2] = col_raw[2];
+					f[3] = col_raw[3];
+
+					col[0] = f[0];
+					col[1] = f[1];
+					col[2] = f[2];
+					if (alpha)
+						col[3] = f[3];
+				}
+#else
+				value_changed |= ColorPicker4("##picker", col, picker_flags, &g.ColorPickerRef.x);
+#endif
+				PopItemWidth();
+				EndPopup();
+			}
+		}
+
+		if (label != label_display_end && !(flags & ImGuiColorEditFlags_NoLabel))
+		{
+			SameLine(0, style.ItemInnerSpacing.x);
+			TextUnformatted(label, label_display_end);
+		}
+
+		// Convert back
+		if (picker_active_window == NULL)
+		{
+			if (!value_changed_as_float)
+				for (int n = 0; n < 4; n++)
+					f[n] = i[n] / 255.0f;
+
+#ifdef RAW_HSV
+			if (value_changed)
+			{
+				col[0] = f[0];
+				col[1] = f[1];
+				col[2] = f[2];
+				if (alpha)
+					col[3] = f[3];
+
+				col_rgb_[0] = col[0];
+				col_rgb_[1] = col[1];
+				col_rgb_[2] = col[2];
+				col_rgb_[3] = col[3];
+
+				if (flags & ImGuiColorEditFlags_HSV)
+					ColorConvertHSVtoRGB(col_rgb_[0], col_rgb_[1], col_rgb_[2], col_rgb_[0], col_rgb_[1], col_rgb_[2]);
+			}
+#else
+			if (flags & ImGuiColorEditFlags_HSV)
+				ColorConvertHSVtoRGB(f[0], f[1], f[2], f[0], f[1], f[2]);
+			if (value_changed)
+			{
+				col[0] = f[0];
+				col[1] = f[1];
+				col[2] = f[2];
+				if (alpha)
+					col[3] = f[3];
+			}
+#endif
+		}
+
+		PopID();
+		EndGroup();
+
+		// Drag and Drop Target
+		// NB: The flag test is merely an optional micro-optimization, BeginDragDropTarget() does the same test.
+		if ((window->DC.LastItemStatusFlags & ImGuiItemStatusFlags_HoveredRect) && !(flags & ImGuiColorEditFlags_NoDragDrop) && BeginDragDropTarget())
+		{
+#ifdef RAW_HSV
+			if (const ImGuiPayload* payload = AcceptDragDropPayload(IMGUI_PAYLOAD_TYPE_COLOR_3F))
+			{
+				memcpy((float*)col_rgb_, payload->Data, sizeof(float) * 3);
+
+				col[0] = col_rgb_[0];
+				col[1] = col_rgb_[1];
+				col[2] = col_rgb_[2];
+
+				if (flags & ImGuiColorEditFlags_HSV)
+					ColorConvertRGBtoHSV(col[0], col[1], col[2], col[0], col[1], col[2]);
+
+				value_changed = true;
+			}
+			if (const ImGuiPayload* payload = AcceptDragDropPayload(IMGUI_PAYLOAD_TYPE_COLOR_4F))
+			{
+				memcpy((float*)col_rgb_, payload->Data, sizeof(float) * components);
+
+				col[0] = col_rgb_[0];
+				col[1] = col_rgb_[1];
+				col[2] = col_rgb_[2];
+				col[3] = col_rgb_[3];
+
+				if (flags & ImGuiColorEditFlags_HSV)
+					ColorConvertRGBtoHSV(col[0], col[1], col[2], col[0], col[1], col[2]);
+
+				value_changed = true;
+			}
+#else
+			if (const ImGuiPayload* payload = AcceptDragDropPayload(IMGUI_PAYLOAD_TYPE_COLOR_3F))
+			{
+				memcpy((float*)col, payload->Data, sizeof(float) * 3);
+				value_changed = true;
+			}
+			if (const ImGuiPayload* payload = AcceptDragDropPayload(IMGUI_PAYLOAD_TYPE_COLOR_4F))
+			{
+				memcpy((float*)col, payload->Data, sizeof(float) * components);
+				value_changed = true;
+			}
+#endif
+			EndDragDropTarget();
+		}
+
+		// When picker is being actively used, use its active id so IsItemActive() will function on ColorEdit4().
+		if (picker_active_window && g.ActiveId != 0 && g.ActiveIdWindow == picker_active_window)
+			window->DC.LastItemId = g.ActiveId;
+
+		if (value_changed)
+			MarkItemValueChanged(window->DC.LastItemId);
+
+		return value_changed;
+	}
 }
 
 namespace efk
@@ -331,19 +677,21 @@ namespace efk
 		return value_changed;
 	}
 
+
+
 	GUIManager::GUIManager()
 	{}
 
 	GUIManager::~GUIManager()
 	{}
 
-	bool GUIManager::Initialize(const char16_t* title, int32_t width, int32_t height, bool isOpenGLMode, bool isSRGBMode)
+	bool GUIManager::Initialize(const char16_t* title, int32_t width, int32_t height, efk::DeviceType deviceType, bool isSRGBMode)
 	{
 		window = new efk::Window();
 
-		this->isOpenGLMode = isOpenGLMode;
+		this->deviceType = deviceType;
 
-		if (!window->Initialize(title, width, height, isSRGBMode, isOpenGLMode))
+		if (!window->Initialize(title, width, height, isSRGBMode, deviceType))
 		{
 			ES_SAFE_DELETE(window);
 			return false;
@@ -392,7 +740,7 @@ namespace efk
 			}
 		};
 
-		if (isOpenGLMode)
+		if (deviceType == DeviceType::OpenGL)
 		{
 			window->MakeCurrent();
 
@@ -400,26 +748,54 @@ namespace efk
 			glewInit();
 #endif
 		}
-       		
+
+#ifdef _WIN32
+		// Calculate font scale from DPI
+		HDC screen = GetDC(0);
+		int dpiX = GetDeviceCaps(screen, LOGPIXELSX);
+		fontScale = (float)dpiX / 96.0f;
+#endif
+		
 		return true;
 	}
 
 	void GUIManager::InitializeGUI(Native* native)
 	{
 		ImGui::CreateContext();
-		ImGui_ImplGlfw_Init(window->GetGLFWWindows(), true);
-
-		if (isOpenGLMode)
+		
+		if (deviceType == DeviceType::OpenGL)
 		{
-			ImGui_ImplGL3_Init(window->GetGLFWWindows(), true, nullptr);
+			ImGuiIO& io = ImGui::GetIO();
+			// It causes bugs on some mac pc
+			//io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
+
+#if __APPLE__
+            // GL 3.2 + GLSL 150
+            const char* glsl_version = "#version 150";
+#else
+            // GL 3.0 + GLSL 130
+            const char* glsl_version = "#version 130";
+#endif
+			ImGui_ImplGlfw_InitForOpenGL(window->GetGLFWWindows(), true);
+			ImGui_ImplOpenGL3_Init(glsl_version);
+		}
+#ifdef _WIN32
+		else if (deviceType == DeviceType::DirectX11)
+		{
+			ImGuiIO& io = ImGui::GetIO();
+			io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
+
+			ImGui_ImplGlfw_InitForVulkan(window->GetGLFWWindows(), true);
+			auto r = (EffekseerRendererDX11::Renderer*)native->GetRenderer();
+			ImGui_ImplDX11_Init(r->GetDevice(), r->GetContext());
 		}
 		else
 		{
-#ifdef _WIN32
+			ImGui_ImplGlfw_InitForOpenGL(window->GetGLFWWindows(), true);
 			auto r = (EffekseerRendererDX9::Renderer*)native->GetRenderer();
-			ImGui_ImplDX9_Init(window->GetNativeHandle(), r->GetDevice());
-#endif
+			ImGui_ImplDX9_Init(r->GetDevice());
 		}
+#endif
 
 		ImGui::StyleColorsDark();
 
@@ -453,6 +829,11 @@ namespace efk
 		window->SetTitle(title);
 	}
 
+	void GUIManager::SetWindowIcon(const char16_t * iconPath)
+	{
+		window->SetWindowIcon(iconPath);
+	}
+
 	Vec2 GUIManager::GetSize() const
 	{
 		return window->GetSize();
@@ -465,16 +846,20 @@ namespace efk
 
 	void GUIManager::Terminate()
 	{
-		if (isOpenGLMode)
+		if (deviceType == DeviceType::OpenGL) 
 		{
-			ImGui_ImplGL3_Shutdown();
+			ImGui_ImplOpenGL3_Shutdown();
+		}
+#ifdef _WIN32
+		else if (deviceType == DeviceType::DirectX11)
+		{
+			ImGui_ImplDX11_Shutdown();
 		}
 		else
 		{
-#ifdef _WIN32
 			ImGui_ImplDX9_Shutdown();
-#endif
 		}
+#endif
 
 		ImGui_ImplGlfw_Shutdown();
 		ImGui::DestroyContext();
@@ -521,43 +906,68 @@ namespace efk
 
 	void GUIManager::ResetGUI()
 	{
-		if (isOpenGLMode)
+		if (deviceType == DeviceType::OpenGL)
 		{
-			ImGui_ImplGL3_NewFrame();
+			ImGui_ImplOpenGL3_NewFrame();
+		}
+#if _WIN32
+		else if (deviceType == DeviceType::DirectX11)
+		{
+			ImGui_ImplDX11_NewFrame();
 		}
 		else
 		{
-#if _WIN32
 			ImGui_ImplDX9_NewFrame();
-#endif
 		}
+#endif
 
 		ImGui_ImplGlfw_NewFrame();
+		ImGui::NewFrame();
 	}
 
-	void GUIManager::RenderGUI()
+	void GUIManager::RenderGUI(bool isValid)
 	{
+		ImGui::EndFrame();
 		ImGui::Render();
 
-		if (isOpenGLMode)
+		if (isValid)
 		{
-			ImGui_ImplGL3_RenderDrawData(ImGui::GetDrawData());
+			if (deviceType == DeviceType::OpenGL)
+			{
+				ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+			}
+#if _WIN32
+			else if (deviceType == DeviceType::DirectX11)
+			{
+				ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
+			}
+			else
+			{
+				ImGui_ImplDX9_RenderDrawData(ImGui::GetDrawData());
+			}
+#endif
 		}
 		else
 		{
-#if _WIN32
-			ImGui_ImplDX9_RenderDrawData(ImGui::GetDrawData());
-#endif
+			if (ImGui::GetDrawData() != nullptr)
+			{
+				ImGui::GetDrawData()->Clear();
+			}
 		}
-		
-		/*
-		glEnable(GL_DEPTH_TEST);
-		glDepthMask(GL_TRUE);
 
-		auto bit = GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT;
-		glClearDepth(1.0f);
-		glClear(bit);
-		*/
+		{
+			ImGuiIO& io = ImGui::GetIO();
+			if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
+			{
+				ImGui::UpdatePlatformWindows();
+				ImGui::RenderPlatformWindowsDefault();
+			}
+
+			if (deviceType == DeviceType::OpenGL)
+			{
+				glfwMakeContextCurrent(window->GetGLFWWindows());
+			}
+		}
 	}
 
 	void* GUIManager::GetNativeHandle()
@@ -568,6 +978,11 @@ namespace efk
 	const char16_t* GUIManager::GetClipboardText()
 	{
 		auto ret = glfwGetClipboardString(window->GetGLFWWindows());
+		if (ret == nullptr)
+		{
+			static std::u16string empty;
+			return empty.c_str();
+		}
 		clipboard = utf8_to_utf16(ret);
 		return clipboard.c_str();
 	}
@@ -722,6 +1137,16 @@ namespace efk
 		return ImGui::GetTextLineHeightWithSpacing();
 	}
 
+	float GUIManager::GetFrameHeight()
+	{
+		return ImGui::GetFrameHeight();
+	}
+
+	float GUIManager::GetFrameHeightWithSpacing()
+	{
+		return ImGui::GetFrameHeightWithSpacing();
+	}
+
 	void GUIManager::Columns(int count, const char* id, bool border)
 	{
 		ImGui::Columns(count, id, border);
@@ -754,17 +1179,31 @@ namespace efk
 
 	void GUIManager::Text(const char16_t* text)
 	{
-		ImGui::Text(utf8str<1024>(text));
+		if (std::char_traits<char16_t>::length(text) < 1024)
+		{
+			ImGui::Text(utf8str<1024>(text));
+		}
+		else
+		{
+			ImGui::Text(utf16_to_utf8(text).c_str());
+		}
 	}
 
 	void GUIManager::TextWrapped(const char16_t* text)
 	{
-		ImGui::TextWrapped(utf8str<1024>(text));
+		if (std::char_traits<char16_t>::length(text) < 1024)
+		{
+			ImGui::TextWrapped(utf8str<1024>(text));
+		}
+		else
+		{
+			ImGui::TextWrapped(utf16_to_utf8(text).c_str());
+		}
 	}
 
-	bool GUIManager::Button(const char16_t* label)
+	bool GUIManager::Button(const char16_t* label, float size_x, float size_y)
 	{
-		return ImGui::Button(utf8str<256>(label));
+		return ImGui::Button(utf8str<256>(label), ImVec2(size_x, size_y));
 	}
 
 	void GUIManager::Image(ImageResource* user_texture_id, float x, float y)
@@ -774,7 +1213,7 @@ namespace efk
 
 	void GUIManager::Image(void* user_texture_id, float x, float y)
 	{
-		if (!isOpenGLMode)
+		if (deviceType != DeviceType::OpenGL)
 		{
 			ImGui::Image((ImTextureID)user_texture_id, ImVec2(x, y), ImVec2(0, 0), ImVec2(1, 1));
 		}
@@ -786,7 +1225,7 @@ namespace efk
 
 	bool GUIManager::ImageButton(ImageResource* user_texture_id, float x, float y)
 	{
-		return ImGui::ImageButton(ToImTextureID(user_texture_id), ImVec2(x, y), ImVec2(0, 0), ImVec2(1, 1), 0);
+		return ImGui::ImageButton_(ToImTextureID(user_texture_id), ImVec2(x, y), ImVec2(0, 0), ImVec2(1, 1), 0, ImVec4(0, 0, 0, 0), ImVec4(1, 1, 1, 1));
 	}
 
 	bool GUIManager::Checkbox(const char16_t* label, bool* v)
@@ -963,7 +1402,7 @@ namespace efk
 
 	bool GUIManager::ColorEdit4(const char16_t* label, float* col, ColorEditFlags flags)
 	{
-		return ImGui::ColorEdit4(utf8str<256>(label), col, (int)flags);
+		return ImGui::ColorEdit4_(utf8str<256>(label), col, (int)flags);
 	}
 
 	bool GUIManager::TreeNode(const char16_t* label)
@@ -999,6 +1438,16 @@ namespace efk
 	void GUIManager::SetTooltip(const char16_t* text)
 	{
 		ImGui::SetTooltip(utf8str<256>(text));
+	}
+
+	void GUIManager::BeginTooltip()
+	{
+		ImGui::BeginTooltip();
+	}
+
+	void GUIManager::EndTooltip()
+	{
+		ImGui::EndTooltip();
 	}
 
 	bool GUIManager::BeginMainMenuBar()
@@ -1081,10 +1530,13 @@ namespace efk
 		ImGui::SetItemDefaultFocus();
 	}
 
-	void GUIManager::AddFontFromFileTTF(const char* filename, float size_pixels)
+	void GUIManager::AddFontFromFileTTF(const char16_t* filename, float size_pixels)
 	{
 		ImGuiIO& io = ImGui::GetIO();
-		io.Fonts->AddFontFromFileTTF(filename, size_pixels, nullptr, glyphRangesJapanese);
+		
+		size_pixels = roundf(size_pixels * fontScale);
+
+		io.Fonts->AddFontFromFileTTF(utf8str<280>(filename), size_pixels, nullptr, glyphRangesJapanese);
 	}
 
 	bool GUIManager::BeginChildFrame(uint32_t id, const Vec2& size, WindowFlags flags)
@@ -1100,6 +1552,11 @@ namespace efk
 	bool GUIManager::IsKeyDown(int user_key_index)
 	{
 		return ImGui::IsKeyDown(user_key_index);
+	}
+
+	bool GUIManager::IsMouseDown(int button)
+	{
+		return ImGui::IsMouseDown(button);
 	}
 
 	bool GUIManager::IsMouseDoubleClicked(int button)
@@ -1148,7 +1605,7 @@ namespace efk
 		auto cursorPos = ImGui::GetCursorPos();
 
 		cursorPos.x = window->Pos.x;
-		cursorPos.y += window->Pos.y;
+		cursorPos.y = window->DC.CursorPos.y;
 		ImVec2 size;
 		size.x = window->Size.x;
 		size.y = height;
@@ -1163,7 +1620,19 @@ namespace efk
 		windowSize.y = ImGui::GetIO().DisplaySize.y - 25;
 
 		ImGui::SetNextWindowSize(windowSize);
-		ImGui::SetNextWindowPos(ImVec2(0, 25));
+		
+		ImGuiIO& io = ImGui::GetIO();
+		if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
+		{
+			auto pos = ImGui::GetMainViewport()->Pos;
+			pos.y += 25;
+			ImGui::SetNextWindowPos(pos);
+		}
+		else
+		{
+			ImGui::SetNextWindowPos(ImVec2(0, 25));
+		}
+		
 		const ImGuiWindowFlags flags = (ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoTitleBar);
 		const float oldWindowRounding = ImGui::GetStyle().WindowRounding; ImGui::GetStyle().WindowRounding = 0;
 		const bool visible = ImGui::Begin(utf8str<256>(label), NULL, ImVec2(0, 0), 1.0f, flags);
@@ -1206,14 +1675,14 @@ namespace efk
 		ImGui::ResetNextParentDock();
 	}
 
-	void GUIManager::SaveDock(const char* path)
+	void GUIManager::SaveDock(const char16_t* path)
 	{
-		ImGui::SaveDock(path);
+		ImGui::SaveDock(utf8str<280>(path));
 	}
 	
-	void GUIManager::LoadDock(const char* path)
+	void GUIManager::LoadDock(const char16_t* path)
 	{
-		ImGui::LoadDock(path);
+		ImGui::LoadDock(utf8str<280>(path));
 	}
 
 	void GUIManager::ShutdownDock()
@@ -1231,14 +1700,19 @@ namespace efk
 		ImGui::SetNextDockTabToolTip(utf8str<256>(popup));
 	}
 
+	bool GUIManager::GetDockActive()
+	{
+		return ImGui::GetDockActive();
+	}
+
 	void GUIManager::SetDockActive()
 	{
 		ImGui::SetDockActive();
 	}
 
-	bool GUIManager::BeginFCurve(int id, const Vec2& size, const Vec2& scale, float min_value, float max_value)
+	bool GUIManager::BeginFCurve(int id, const Vec2& size, float current, const Vec2& scale, float min_value, float max_value)
 	{
-		return ImGui::BeginFCurve(id, ImVec2(size.X, size.Y), ImVec2(scale.X, scale.Y), min_value, max_value);
+		return ImGui::BeginFCurve(id, ImVec2(size.X, size.Y), current, ImVec2(scale.X, scale.Y), min_value, max_value);
 	}
 
 	void GUIManager::EndFCurve()
@@ -1345,6 +1819,21 @@ namespace efk
                                             (boxer::Style)style,
                                             (boxer::Buttons)buttons);
     }
+
+	bool GUIManager::IsMacOSX()
+	{
+#if __APPLE__
+		return true;
+#else
+		return false;
+#endif
+	}
+
+	void GUIManager::SetIniFilename(const char16_t* filename)
+	{
+		static std::string filename_ = std::string(utf8str<256>(filename));
+		ImGui::GetIO().IniFilename = filename_.c_str();
+	}
 
 	int GUIManager::GetLanguage()
 	{

@@ -15,6 +15,11 @@ if (MSVC)
 	option(USE_MSVC_RUNTIME_LIBRARY_DLL "Use MSVC runtime library DLL" OFF)
 endif()
 
+# For Mac
+if(APPLE)
+	set(CMAKE_OSX_DEPLOYMENT_TARGET 10.10)
+endif()
+
 if (MSVC)
 
 elseif (MINGW)
@@ -55,7 +60,6 @@ endif()
 set(effekseer_src
 	Effekseer/Effekseer/Effekseer.Client.cpp
 	Effekseer/Effekseer/Effekseer.Color.cpp
-	Effekseer/Effekseer/Effekseer.CriticalSection.cpp
 	Effekseer/Effekseer/Effekseer.DefaultEffectLoader.cpp
 	Effekseer/Effekseer/Effekseer.DefaultFile.cpp
 	Effekseer/Effekseer/Effekseer.Effect.cpp
@@ -78,7 +82,6 @@ set(effekseer_src
 	Effekseer/Effekseer/Effekseer.Setting.cpp
 	Effekseer/Effekseer/Effekseer.Server.cpp
 	Effekseer/Effekseer/Effekseer.Socket.cpp
-	Effekseer/Effekseer/Effekseer.Thread.cpp
 	Effekseer/Effekseer/Effekseer.Vector2D.cpp
 	Effekseer/Effekseer/Effekseer.Vector3D.cpp
 	Effekseer/Effekseer/Culling/Culling3D.Grid.cpp
@@ -90,10 +93,12 @@ set(effekseer_src
 	Effekseer/Effekseer/Culling/Culling3D.WorldInternal.cpp)
 
 set(effekseer_renderer_common_src
+	EffekseerRendererCommon/EffekseerRenderer.CommonUtils.cpp
 	EffekseerRendererCommon/EffekseerRenderer.IndexBufferBase.cpp
 	EffekseerRendererCommon/EffekseerRenderer.ModelRendererBase.cpp
 	EffekseerRendererCommon/EffekseerRenderer.RenderStateBase.cpp
 	EffekseerRendererCommon/EffekseerRenderer.Renderer.cpp
+	EffekseerRendererCommon/EffekseerRenderer.Renderer_Impl.cpp
 	EffekseerRendererCommon/EffekseerRenderer.RibbonRendererBase.cpp
 	EffekseerRendererCommon/EffekseerRenderer.RingRendererBase.cpp
 	EffekseerRendererCommon/EffekseerRenderer.SpriteRendererBase.cpp

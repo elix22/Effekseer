@@ -347,7 +347,7 @@ namespace Effekseer.GUI
 			native.SetMouseInverseFlag(rotX, rotY, slideX, slideY);
 		}
 
-		public bool ShowViewer(IntPtr handle, int width, int height, bool isOpenGLMode = false)
+		public bool ShowViewer(IntPtr handle, int width, int height, swig.DeviceType deviceType)
 		{
 			if (isViewerShown) return false;
 
@@ -357,17 +357,26 @@ namespace Effekseer.GUI
 			}
 
 			if (native.CreateWindow_Effekseer(
-				handle, width <= 0 ? 1 : width,
+				handle, 
+				width <= 0 ? 1 : width,
 				height <= 0 ? 1 : height,
 				Core.Option.ColorSpace.Value == Data.OptionValues.ColorSpaceType.LinearSpace,
-				isOpenGLMode))
+				deviceType))
 			{
 				isViewerShown = true;
 				return true;
 			}
 			else
 			{
-				Core.OnOutputMessage("描画画面の生成に失敗しました。DirectXのバージョンの問題、メモリの不足等が考えられます。");
+				if(Core.Language == Language.Japanese)
+				{
+					Core.OnOutputMessage("描画画面の生成に失敗しました。DirectXのバージョンの問題、メモリの不足等が考えられます。");
+				}
+				else
+				{
+					Core.OnOutputMessage("Failed to generate drawing screen. DirectX version problems, memory shortage, and so on.");
+
+				}
 			}
 
 			return false;

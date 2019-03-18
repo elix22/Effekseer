@@ -7,7 +7,6 @@
 #include "EffekseerRendererDX11.TextureLoader.h"
 
 #include "../../EffekseerRendererCommon/EffekseerRenderer.DXTK.DDSTextureLoader.h"
-#include "../../EffekseerRendererCommon/EffekseerRenderer.PngTextureLoader.h"
 #include "../../EffekseerRendererCommon/EffekseerRenderer.DDSTextureLoader.h"
 
 //-----------------------------------------------------------------------------------
@@ -18,11 +17,13 @@ namespace EffekseerRendererDX11
 //----------------------------------------------------------------------------------
 //
 //----------------------------------------------------------------------------------
-TextureLoader::TextureLoader(ID3D11Device* device, ::Effekseer::FileInterface* fileInterface )
+TextureLoader::TextureLoader(ID3D11Device* device, ID3D11DeviceContext* context, ::Effekseer::FileInterface* fileInterface )
 	: m_fileInterface	(fileInterface)
 	, device			(device)
+	, context			(context)
 {
 	ES_SAFE_ADDREF(device);
+	ES_SAFE_ADDREF(context);
 
 	if( fileInterface == NULL )
 	{
@@ -30,7 +31,7 @@ TextureLoader::TextureLoader(ID3D11Device* device, ::Effekseer::FileInterface* f
 	}
 
 #ifdef __EFFEKSEER_RENDERER_INTERNAL_LOADER__
-	EffekseerRenderer::PngTextureLoader::Initialize();
+	pngTextureLoader.Initialize();
 #endif
 }
 
@@ -40,10 +41,11 @@ TextureLoader::TextureLoader(ID3D11Device* device, ::Effekseer::FileInterface* f
 TextureLoader::~TextureLoader()
 {
 #ifdef __EFFEKSEER_RENDERER_INTERNAL_LOADER__
-	EffekseerRenderer::PngTextureLoader::Finalize();
+	pngTextureLoader.Finalize();
 #endif
 
 	ES_SAFE_RELEASE(device);
+	ES_SAFE_RELEASE(context);
 }
 
 //----------------------------------------------------------------------------------
@@ -70,41 +72,38 @@ Effekseer::TextureData* TextureLoader::Load(const EFK_CHAR* path, ::Effekseer::T
 			data_texture[2] == 'N' &&
 			data_texture[3] == 'G')
 		{
-			if(::EffekseerRenderer::PngTextureLoader::Load(data_texture, size_texture, false))
+			if(pngTextureLoader.Load(data_texture, size_texture, false))
 			{
 				ID3D11Texture2D* tex = NULL;
 
-				D3D11_TEXTURE2D_DESC TexDesc;
-				TexDesc.Width = ::EffekseerRenderer::PngTextureLoader::GetWidth();
-				TexDesc.Height = ::EffekseerRenderer::PngTextureLoader::GetHeight();
-				TexDesc.MipLevels = 1;
+				D3D11_TEXTURE2D_DESC TexDesc{};
+				TexDesc.Width = pngTextureLoader.GetWidth();
+				TexDesc.Height = pngTextureLoader.GetHeight();
 				TexDesc.ArraySize = 1;
 				TexDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
 				TexDesc.SampleDesc.Count = 1;
 				TexDesc.SampleDesc.Quality = 0;
 				TexDesc.Usage = D3D11_USAGE_DEFAULT;
-				TexDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+				TexDesc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
 				TexDesc.CPUAccessFlags = 0;
-				TexDesc.MiscFlags = 0;
+				TexDesc.MiscFlags = D3D11_RESOURCE_MISC_GENERATE_MIPS;
 
 				D3D11_SUBRESOURCE_DATA data;
-				data.pSysMem = ::EffekseerRenderer::PngTextureLoader::GetData().data();
+				data.pSysMem = pngTextureLoader.GetData().data();
 				data.SysMemPitch = TexDesc.Width * 4;
 				data.SysMemSlicePitch = TexDesc.Width * TexDesc.Height * 4;
 
-				HRESULT hr = device->CreateTexture2D(&TexDesc, &data, &tex);
+				HRESULT hr = device->CreateTexture2D(&TexDesc, nullptr, &tex);
 
 				if (FAILED(hr))
 				{
 					goto Exit;
 				}
 			
-				D3D11_SHADER_RESOURCE_VIEW_DESC desc;
-				ZeroMemory(&desc, sizeof(desc));
+				D3D11_SHADER_RESOURCE_VIEW_DESC desc{};
 				desc.Format = TexDesc.Format;
 				desc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
-				desc.Texture2D.MostDetailedMip = 0;
-				desc.Texture2D.MipLevels = TexDesc.MipLevels;
+				desc.Texture2D.MipLevels = -1;
 
 				hr = device->CreateShaderResourceView(tex, &desc, &texture);
 				if (FAILED(hr))
@@ -113,7 +112,12 @@ Effekseer::TextureData* TextureLoader::Load(const EFK_CHAR* path, ::Effekseer::T
 					goto Exit;
 				}
 
+				context->UpdateSubresource(tex, 0, 0, pngTextureLoader.GetData().data(), data.SysMemPitch, 0);
+
 				ES_SAFE_RELEASE(tex);
+
+				// Generate mipmap
+				context->GenerateMips(texture);
 
 				textureData = new Effekseer::TextureData();
 				textureData->UserPtr = texture;
@@ -139,14 +143,14 @@ Effekseer::TextureData* TextureLoader::Load(const EFK_CHAR* path, ::Effekseer::T
 			ES_SAFE_RELEASE(textureR);
 
 			// To get texture size, use loader
-			EffekseerRenderer::DDSTextureLoader::Load(data_texture, size_texture);
+			ddsTextureLoader.Load(data_texture, size_texture);
 
 			textureData = new Effekseer::TextureData();
 			textureData->UserPtr = texture;
 			textureData->UserID = 0;
-			textureData->TextureFormat = EffekseerRenderer::DDSTextureLoader::GetTextureFormat();
-			textureData->Width = EffekseerRenderer::DDSTextureLoader::GetWidth();
-			textureData->Height = EffekseerRenderer::DDSTextureLoader::GetHeight();
+			textureData->TextureFormat = ddsTextureLoader.GetTextureFormat();
+			textureData->Width = ddsTextureLoader.GetWidth();
+			textureData->Height = ddsTextureLoader.GetHeight();
 		}
 
 	Exit:;

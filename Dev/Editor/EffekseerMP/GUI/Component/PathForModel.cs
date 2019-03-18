@@ -86,8 +86,10 @@ namespace Effekseer.GUI.Component
 			isHovered = false;
 
 			if (binding == null) return;
+			
+			float buttonSizeX = Manager.NativeManager.GetTextLineHeightWithSpacing() * 2;
 
-			if (Manager.NativeManager.Button(Resources.GetString("Load") + id1))
+			if (Manager.NativeManager.Button(Resources.GetString("Load") + id1, buttonSizeX))
 			{
 				btn_load_Click();
 			}
@@ -98,23 +100,31 @@ namespace Effekseer.GUI.Component
 
 			Manager.NativeManager.Text(filePath);
 
-			isHovered = isHovered || Manager.NativeManager.IsItemHovered();
-
-			if (Manager.NativeManager.Button(Resources.GetString("Delete") + id2))
+			if (Manager.NativeManager.IsItemHovered())
 			{
-				btn_delete_Click();
-			}
-
-			Manager.NativeManager.SameLine();
-
-			isHovered = isHovered || Manager.NativeManager.IsItemHovered();
-
-			if (Manager.NativeManager.Button(Resources.GetString("ResetMaginification") + id3))
-			{
-				btn_reload_Click();
+				Manager.NativeManager.SetTooltip(filePath);
 			}
 
 			isHovered = isHovered || Manager.NativeManager.IsItemHovered();
+			
+			if (filePath != string.Empty)
+			{
+				if (Manager.NativeManager.Button(Resources.GetString("Delete") + id2, buttonSizeX))
+				{
+					btn_delete_Click();
+				}
+
+				Manager.NativeManager.SameLine();
+
+				isHovered = isHovered || Manager.NativeManager.IsItemHovered();
+
+				if (Manager.NativeManager.Button(Resources.GetString("ResetMaginification") + id3, buttonSizeX * 2))
+				{
+					btn_reload_Click();
+				}
+
+				isHovered = isHovered || Manager.NativeManager.IsItemHovered();
+			}
 		}
 
 		private void btn_load_Click()
@@ -254,6 +264,19 @@ namespace Effekseer.GUI.Component
 					{
 						string converterPath = Manager.GetEntryDirectory() + "/tools/fbxToEffekseerModelConverter";
 
+						// japanese file path is not supported.
+						try
+						{
+							string tempFilePath = Path.GetTempPath() + System.IO.Path.GetFileName(filepath);
+							System.IO.File.Copy(oldFilepath, tempFilePath);
+							oldFilepath = tempFilePath;
+						}
+						catch
+						{
+
+						}
+
+
 						System.Diagnostics.ProcessStartInfo info = new System.Diagnostics.ProcessStartInfo();
 						info.FileName = converterPath;
 						info.Arguments = "\"" + oldFilepath + "\" \"" + newFilepath + "\" -scale " + omd.Magnification.ToString();
@@ -265,6 +288,16 @@ namespace Effekseer.GUI.Component
 						if (System.IO.File.Exists(newFilepath))
 						{
 							System.IO.File.SetLastWriteTime(newFilepath, System.IO.File.GetLastWriteTime(oldFilepath));
+						}
+
+						try
+						{
+							string tempFilePath = Path.GetTempPath() + System.IO.Path.GetFileName(filepath);
+							System.IO.File.Delete(tempFilePath);
+						}
+						catch
+						{
+
 						}
 					}
 				}
@@ -286,6 +319,18 @@ namespace Effekseer.GUI.Component
 					{
 						string converterPath = Manager.GetEntryDirectory() + "/tools/mqoToEffekseerModelConverter";
 
+						// japanese file path is not supported.
+						try
+						{
+							string tempFilePath = Path.GetTempPath() + System.IO.Path.GetFileName(filepath);
+							System.IO.File.Copy(oldFilepath, tempFilePath);
+							oldFilepath = tempFilePath;
+						}
+						catch
+						{
+
+						}
+
 						System.Diagnostics.ProcessStartInfo info = new System.Diagnostics.ProcessStartInfo();
 						info.FileName = converterPath;
 						info.Arguments = "\"" + oldFilepath + "\" \"" + newFilepath + "\" -scale " + omd.Magnification.ToString();
@@ -297,6 +342,16 @@ namespace Effekseer.GUI.Component
 						if (System.IO.File.Exists(newFilepath))
 						{
 							System.IO.File.SetLastWriteTime(newFilepath, System.IO.File.GetLastWriteTime(oldFilepath));
+						}
+
+						try
+						{
+							string tempFilePath = Path.GetTempPath() + System.IO.Path.GetFileName(filepath);
+							System.IO.File.Delete(tempFilePath);
+						}
+						catch
+						{
+
 						}
 					}
 				}

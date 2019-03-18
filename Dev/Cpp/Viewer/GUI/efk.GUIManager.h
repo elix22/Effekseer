@@ -8,10 +8,11 @@
 #include "../3rdParty/imgui/imgui_internal.h"
 
 #include "../3rdParty/imgui_platform/imgui_impl_glfw.h"
-#include "../3rdParty/imgui_platform/imgui_impl_gl3.h"
+#include "../3rdParty/imgui_platform/imgui_impl_opengl3.h"
 
 #ifdef _WIN32
 #include "../3rdParty/imgui_platform/imgui_impl_dx9.h"
+#include "../3rdParty/imgui_platform/imgui_impl_dx11.h"
 #endif
 
 //#include "../3rdParty/imgui_glfw_gl3/imgui_impl_glfw_gl3.h"
@@ -32,7 +33,7 @@ namespace efk
 		NoScrollWithMouse = 1 << 4,   // Disable user vertically scrolling with mouse wheel. On child window, mouse wheel will be forwarded to the parent unless NoScrollbar is also set.
 		NoCollapse = 1 << 5,   // Disable user collapsing window by double-clicking on it
 		AlwaysAutoResize = 1 << 6,   // Resize every window to its content every frame
-		ShowBorders          = 1 << 7,   // Show borders around windows and items (OBSOLETE! Use e.g. style.FrameBorderSize=1.0f to enable borders).
+		//ShowBorders          = 1 << 7,   // Show borders around windows and items (OBSOLETE! Use e.g. style.FrameBorderSize=1.0f to enable borders).
 		NoSavedSettings = 1 << 8,   // Never load/save settings in .ini file
 		NoInputs = 1 << 9,   // Disable catching mouse or keyboard inputs, hovering test with pass through.
 		MenuBar = 1 << 10,  // Has a menu-bar
@@ -42,7 +43,7 @@ namespace efk
 		AlwaysVerticalScrollbar = 1 << 14,  // Always show vertical scrollbar (even if ContentSize.y < Size.y)
 		AlwaysHorizontalScrollbar = 1 << 15,  // Always show horizontal scrollbar (even if ContentSize.x < Size.x)
 		AlwaysUseWindowPadding = 1 << 16,  // Ensure child windows without border uses style.WindowPadding (ignored by default for non-bordered child windows, because more convenient)
-		ResizeFromAnySide = 1 << 17,  // (WIP) Enable resize from any corners and borders. Your back-end needs to honor the different values of io.MouseCursor set by imgui.
+		//ResizeFromAnySide = 1 << 17,  // (WIP) Enable resize from any corners and borders. Your back-end needs to honor the different values of io.MouseCursor set by imgui.
 		NoNavInputs = 1 << 18,  // No gamepad/keyboard navigation within the window
 		NoNavFocus = 1 << 19,  // No focusing toward this window with gamepad/keyboard navigation (e.g. skipped by CTRL+TAB)
 	};
@@ -59,18 +60,21 @@ namespace efk
 		NoTooltip = 1 << 6,   //              // ColorEdit, ColorPicker, ColorButton: disable tooltip when hovering the preview.
 		NoLabel = 1 << 7,   //              // ColorEdit, ColorPicker: disable display of inline text label (the label is still forwarded to the tooltip and picker).
 		NoSidePreview = 1 << 8,   //              // ColorPicker: disable bigger color preview on right side of the picker, use small colored square preview instead.
+		NoDragDrop = 1 << 9,   //              // ColorEdit: disable drag and drop target. ColorButton: disable drag and drop source.
+
 		// User Options (right-click on widget to change some of them). You can set application defaults using SetColorEditOptions(). The idea is that you probably don't want to override them in most of your calls, let the user choose and/or call SetColorEditOptions() during startup.
-		AlphaBar = 1 << 9,   //              // ColorEdit, ColorPicker: show vertical alpha bar/gradient in picker.
-		AlphaPreview = 1 << 10,  //              // ColorEdit, ColorPicker, ColorButton: display preview as a transparent color over a checkerboard, instead of opaque.
-		AlphaPreviewHalf = 1 << 11,  //              // ColorEdit, ColorPicker, ColorButton: display half opaque / half checkerboard, instead of opaque.
-		HDR = 1 << 12,  //              // (WIP) ColorEdit: Currently only disable 0.0f..1.0f limits in RGBA edition (note: you probably want to use ImGuiColorEditFlags_Float flag as well).
-		RGB = 1 << 13,  // [Inputs]     // ColorEdit: choose one among RGB/HSV/HEX. ColorPicker: choose any combination using RGB/HSV/HEX.
-		HSV = 1 << 14,  // [Inputs]     // "
-		HEX = 1 << 15,  // [Inputs]     // "
-		Uint8 = 1 << 16,  // [DataType]   // ColorEdit, ColorPicker, ColorButton: _display_ values formatted as 0..255. 
-		Float = 1 << 17,  // [DataType]   // ColorEdit, ColorPicker, ColorButton: _display_ values formatted as 0.0f..1.0f floats instead of 0..255 integers. No round-trip of value via integers.
-		PickerHueBar = 1 << 18,  // [PickerMode] // ColorPicker: bar for Hue, rectangle for Sat/Value.
-		PickerHueWheel = 1 << 19,  // [PickerMode] // ColorPicker: wheel for Hue, triangle for Sat/Value.
+		AlphaBar = 1 << 16,  //              // ColorEdit, ColorPicker: show vertical alpha bar/gradient in picker.
+		AlphaPreview = 1 << 17,  //              // ColorEdit, ColorPicker, ColorButton: display preview as a transparent color over a checkerboard, instead of opaque.
+		AlphaPreviewHalf = 1 << 18,  //              // ColorEdit, ColorPicker, ColorButton: display half opaque / half checkerboard, instead of opaque.
+		HDR = 1 << 19,  //              // (WIP) ColorEdit: Currently only disable 0.0f..1.0f limits in RGBA edition (note: you probably want to use ImGuiColorEditFlags_Float flag as well).
+		RGB = 1 << 20,  // [Inputs]     // ColorEdit: choose one among RGB/HSV/HEX. ColorPicker: choose any combination using RGB/HSV/HEX.
+		HSV = 1 << 21,  // [Inputs]     // "
+		HEX = 1 << 22,  // [Inputs]     // "
+		Uint8 = 1 << 23,  // [DataType]   // ColorEdit, ColorPicker, ColorButton: _display_ values formatted as 0..255.
+		Float = 1 << 24,  // [DataType]   // ColorEdit, ColorPicker, ColorButton: _display_ values formatted as 0.0f..1.0f floats instead of 0..255 integers. No round-trip of value via integers.
+		PickerHueBar = 1 << 25,  // [PickerMode] // ColorPicker: bar for Hue, rectangle for Sat/Value.
+		PickerHueWheel = 1 << 26,  // [PickerMode] // ColorPicker: wheel for Hue, triangle for Sat/Value.
+		
 	};
 
 	enum class Cond : int32_t
@@ -231,19 +235,22 @@ namespace efk
 	private:
 		GUIManagerCallback*		callback = nullptr;
 		efk::Window*	window = nullptr;
-		bool			isOpenGLMode = false;
+		efk::DeviceType deviceType;
 		std::u16string	clipboard;
+		float			fontScale = 1.0f;
 
 	public:
 		GUIManager();
 
 		virtual ~GUIManager();
 
-		bool Initialize(const char16_t* title, int32_t width, int32_t height, bool isOpenGLMode, bool isSRGBMode);
+		bool Initialize(const char16_t* title, int32_t width, int32_t height, efk::DeviceType deviceType, bool isSRGBMode);
 
 		void InitializeGUI(Native* native);
 
 		void SetTitle(const char16_t* title);
+
+		void SetWindowIcon(const char16_t* iconPath);
 
 		Vec2 GetSize() const;
 
@@ -267,7 +274,7 @@ namespace efk
 
 		void ResetGUI();
 
-		void RenderGUI();
+		void RenderGUI(bool isValid = true);
 
 		void* GetNativeHandle();
 
@@ -307,6 +314,8 @@ namespace efk
 		float GetCursorPosY();
 		float GetTextLineHeight();
 		float GetTextLineHeightWithSpacing();
+		float GetFrameHeight();
+		float GetFrameHeightWithSpacing();
 
 		// Column
 		void  Columns(int count = 1, const char* id = NULL, bool border = true);
@@ -322,7 +331,7 @@ namespace efk
 		void TextWrapped(const char16_t* text);
 
 		// Main
-		bool Button(const char16_t* label);
+		bool Button(const char16_t* label, float size_x = 0.0f, float size_y = 0.0f);
 
 		void Image(ImageResource* user_texture_id, float x, float y);
 
@@ -384,6 +393,8 @@ namespace efk
 
 		// Tooltips
 		void SetTooltip(const char16_t* text);
+		void BeginTooltip();
+		void EndTooltip();
 
 		// Menus
 		bool BeginMainMenuBar();                                                
@@ -406,7 +417,7 @@ namespace efk
 
 		void SetItemDefaultFocus();
 
-		void AddFontFromFileTTF(const char* filename, float size_pixels);
+		void AddFontFromFileTTF(const char16_t* filename, float size_pixels);
 
 		// Utils
 		bool BeginChildFrame(uint32_t id, const Vec2& size, WindowFlags flags = WindowFlags::None);
@@ -414,6 +425,7 @@ namespace efk
 
 		// Inputs
 		bool IsKeyDown(int user_key_index);
+		bool IsMouseDown(int button);
 		bool IsMouseDoubleClicked(int button);
 
 		bool IsItemHovered();
@@ -436,15 +448,16 @@ namespace efk
 		void EndDock();
 		void SetNextDockRate(float rate);
 		void ResetNextParentDock();
-		void SaveDock(const char* path);
-		void LoadDock(const char* path);
+		void SaveDock(const char16_t* path);
+		void LoadDock(const char16_t* path);
 		void ShutdownDock();
 		void SetNextDockIcon(ImageResource* icon, Vec2 iconSize);
 		void SetNextDockTabToolTip(const char16_t* popup);
+		bool GetDockActive();
 		void SetDockActive();
 
 		// Fcurve
-		bool BeginFCurve(int id, const Vec2& size, const Vec2& scale, float min_value = 1.0f, float max_value = -1.0f);
+		bool BeginFCurve(int id, const Vec2& size, float current, const Vec2& scale, float min_value = 1.0f, float max_value = -1.0f);
 		void EndFCurve();
 		bool FCurve(
 			int fcurve_id,
@@ -480,6 +493,10 @@ namespace efk
         
         // Dalog
         static DialogSelection show(const char16_t* message, const char16_t* title, DialogStyle style, DialogButtons buttons);
+
+		static bool IsMacOSX();
+
+		static void SetIniFilename(const char16_t* filename);
 
 		// Language
 		static int GetLanguage();

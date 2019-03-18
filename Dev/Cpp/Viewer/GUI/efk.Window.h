@@ -21,6 +21,7 @@
 #include <functional>
 
 #include "efk.Vec2.h"
+#include "../efk.Base.h"
 
 namespace efk
 {
@@ -31,6 +32,7 @@ namespace efk
 	private:
 		GLFWwindow*	window = nullptr;
 		bool		isOpenGLMode = false;
+		DeviceType	deviceType = DeviceType::OpenGL;
 
 #ifndef _WIN32
         GLuint      vao;
@@ -40,13 +42,15 @@ namespace efk
 		Window();
 		virtual ~Window();
 
-		bool Initialize(const char16_t* title, int32_t width, int32_t height, bool isSRGBMode, bool isOpenGLMode);
+		bool Initialize(const char16_t* title, int32_t width, int32_t height, bool isSRGBMode, DeviceType deviceType);
 
 		void Terminate();
 
 		bool DoEvents();
 
 		void SetTitle(const char16_t* title);
+
+		void SetWindowIcon(const char16_t* iconPath);
 
 		Vec2 GetSize() const;
 
