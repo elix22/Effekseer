@@ -6,10 +6,11 @@
 
 #include <windows.h>
 #include <d3d11.h>
-#include <d3dx11.h>
 #include "../EffekseerRendererDX11/EffekseerRendererDX11.h"
 #include "graphics.h"
 #include "window.h"
+
+#pragma comment(lib, "d3dcompiler.lib")
 
 #if _DEBUG
 #pragma comment(lib, "x86/EffekseerRendererDX11.Debug.lib" )

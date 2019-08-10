@@ -10,12 +10,15 @@
 #include "Effekseer.TextureLoader.h"
 #include "Effekseer.ModelLoader.h"
 #include "Effekseer.SoundLoader.h"
+#include "Effekseer.MaterialLoader.h"
 
 #include "Renderer/Effekseer.SpriteRenderer.h"
 #include "Renderer/Effekseer.RibbonRenderer.h"
 #include "Renderer/Effekseer.RingRenderer.h"
 #include "Renderer/Effekseer.ModelRenderer.h"
 #include "Renderer/Effekseer.TrackRenderer.h"
+
+#include "Effekseer.Effect.h"
 
 //----------------------------------------------------------------------------------
 //
@@ -32,6 +35,8 @@ Setting::Setting()
 	, m_soundLoader(NULL)
 	, m_modelLoader(NULL)
 {
+	auto effectFactory = new EffectFactory();
+	effectFactories.push_back(effectFactory);
 }
 
 //----------------------------------------------------------------------------------
@@ -39,11 +44,13 @@ Setting::Setting()
 //----------------------------------------------------------------------------------
 Setting::~Setting()
 {
+	ClearEffectFactory();
+
 	ES_SAFE_DELETE(m_effectLoader);
 	ES_SAFE_DELETE(m_textureLoader);
 	ES_SAFE_DELETE(m_soundLoader);
 	ES_SAFE_DELETE(m_modelLoader);
-
+	ES_SAFE_DELETE(m_materialLoader);
 }
 
 //----------------------------------------------------------------------------------
@@ -138,12 +145,42 @@ void Setting::SetSoundLoader(SoundLoader* loader)
 	m_soundLoader = loader;
 }
 
+MaterialLoader* Setting::GetMaterialLoader()
+{ return m_materialLoader;
+}
 
+void Setting::SetMaterialLoader(MaterialLoader* loader)
+{
+	ES_SAFE_DELETE(m_materialLoader);
+	m_materialLoader = loader;
+}
 
+void Setting::AddEffectFactory(EffectFactory* effectFactory) { 
+	
+	if (effectFactory == nullptr)
+		return;
+	ES_SAFE_ADDREF(effectFactory); 
+	effectFactories.push_back(effectFactory);
+}
 
-//----------------------------------------------------------------------------------
-//
-//----------------------------------------------------------------------------------
+void Setting::ClearEffectFactory()
+{
+	for (auto& e : effectFactories)
+	{
+		ES_SAFE_RELEASE(e);
+	}
+	effectFactories.clear();
+}
+
+EffectFactory* Setting::GetEffectFactory(int32_t ind) const
+{
+	return effectFactories[ind]; 
+}
+
+int32_t Setting::GetEffectFactoryCount() const { 
+	return effectFactories.size();
+}
+
 }
 //----------------------------------------------------------------------------------
 //

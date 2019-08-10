@@ -33,6 +33,33 @@ namespace Effekseer.Data.Value
 
 		internal DrawnAs DefaultDrawnAs { get; private set; }
 
+		public bool CanSelectDynamicEquation = false;
+
+		public Boolean IsDynamicEquationEnabled
+		{
+			get;
+			private set;
+		}
+		
+		public DynamicEquationReference DynamicEquationMin
+		{
+			get;
+			private set;
+		}
+
+		public DynamicEquationReference DynamicEquationMax
+		{
+			get;
+			private set;
+		}
+
+		public event ChangedValueEventHandler OnChanged;
+
+		public bool IsValueChangedFromDefault
+		{
+			get { return X.IsValueChangedFromDefault || Y.IsValueChangedFromDefault || Z.IsValueChangedFromDefault || DrawnAs != DefaultDrawnAs; }
+		}
+
 		internal Vector3DWithRandom(
 			float x = 0,
 			float y = 0,
@@ -51,6 +78,9 @@ namespace Effekseer.Data.Value
 			X = new FloatWithRandom(x, x_max, x_min, drawnas, x_step);
 			Y = new FloatWithRandom(y, y_max, y_min, drawnas, y_step);
 			Z = new FloatWithRandom(z, z_max, z_min, drawnas, z_step);
+			IsDynamicEquationEnabled = new Boolean();
+			DynamicEquationMin = new DynamicEquationReference();
+			DynamicEquationMax = new DynamicEquationReference();
 			DrawnAs = drawnas;
 			DefaultDrawnAs = DrawnAs;
 		}

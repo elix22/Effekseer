@@ -70,6 +70,160 @@ namespace Effekseer.Data
 			return e;
 		}
 
+#if MATERIAL_ENABLED
+		public static XmlElement SaveToElement(XmlDocument doc, string element_name, MaterialFileParameter mfp, bool isClip)
+		{
+			var e = doc.CreateElement(element_name);
+
+			var e_path = SaveToElement(doc, "Path", mfp.Path, isClip);
+			if(e_path != null)
+			{
+				e.AppendChild(e_path);
+			}
+
+			var e_float1 = doc.CreateElement("Float1");
+			var e_float4 = doc.CreateElement("Float4");
+			var e_texture = doc.CreateElement("Texture");
+
+
+			// check file info
+			var info = new Utl.MaterialInformation();
+			if(info.Load(mfp.Path.AbsolutePath))
+			{
+				var uniforms = mfp.GetUniforms(info);
+
+				foreach(var uniform in uniforms)
+				{
+					var status = uniform;
+
+					if (status.Value is Data.Value.Vector4D)
+					{
+						var v = status.Value as Data.Value.Vector4D;
+						var v_e = SaveToElement(doc, uniform.Key, v, isClip);
+						if(v_e != null)
+						{
+							e_float4.AppendChild(v_e);
+						}
+					}
+					else if (status.Value is Data.Value.Float)
+					{
+						var v = status.Value as Data.Value.Float;
+						var v_e = SaveToElement(doc, uniform.Key, v, isClip);
+						if (v_e != null)
+						{
+							e_float1.AppendChild(v_e);
+						}
+					}
+				}
+
+				var textures = mfp.GetTextures(info);
+
+				foreach (var kv in textures)
+				{
+					var status = kv.Item1;
+					
+					// regard as defalt texture
+					if (!status.IsShown)
+						continue;
+
+					if (status.Value is Data.Value.PathForImage)
+					{
+						var v = status.Value as Data.Value.PathForImage;
+						var v_e = SaveToElement(doc, status.Key, v, isClip);
+						if (v_e != null)
+						{
+							e_texture.AppendChild(v_e);
+						}
+					}
+				}
+			}
+			else
+			{
+				foreach(var kv in mfp.KeyValues)
+				{
+					var key = kv.Key;
+					var status = kv.Value as MaterialFileParameter.ValueStatus;
+
+					if(status.Value is Data.Value.Vector4D)
+					{
+						var v = status.Value as Data.Value.Vector4D;
+						var v_e = SaveToElement(doc, status.Key, v, isClip);
+						if (v_e != null)
+						{
+							e_float4.AppendChild(v_e);
+						}
+					}
+					else if (status.Value is Data.Value.Float)
+					{
+						var v = status.Value as Data.Value.Float;
+						var v_e = SaveToElement(doc, status.Key, v, isClip);
+						if (v_e != null)
+						{
+							e_float1.AppendChild(v_e);
+						}
+					}
+					else if (status.Value is Data.Value.PathForImage)
+					{
+						var v = status.Value as Data.Value.PathForImage;
+
+						// regard as defalt texture
+						if (!status.IsShown)
+							continue;
+
+						var v_e = SaveToElement(doc, status.Key, v, isClip);
+						if (v_e != null)
+						{
+							e_texture.AppendChild(v_e);
+						}
+					}
+				}
+			}
+
+			if(e_float1.ChildNodes.Count > 0)
+			{
+				e.AppendChild(e_float1);
+			}
+
+			if (e_float4.ChildNodes.Count > 0)
+			{
+				e.AppendChild(e_float4);
+			}
+
+			if (e_texture.ChildNodes.Count > 0)
+			{
+				e.AppendChild(e_texture);
+			}
+
+			return e.ChildNodes.Count > 0 ? e : null;
+		}
+#endif
+		public static XmlElement SaveToElement(XmlDocument doc, string element_name, Data.DynamicInputCollection collection, bool isClip)
+		{
+			var e = doc.CreateElement(element_name);
+			for (int i = 0; i < collection.Values.Count; i++)
+			{
+				var e_node = SaveToElement(doc, collection.Values[i].GetType().Name, collection.Values[i], true);
+				if(e_node != null)
+				{
+					e.AppendChild(e_node);
+				}
+			}
+
+			return e;
+		}
+
+		public static XmlElement SaveToElement(XmlDocument doc, string element_name, Data.DynamicEquationCollection collection, bool isClip)
+		{
+			var e = doc.CreateElement(element_name);
+			for (int i = 0; i < collection.Values.Count; i++)
+			{
+				var e_node = SaveToElement(doc, collection.Values[i].GetType().Name, collection.Values[i], isClip);
+				e.AppendChild(e_node);
+			}
+
+			return e;
+		}
+
 		public static XmlElement SaveToElement(XmlDocument doc, string element_name, Value.String value, bool isClip)
 		{
 			if (value.DefaultValue == value.Value && !isClip) return null;
@@ -93,9 +247,27 @@ namespace Effekseer.Data
 
 		public static XmlElement SaveToElement(XmlDocument doc, string element_name, Value.Float value, bool isClip)
 		{
-			if (value.Value == value.DefaultValue && !isClip) return null;
-			var text = value.GetValue().ToString();
-			return doc.CreateTextElement(element_name, text);
+			if(value.DynamicEquation.Index >= 0)
+			{
+				var e = doc.CreateElement(element_name);
+				var text = value.GetValue().ToString();
+				var value_ = doc.CreateTextElement("Value", text);
+				e.AppendChild(value_);
+
+				var d = SaveToElement(doc, "DynamicEquation", value.DynamicEquation, isClip);
+				if (d != null)
+				{
+					e.AppendChild(d);
+				}
+
+				return e.ChildNodes.Count > 0 ? e : null;
+			}
+			else
+			{
+				if (value.Value == value.DefaultValue && !isClip) return null;
+				var text = value.GetValue().ToString();
+				return doc.CreateTextElement(element_name, text);
+			}
 		}
 
 		public static XmlElement SaveToElement(XmlDocument doc, string element_name, Value.IntWithInifinite value, bool isClip)
@@ -106,6 +278,12 @@ namespace Effekseer.Data
 			
 			if (v != null) e.AppendChild(v);
 			if (i != null) e.AppendChild(i);
+
+			var d = SaveToElement(doc, "DynamicEquation", value.DynamicEquation, isClip);
+			if (d != null)
+			{
+				e.AppendChild(d);
+			}
 
 			return e.ChildNodes.Count > 0 ? e : null;
 		}
@@ -132,6 +310,28 @@ namespace Effekseer.Data
 			if (x != null) e.AppendChild(x);
 			if (y != null) e.AppendChild(y);
 			if (z != null) e.AppendChild(z);
+
+			var d = SaveToElement(doc, "DynamicEquation", value.DynamicEquation, isClip);
+			if(d != null)
+			{
+				e.AppendChild(d);
+			}
+
+			return e.ChildNodes.Count > 0 ? e : null;
+		}
+
+		public static XmlElement SaveToElement(XmlDocument doc, string element_name, Value.Vector4D value, bool isClip)
+		{
+			var e = doc.CreateElement(element_name);
+			var x = SaveToElement(doc, "X", value.X, isClip);
+			var y = SaveToElement(doc, "Y", value.Y, isClip);
+			var z = SaveToElement(doc, "Z", value.Z, isClip);
+			var w = SaveToElement(doc, "W", value.W, isClip);
+
+			if (x != null) e.AppendChild(x);
+			if (y != null) e.AppendChild(y);
+			if (z != null) e.AppendChild(z);
+			if (w != null) e.AppendChild(w);
 
 			return e.ChildNodes.Count > 0 ? e : null;
 		}
@@ -160,6 +360,20 @@ namespace Effekseer.Data
 			if (value.DefaultValueMin != value.Min || isClip) e.AppendChild(doc.CreateTextElement("Min", value.Min.ToString()));
 			if (value.DefaultDrawnAs != value.DrawnAs || isClip) e.AppendChild(doc.CreateTextElement("DrawnAs", (int)value.DrawnAs));
 
+			var d_min = SaveToElement(doc, "DynamicEquationMin", value.DynamicEquationMin, isClip);
+
+			if (d_min != null)
+			{
+				e.AppendChild(d_min);
+			}
+
+			var d_max = SaveToElement(doc, "DynamicEquationMax", value.DynamicEquationMax, isClip);
+
+			if (d_max != null)
+			{
+				e.AppendChild(d_max);
+			}
+
 			return e.ChildNodes.Count > 0 ? e : null;
 		}
 
@@ -171,7 +385,21 @@ namespace Effekseer.Data
 			if (value.DefaultValueMax != value.Max || isClip) e.AppendChild(doc.CreateTextElement("Max", value.Max.ToString()));
 			if (value.DefaultValueMin != value.Min || isClip) e.AppendChild(doc.CreateTextElement("Min", value.Min.ToString()));
 			if (value.DefaultDrawnAs != value.DrawnAs || isClip) e.AppendChild(doc.CreateTextElement("DrawnAs", (int)value.DrawnAs));
-			
+
+			var d_min = SaveToElement(doc, "DynamicEquationMin", value.DynamicEquationMin, isClip);
+
+			if (d_min != null)
+			{
+				e.AppendChild(d_min);
+			}
+
+			var d_max = SaveToElement(doc, "DynamicEquationMax", value.DynamicEquationMax, isClip);
+
+			if (d_max != null)
+			{
+				e.AppendChild(d_max);
+			}
+
 			return e.ChildNodes.Count > 0 ? e : null;
 		}
 
@@ -201,6 +429,20 @@ namespace Effekseer.Data
 			if (y != null) e.AppendChild(y);
 			if (z != null) e.AppendChild(z);
 			if (da != null) e.AppendChild(da);
+
+			var d_min = SaveToElement(doc, "DynamicEquationMin", value.DynamicEquationMin, isClip);
+
+			if (d_min != null)
+			{
+				e.AppendChild(d_min);
+			}
+
+			var d_max = SaveToElement(doc, "DynamicEquationMax", value.DynamicEquationMax, isClip);
+
+			if (d_max != null)
+			{
+				e.AppendChild(d_max);
+			}
 
 			return e.ChildNodes.Count > 0 ? e : null;
 		}
@@ -411,6 +653,48 @@ namespace Effekseer.Data
 			return e.ChildNodes.Count > 0 ? e : null;
 		}
 
+		public static XmlElement SaveToElement(XmlDocument doc, string element_name, Data.DynamicInput value, bool isClip)
+		{
+			var e = doc.CreateElement(element_name);
+			var input = SaveToElement(doc, "Input", value.Input, isClip);
+			if (input != null)
+			{
+				e.AppendChild(input);
+			}
+
+			return e.ChildNodes.Count > 0 ? e : null;
+		}
+
+		public static XmlElement SaveToElement(XmlDocument doc, string element_name, Data.DynamicEquation value, bool isClip)
+		{
+			var e = doc.CreateElement(element_name);
+			var name = SaveToElement(doc, "Name", value.Name, isClip);
+			if (name != null)
+			{
+				e.AppendChild(name);
+			}
+
+			var code = SaveToElement(doc, "Code", value.Code, isClip);
+			if (code != null)
+			{
+				e.AppendChild(code);
+			}
+
+			return e.ChildNodes.Count > 0 ? e : null;
+		}
+
+		public static XmlElement SaveToElement(XmlDocument doc, string element_name, Data.Value.DynamicEquationReference de, bool isClip)
+		{
+			var d_ind = de.Index;
+			if (d_ind >= 0)
+			{
+				var d = doc.CreateTextElement(element_name, d_ind.ToString());
+				return d;
+			}
+
+			return null;
+		}
+
 		public static void LoadObjectFromElement(XmlElement e, ref object o, bool isClip)
 		{
 			var o_type = o.GetType();
@@ -463,6 +747,89 @@ namespace Effekseer.Data
 			}
 		}
 
+		public static void LoadFromElement(XmlElement e, MaterialFileParameter mfp, bool isClip)
+		{
+			var e_path = e["Path"] as XmlElement;
+			if(e_path != null)
+			{
+				LoadFromElement(e_path, mfp.Path, isClip);
+			}
+
+			var e_float1 = e["Float1"] as XmlElement;
+			var e_float4 = e["Float4"] as XmlElement;
+			var e_texture = e["Texture"] as XmlElement;
+
+			var kv = mfp.KeyValues;
+
+			if (e_float1 != null)
+			{
+				for (var i = 0; i < e_float1.ChildNodes.Count; i++)
+				{
+					var e_child = e_float1.ChildNodes[i] as XmlElement;
+					if (kv.ContainsKey((e_child.Name)))
+					{
+						var vs = kv[e_child.Name] as MaterialFileParameter.ValueStatus;
+						var v = vs.Value as Value.Float;
+						LoadFromElement(e_child, v, isClip);
+					}
+				}
+			}
+
+			if (e_float4 != null)
+			{
+				for (var i = 0; i < e_float4.ChildNodes.Count; i++)
+				{
+					var e_child = e_float4.ChildNodes[i] as XmlElement;
+					if (kv.ContainsKey(e_child.Name))
+					{
+						var vs = kv[e_child.Name] as MaterialFileParameter.ValueStatus;
+						var v = vs.Value as Value.Vector4D;
+						LoadFromElement(e_child, v, isClip);
+					}
+				}
+			}
+
+			if (e_texture != null)
+			{
+				for (var i = 0; i < e_texture.ChildNodes.Count; i++)
+				{
+					var e_child = e_texture.ChildNodes[i] as XmlElement;
+					if (kv.ContainsKey(e_child.Name))
+					{
+						var vs = kv[e_child.Name] as MaterialFileParameter.ValueStatus;
+						var v = vs.Value as Value.PathForImage;
+						LoadFromElement(e_child, v, isClip);
+					}
+				}
+			}
+		}
+
+		public static void LoadFromElement(XmlElement e, Data.DynamicInputCollection collection, bool isClip)
+		{
+			collection.Values.Clear();
+
+			for (var i = 0; i < e.ChildNodes.Count; i++)
+			{
+				var e_child = e.ChildNodes[i] as XmlElement;
+				var element = new DynamicInput();
+				LoadFromElement(e_child, element, isClip);
+				collection.Values.Add(element);
+			}
+		}
+
+		public static void LoadFromElement(XmlElement e, Data.DynamicEquationCollection collection, bool isClip)
+		{
+			collection.Values.Clear();
+
+			for (var i = 0; i < e.ChildNodes.Count; i++)
+			{
+				var e_child = e.ChildNodes[i] as XmlElement;
+				var element = new DynamicEquation(DynamicEquation.DefaultName, collection);
+				LoadFromElement(e_child, element, isClip);
+				collection.Values.Add(element);
+			}
+		}
+
 		public static void LoadFromElement(XmlElement e, Value.String value, bool isClip)
 		{
 			var text = e.GetText();
@@ -491,11 +858,33 @@ namespace Effekseer.Data
 
 		public static void LoadFromElement(XmlElement e, Value.Float value, bool isClip)
 		{
-			var text = e.GetText();
-			var parsed = 0.0f;
-			if (float.TryParse(text, System.Globalization.NumberStyles.Float, Setting.NFI, out parsed))
+			if(e.HasChildNodes && e.ChildNodes[0].HasChildNodes)
 			{
-				value.SetValue(parsed);
+				// with dynamic equation
+				var e_value = e["Value"] as XmlElement;
+
+				if(e_value != null)
+				{
+					LoadFromElement(e_value, value, isClip);
+				}
+
+				var e_d = e["DynamicEquation"] as XmlElement;
+
+				if (e_d != null)
+				{
+					LoadFromElement(e_d, value.DynamicEquation, isClip);
+					value.IsDynamicEquationEnabled.SetValue(true);
+				}
+			}
+			else
+			{
+				// without dynamic equation
+				var text = e.GetText();
+				var parsed = 0.0f;
+				if (float.TryParse(text, System.Globalization.NumberStyles.Float, Setting.NFI, out parsed))
+				{
+					value.SetValue(parsed);
+				}
 			}
 		}
 
@@ -515,6 +904,14 @@ namespace Effekseer.Data
 				if (e_value != null) LoadFromElement(e_value, value.Value, isClip);
 				if (e_infinite != null) LoadFromElement(e_infinite, value.Infinite, isClip);
 			}
+
+			var e_d = e["DynamicEquation"] as XmlElement;
+
+			if (e_d != null)
+			{
+				LoadFromElement(e_d, value.DynamicEquation, isClip);
+				value.IsDynamicEquationEnabled.SetValue(true);
+			}
 		}
 
 		public static void LoadFromElement(XmlElement e, Value.Vector2D value, bool isClip)
@@ -531,10 +928,30 @@ namespace Effekseer.Data
 			var e_x = e["X"] as XmlElement;
 			var e_y = e["Y"] as XmlElement;
 			var e_z = e["Z"] as XmlElement;
+			var e_d = e["DynamicEquation"] as XmlElement;
 
 			if (e_x != null) LoadFromElement(e_x, value.X, isClip);
 			if (e_y != null) LoadFromElement(e_y, value.Y, isClip);
 			if (e_z != null) LoadFromElement(e_z, value.Z, isClip);
+
+			if (e_d != null) 
+			{
+				LoadFromElement(e_d, value.DynamicEquation, isClip);
+				value.IsDynamicEquationEnabled.SetValue(true);
+			}
+		}
+
+		public static void LoadFromElement(XmlElement e, Value.Vector4D value, bool isClip)
+		{
+			var e_x = e["X"] as XmlElement;
+			var e_y = e["Y"] as XmlElement;
+			var e_z = e["Z"] as XmlElement;
+			var e_w = e["W"] as XmlElement;
+
+			if (e_x != null) LoadFromElement(e_x, value.X, isClip);
+			if (e_y != null) LoadFromElement(e_y, value.Y, isClip);
+			if (e_z != null) LoadFromElement(e_z, value.Z, isClip);
+			if (e_w != null) LoadFromElement(e_w, value.W, isClip);
 		}
 
 		public static void LoadFromElement(XmlElement e, Value.Color value, bool isClip)
@@ -587,6 +1004,21 @@ namespace Effekseer.Data
 			{
 				value.DrawnAs = (DrawnAs)e_da.GetTextAsInt();
 			}
+
+			var e_d_min = e["DynamicEquationMin"] as XmlElement;
+			var e_d_max = e["DynamicEquationMax"] as XmlElement;
+
+			if (e_d_min != null)
+			{
+				LoadFromElement(e_d_min, value.DynamicEquationMin, isClip);
+				value.IsDynamicEquationEnabled.SetValue(true);
+			}
+
+			if (e_d_max != null)
+			{
+				LoadFromElement(e_d_max, value.DynamicEquationMax, isClip);
+				value.IsDynamicEquationEnabled.SetValue(true);
+			}
 		}
 
 		public static void LoadFromElement(XmlElement e, Value.FloatWithRandom value, bool isClip)
@@ -625,6 +1057,21 @@ namespace Effekseer.Data
 			if (e_da != null)
 			{
 				value.DrawnAs = (DrawnAs)e_da.GetTextAsInt();
+			}
+
+			var e_d_min = e["DynamicEquationMin"] as XmlElement;
+			var e_d_max = e["DynamicEquationMax"] as XmlElement;
+
+			if (e_d_min != null)
+			{
+				LoadFromElement(e_d_min, value.DynamicEquationMin, isClip);
+				value.IsDynamicEquationEnabled.SetValue(true);
+			}
+
+			if (e_d_max != null)
+			{
+				LoadFromElement(e_d_max, value.DynamicEquationMax, isClip);
+				value.IsDynamicEquationEnabled.SetValue(true);
 			}
 		}
 
@@ -673,6 +1120,8 @@ namespace Effekseer.Data
 			var e_y = e["Y"] as XmlElement;
 			var e_z = e["Z"] as XmlElement;
 			var e_da = e["DrawnAs"];
+			var e_d_min = e["DynamicEquationMin"] as XmlElement;
+			var e_d_max = e["DynamicEquationMax"] as XmlElement;
 
 			if (e_x != null) LoadFromElement(e_x, value.X, isClip);
 			if (e_y != null) LoadFromElement(e_y, value.Y, isClip);
@@ -681,6 +1130,18 @@ namespace Effekseer.Data
 			if (e_da != null)
 			{
 				value.DrawnAs = (DrawnAs)e_da.GetTextAsInt();
+			}
+
+			if (e_d_min != null)
+			{
+				LoadFromElement(e_d_min, value.DynamicEquationMin, isClip);
+				value.IsDynamicEquationEnabled.SetValue(true);
+			}
+
+			if (e_d_max != null)
+			{
+				LoadFromElement(e_d_max, value.DynamicEquationMax, isClip);
+				value.IsDynamicEquationEnabled.SetValue(true);
 			}
 		}
 
@@ -918,6 +1379,32 @@ namespace Effekseer.Data
 			if (e_g != null) import(value.G, e_g);
 			if (e_b != null) import(value.B, e_b);
 			if (e_a != null) import(value.A, e_a);
+		}
+
+		public static void LoadFromElement(XmlElement e, Data.DynamicInput value, bool isClip)
+		{
+			var e_input = e["Input"] as XmlElement;
+			if (e_input != null) LoadFromElement(e_input, value.Input, isClip);
+		}
+
+		public static void LoadFromElement(XmlElement e, Data.DynamicEquation value, bool isClip)
+		{
+			var e_name = e["Name"] as XmlElement;
+			var e_x = e["Code"] as XmlElement;
+
+			if (e_name != null) LoadFromElement(e_name, value.Name, isClip);
+			if (e_x != null) LoadFromElement(e_x, value.Code, isClip);
+		}
+
+		public static void LoadFromElement(XmlElement e, Data.Value.DynamicEquationReference de, bool isClip)
+		{
+			var ind = e.GetTextAsInt();
+
+			if (0 <= ind && ind < Core.Dynamic.Equations.Values.Count)
+			{
+				var d = Core.Dynamic.Equations.Values[ind];
+				de.SetValue(d);
+			}
 		}
 	}
 }

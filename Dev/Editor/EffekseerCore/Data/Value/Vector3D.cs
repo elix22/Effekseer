@@ -24,7 +24,29 @@ namespace Effekseer.Data.Value
 			get;
 			private set;
 		}
-		
+
+		public bool CanSelectDynamicEquation = false;
+
+		public Boolean IsDynamicEquationEnabled
+		{
+			get;
+			private set;
+		}
+
+		public DynamicEquationReference DynamicEquation
+		{
+			get;
+			private set;
+		}
+
+		public event ChangedValueEventHandler OnChanged;
+
+		public bool IsValueChangedFromDefault
+		{
+			get { return X.IsValueChangedFromDefault || Y.IsValueChangedFromDefault || Z.IsValueChangedFromDefault; }
+		}
+
+
 		internal Vector3D(
 			float x = 0,
 			float y = 0,
@@ -42,6 +64,9 @@ namespace Effekseer.Data.Value
 			X = new Float(x, x_max, x_min, x_step);
 			Y = new Float(y, y_max, y_min, y_step);
 			Z = new Float(z, z_max, z_min, z_step);
+
+			IsDynamicEquationEnabled = new Boolean();
+			DynamicEquation = new DynamicEquationReference();
 		}
 
 		public static explicit operator byte[](Vector3D value)

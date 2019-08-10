@@ -1,33 +1,28 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.ComponentModel;
-using System.Drawing;
-using System.Data;
 using System.Linq;
 using System.Text;
-using System.Windows.Forms;
+using System.Threading.Tasks;
 
 namespace Effekseer.GUI.Component
 {
-	public partial class ColorCtrl : UserControl
+	class ColorCtrl : Control, IParameterControl
 	{
-		public ColorCtrl()
-		{
-			InitializeComponent();
+		string id = "";
 
-			EnableUndo = true;
-			
-			this.SuspendLayout();
-			Anchor = AnchorStyles.Left | AnchorStyles.Right;
-			this.ResumeLayout(false);
-			colorDialog.FullOpen = true;
+		public string Label { get; set; } = string.Empty;
 
-			HandleDestroyed += new EventHandler(ColorCtrl_HandleDestroyed);
-		}
+		public string Description { get; set; } = string.Empty;
 
 		Data.Value.Color binding = null;
 
-		public bool EnableUndo { get; set; }
+		ValueChangingProperty valueChangingProp = new ValueChangingProperty();
+
+		float[] internalValue = new float[] { 1.0f, 1.0f, 1.0f, 1.0f };
+
+		bool isActive = false;
+
+		public bool EnableUndo { get; set; } = true;
 
 		public Data.Value.Color Binding
 		{
@@ -39,36 +34,26 @@ namespace Effekseer.GUI.Component
 			{
 				if (binding == value) return;
 
-				if (binding != null)
-				{
-					tb_r.Binding = null;
-					tb_g.Binding = null;
-					tb_b.Binding = null;
-					tb_a.Binding = null;
-
-					binding.R.OnChanged -= OnChanged;
-					binding.G.OnChanged -= OnChanged;
-					binding.B.OnChanged -= OnChanged;
-					binding.A.OnChanged -= OnChanged;
-				}
-
 				binding = value;
 
 				if (binding != null)
 				{
-					tb_r.Binding = binding.R;
-					tb_g.Binding = binding.G;
-					tb_b.Binding = binding.B;
-					tb_a.Binding = binding.A;
-
-					binding.R.OnChanged += OnChanged;
-					binding.G.OnChanged += OnChanged;
-					binding.B.OnChanged += OnChanged;
-					binding.A.OnChanged += OnChanged;
+					internalValue[0] = binding.R / 255.0f;
+					internalValue[1] = binding.G / 255.0f;
+					internalValue[2] = binding.B / 255.0f;
+					internalValue[3] = binding.A / 255.0f;
 				}
-
-				Read();
 			}
+		}
+
+		public ColorCtrl(string label = null)
+		{
+			if (label != null)
+			{
+				Label = label;
+			}
+
+			id = "###" + Manager.GetUniqueID().ToString();
 		}
 
 		public void SetBinding(object o)
@@ -77,40 +62,54 @@ namespace Effekseer.GUI.Component
 			Binding = o_;
 		}
 
-		void Read()
+		public void FixValue()
+		{
+			if (binding == null) return;
+			binding.SetValue(
+				(int)(internalValue[0] * 255),
+				(int)(internalValue[1] * 255),
+				(int)(internalValue[2] * 255),
+				(int)(internalValue[3] * 255),
+				isActive);
+		}
+
+		public override void Update()
 		{
 			if (binding != null)
 			{
-				btn_color.BackColor = Color.FromArgb(binding.R, binding.G, binding.B);
+				internalValue[0] = binding.R / 255.0f;
+				internalValue[1] = binding.G / 255.0f;
+				internalValue[2] = binding.B / 255.0f;
+				internalValue[3] = binding.A / 255.0f;
 			}
-			else
+
+			valueChangingProp.Enable(binding);
+
+			if (Manager.NativeManager.ColorEdit4(id, internalValue, swig.ColorEditFlags.NoOptions))
 			{
-				btn_color.BackColor = Color.FromArgb(255, 255, 255);
+				if (EnableUndo)
+				{
+					FixValue();
+				}
+				else
+				{
+					binding.R.SetValueDirectly((int)(internalValue[0] * 255));
+					binding.G.SetValueDirectly((int)(internalValue[1] * 255));
+					binding.B.SetValueDirectly((int)(internalValue[2] * 255));
+					binding.A.SetValueDirectly((int)(internalValue[3] * 255));
+				}
 			}
-		}
 
-		void OnChanged(object sender, ChangedValueEventArgs e)
-		{
-			Read();
-		}
+			valueChangingProp.Disable();
 
-		private void btn_color_Click(object sender, EventArgs e)
-		{
-			if (binding != null)
+			var isActive_Current = Manager.NativeManager.IsItemActive();
+
+			if (isActive && !isActive_Current)
 			{
-				colorDialog.Color = Color.FromArgb(binding.R, binding.G, binding.B);
-				colorDialog.ShowDialog();
-				binding.SetValue(colorDialog.Color.R, colorDialog.Color.G, colorDialog.Color.B);
+				FixValue();
 			}
-			else
-			{ 
-			
-			}
-		}
 
-		void ColorCtrl_HandleDestroyed(object sender, EventArgs e)
-		{
-			Binding = null;
+			isActive = isActive_Current;
 		}
 	}
 }

@@ -9,13 +9,33 @@ namespace Effekseer.Binary
 {
 	public class Exporter
 	{
-		const int Version = 13;
+#if MATERIAL_ENABLED
+		/// <summary>
+		/// Binary version
+		/// </summary>
+		/// <remarks>
+		/// Version14
+		/// Support dynamic parameter
+		/// </remarks>
+		const int Version = 15;
+#else
+		const int Version = 14;
+#endif
+		public HashSet<string> UsedTextures = new HashSet<string>();
+
+		public HashSet<string> UsedNormalTextures = new HashSet<string>();
+
+		public HashSet<string> UsedDistortionTextures = new HashSet<string>();
+
+		public HashSet<string> Sounds = new HashSet<string>();
+
+		public HashSet<string> Models = new HashSet<string>();
 
 		/// <summary>
 		/// エフェクトデータの出力
 		/// </summary>
 		/// <returns></returns>
-		public static byte[] Export(float magnification = 1.0f)
+		public byte[] Export(float magnification = 1.0f)
 		{
 			List<byte[]> data = new List<byte[]>();
 
@@ -25,18 +45,20 @@ namespace Effekseer.Binary
 			// バージョン
 			data.Add(BitConverter.GetBytes(Version));
 
-			// テクスチャ名称一覧取得
-            SortedSet<string> textures = new SortedSet<string>();
+			// reset texture names
+            UsedTextures = new HashSet<string>();
 
-			SortedSet<string> normalTextures = new SortedSet<string>();
+			UsedNormalTextures = new HashSet<string>();
 
-			SortedSet<string> distortionTextures = new SortedSet<string>();
+			UsedDistortionTextures = new HashSet<string>();
 
-            // ウェーブ名称一覧取得
-            SortedSet<string> waves = new SortedSet<string>();
+            Sounds = new HashSet<string>();
 
-			// モデル名称一覧取得
-			SortedSet<string> models = new SortedSet<string>();
+			Models = new HashSet<string>();
+
+#if MATERIAL_ENABLED
+			HashSet<string> materials = new HashSet<string>();
+#endif
 
 			Action<Data.NodeBase> get_textures = null;
 			get_textures = (node) =>
@@ -50,34 +72,86 @@ namespace Effekseer.Binary
 						}
 						else
 						{
+#if MATERIAL_ENABLED
+							if(_node.RendererCommonValues.Material.Value == Data.RendererCommonValues.MaterialType.Default)
+							{
+								var relative_path = _node.RendererCommonValues.ColorTexture.RelativePath;
+								if (relative_path != string.Empty)
+								{
+									if (_node.RendererCommonValues.Distortion.Value)
+									{
+										if (!UsedDistortionTextures.Contains(relative_path))
+										{
+											UsedDistortionTextures.Add(relative_path);
+										}
+									}
+									else
+									{
+										if (!UsedTextures.Contains(relative_path))
+										{
+											UsedTextures.Add(relative_path);
+										}
+									}
+								}
+							}
+							else if(_node.RendererCommonValues.Material.Value == Data.RendererCommonValues.MaterialType.File)
+							{
+								var materialInfo = new Utl.MaterialInformation();
+								materialInfo.Load(_node.RendererCommonValues.MaterialFile.Path.AbsolutePath);
+
+								var textures = _node.RendererCommonValues.MaterialFile.GetTextures(materialInfo);
+
+								foreach (var texture in textures)
+								{
+									var relative_path = (texture.Item1.Value as Data.Value.PathForImage).RelativePath;
+									if (relative_path != string.Empty)
+									{
+										if(texture.Item2)
+										{
+											if (!UsedNormalTextures.Contains(relative_path))
+											{
+												UsedNormalTextures.Add(relative_path);
+											}
+										}
+										else
+										{
+											if (!UsedTextures.Contains(relative_path))
+											{
+												UsedTextures.Add(relative_path);
+											}
+										}
+									}
+								}
+							}
+#else
 							{
 								var relative_path = _node.RendererCommonValues.ColorTexture.RelativePath;
 								if (relative_path != string.Empty)
 								{
 									if(_node.RendererCommonValues.Distortion.Value)
 									{
-										if (!distortionTextures.Contains(relative_path))
+										if (!UsedDistortionTextures.Contains(relative_path))
 										{
-											distortionTextures.Add(relative_path);
+											UsedDistortionTextures.Add(relative_path);
 										}
 									}
 									else
 									{
-										if (!textures.Contains(relative_path))
+										if (!UsedTextures.Contains(relative_path))
 										{
-											textures.Add(relative_path);
+											UsedTextures.Add(relative_path);
 										}
 									}
 								}
 							}
-
+#endif
 							{
 								var relative_path = _node.DrawingValues.Model.NormalTexture.RelativePath;
 								if (relative_path != string.Empty)
 								{
-									if (!normalTextures.Contains(relative_path))
+									if (!UsedNormalTextures.Contains(relative_path))
 									{
-										normalTextures.Add(relative_path);
+										UsedNormalTextures.Add(relative_path);
 									}
 								}
 							}
@@ -95,7 +169,7 @@ namespace Effekseer.Binary
             Dictionary<string, int> texture_and_index = new Dictionary<string, int>();
             {
                 int index = 0;
-                foreach (var texture in textures)
+                foreach (var texture in UsedTextures.ToList().OrderBy(_ => _))
                 {
                     texture_and_index.Add(texture, index);
                     index++;
@@ -105,7 +179,7 @@ namespace Effekseer.Binary
 			Dictionary<string, int> normalTexture_and_index = new Dictionary<string, int>();
 			{
 				int index = 0;
-				foreach (var texture in normalTextures)
+				foreach (var texture in UsedNormalTextures.ToList().OrderBy(_ => _))
 				{
 					normalTexture_and_index.Add(texture, index);
 					index++;
@@ -115,7 +189,7 @@ namespace Effekseer.Binary
 			Dictionary<string, int> distortionTexture_and_index = new Dictionary<string, int>();
 			{
 				int index = 0;
-				foreach (var texture in distortionTextures)
+				foreach (var texture in UsedDistortionTextures.ToList().OrderBy(_ => _))
 				{
 					distortionTexture_and_index.Add(texture, index);
 					index++;
@@ -137,9 +211,9 @@ namespace Effekseer.Binary
                         var relative_path = _node.SoundValues.Sound.Wave.RelativePath;
                         if (relative_path != string.Empty)
                         {
-                            if (!waves.Contains(relative_path))
+                            if (!Sounds.Contains(relative_path))
                             {
-                                waves.Add(relative_path);
+                                Sounds.Add(relative_path);
                             }
                         }
                     }
@@ -156,7 +230,7 @@ namespace Effekseer.Binary
             Dictionary<string, int> wave_and_index = new Dictionary<string, int>();
             {
                 int index = 0;
-                foreach (var wave in waves)
+                foreach (var wave in Sounds.ToList().OrderBy(_ => _))
                 {
                     wave_and_index.Add(wave, index);
                     index++;
@@ -187,9 +261,9 @@ namespace Effekseer.Binary
 
 							if (relative_path != string.Empty)
                             {
-                                if (!models.Contains(relative_path))
+                                if (!Models.Contains(relative_path))
                                 {
-                                    models.Add(relative_path);
+                                    Models.Add(relative_path);
                                 }
                             }
                         }
@@ -213,9 +287,9 @@ namespace Effekseer.Binary
 
 							if (relative_path != string.Empty)
                             {
-                                if (!models.Contains(relative_path))
+                                if (!Models.Contains(relative_path))
                                 {
-                                    models.Add(relative_path);
+                                    Models.Add(relative_path);
                                 }
                             }
                         }
@@ -233,12 +307,52 @@ namespace Effekseer.Binary
 			Dictionary<string, int> model_and_index = new Dictionary<string, int>();
 			{
 				int index = 0;
-				foreach (var model in models)
+				foreach (var model in Models.ToList().OrderBy(_ => _))
 				{
 					model_and_index.Add(model, index);
 					index++;
 				}
 			}
+
+#if MATERIAL_ENABLED
+			Action<Data.NodeBase> get_materials = null;
+			get_materials = (node) =>
+			{
+				if (node is Data.Node)
+				{
+					var _node = node as Data.Node;
+
+					if (_node.RendererCommonValues.Material.Value == Data.RendererCommonValues.MaterialType.File)
+					{
+						var relative_path = _node.RendererCommonValues.MaterialFile.Path.RelativePath;
+						if (relative_path != string.Empty)
+						{
+							if (!materials.Contains(relative_path))
+							{
+								materials.Add(relative_path);
+							}
+						}
+					}
+				}
+
+				for (int i = 0; i < node.Children.Count; i++)
+				{
+					get_materials(node.Children[i]);
+				}
+			};
+
+			get_materials(Core.Root);
+
+			Dictionary<string, int> material_and_index = new Dictionary<string, int>();
+			{
+				int index = 0;
+				foreach (var wave in materials.ToList().OrderBy(_ => _))
+				{
+					material_and_index.Add(wave, index);
+					index++;
+				}
+			}
+#endif
 
 			// get all nodes
 			var nodes = new List<Data.Node>();
@@ -261,9 +375,9 @@ namespace Effekseer.Binary
 			get_nodes(Core.Root);
 
 			var snode2ind = nodes.
-				Select((v, i) => Tuple.Create(v, i)).
+				Select((v, i) => Tuple35.Create(v, i)).
 				OrderBy(_ => _.Item1.DepthValues.DrawingPriority.Value * 255 + _.Item2).
-				Select((v, i) => Tuple.Create(v.Item1, i)).ToList();
+				Select((v, i) => Tuple35.Create(v.Item1, i)).ToList();
 
 				// ファイルにテクスチャ一覧出力
 				data.Add(BitConverter.GetBytes(texture_and_index.Count));
@@ -311,6 +425,50 @@ namespace Effekseer.Binary
 				data.Add(((path.Count() + 2) / 2).GetBytes());
 				data.Add(path);
 				data.Add(new byte[] { 0, 0 });
+			}
+
+#if MATERIAL_ENABLED
+			// export materials to a file
+			data.Add(BitConverter.GetBytes(material_and_index.Count));
+			foreach (var material in material_and_index)
+			{
+				var path = Encoding.Unicode.GetBytes(material.Key);
+				data.Add(((path.Count() + 2) / 2).GetBytes());
+				data.Add(path);
+				data.Add(new byte[] { 0, 0 });
+			}
+#endif
+
+			// export dynamic parameters
+			data.Add(BitConverter.GetBytes(Core.Dynamic.Inputs.Values.Count));
+			foreach (var value in Core.Dynamic.Inputs.Values)
+			{
+				float value_ = value.Input.Value;
+				data.Add(BitConverter.GetBytes(value_));
+			}
+
+			data.Add(BitConverter.GetBytes(Core.Dynamic.Equations.Values.Count));
+
+			var compiler = new InternalScript.Compiler();
+
+			foreach (var value in Core.Dynamic.Equations.Values)
+			{
+				var cx = compiler.Compile(value.Code.Value);
+
+				var cs = new []{ cx };
+
+				foreach(var c in cs)
+				{
+					if(c.Bytecode != null)
+					{
+						data.Add(BitConverter.GetBytes((int)c.Bytecode.Length));
+						data.Add(c.Bytecode);
+					}
+					else
+					{
+						data.Add(BitConverter.GetBytes((int)0));
+					}
+				}
 			}
 
 			// Export the number of nodes
@@ -437,11 +595,30 @@ namespace Effekseer.Binary
                 node_data.Add(n.DepthValues.DepthOffset.Value.GetBytes());
 				node_data.Add(BitConverter.GetBytes(n.DepthValues.IsScaleChangedDependingOnDepthOffset.Value ? 1 : 0));
 				node_data.Add(BitConverter.GetBytes(n.DepthValues.IsDepthOffsetChangedDependingOnParticleScale.Value ? 1 : 0));
+
+				if (Version >= 15)
+				{
+					node_data.Add(((float)n.DepthValues.SuppressionOfScalingByDepth.Value).GetBytes());
+
+					if (n.DepthValues.DepthClipping.Infinite)
+					{
+						node_data.Add((float.MaxValue).GetBytes());
+					}
+					else
+					{
+						node_data.Add(((float)n.DepthValues.DepthClipping.Value.Value).GetBytes());
+					}
+				}
+
 				node_data.Add(((int)n.DepthValues.ZSort.Value).GetBytes());
 				node_data.Add(n.DepthValues.DrawingPriority.Value.GetBytes());
 				node_data.Add(n.DepthValues.SoftParticle.Value.GetBytes());
 
-                node_data.Add(RendererCommonValues.GetBytes(n.RendererCommonValues, texture_and_index, distortionTexture_and_index));
+#if MATERIAL_ENABLED
+				node_data.Add(RendererCommonValues.GetBytes(n.RendererCommonValues, texture_and_index, normalTexture_and_index, distortionTexture_and_index, material_and_index));
+#else
+				node_data.Add(RendererCommonValues.GetBytes(n.RendererCommonValues, texture_and_index, distortionTexture_and_index));
+#endif
 
 				if (isRenderParamExported)
 				{

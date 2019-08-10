@@ -1,42 +1,34 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.ComponentModel;
-using System.Drawing;
-using System.Data;
 using System.Linq;
 using System.Text;
-using System.Windows.Forms;
+using System.Threading.Tasks;
 
 namespace Effekseer.GUI.Component
 {
-	public partial class IntWithInifinite : UserControl
+	class IntWithInifinite : Control, IParameterControl
 	{
-		public IntWithInifinite()
-		{
-			InitializeComponent();
+		string id1 = "";
+		string id2 = "";
+		string id_c = "";
+		string id_d = "";
 
-			EnableUndo = true;
+		public string Label { get; set; } = string.Empty;
 
-			this.SuspendLayout();
-			Anchor = AnchorStyles.Left | AnchorStyles.Right;
-			this.ResumeLayout(false);
-
-			Func<bool> get_enable = () =>
-				{
-					if (binding != null)
-					{
-						return !binding.Infinite;
-					}
-					return false;
-				};
-
-			tb_int.IsEnable += get_enable;
-			HandleDestroyed += new EventHandler(IntWithInifinite_HandleDestroyed);
-		}
+		public string Description { get; set; } = string.Empty;
 
 		Data.Value.IntWithInifinite binding = null;
 
-		public bool EnableUndo { get; set; }
+		ValueChangingProperty valueChangingProp = new ValueChangingProperty();
+
+		int[] internalValue = new int[] { 0 };
+		bool[] isInfinite = new bool[] { false };
+
+		bool isActive = false;
+
+		bool isPopupShown = false;
+
+		public bool EnableUndo { get; set; } = true;
 
 		public Data.Value.IntWithInifinite Binding
 		{
@@ -48,22 +40,27 @@ namespace Effekseer.GUI.Component
 			{
 				if (binding == value) return;
 
-				if (binding != null)
-				{
-					binding.Infinite.OnChanged -= OnChanged;
-					tb_int.Binding = null;
-					cb_infinite.Binding = null;
-				}
-
 				binding = value;
 
 				if (binding != null)
 				{
-					binding.Infinite.OnChanged += OnChanged;
-					tb_int.Binding = binding.Value;
-					cb_infinite.Binding = binding.Infinite;
+					internalValue[0] = binding.Value;
+					isInfinite[0] = binding.Infinite.Value;
 				}
 			}
+		}
+
+		public IntWithInifinite(string label = null)
+		{
+			if (label != null)
+			{
+				Label = label;
+			}
+
+			id1 = "###" + Manager.GetUniqueID().ToString();
+			id2 = "###" + Manager.GetUniqueID().ToString();
+			id_c = "###" + Manager.GetUniqueID().ToString();
+			id_d = "###" + Manager.GetUniqueID().ToString();
 		}
 
 		public void SetBinding(object o)
@@ -72,14 +69,106 @@ namespace Effekseer.GUI.Component
 			Binding = o_;
 		}
 
-		void OnChanged(object sender, ChangedValueEventArgs e)
+		public void FixValue()
 		{
-			tb_int.Reload();
+			if (binding == null) return;
+
+			if (EnableUndo)
+			{
+				binding.Value.SetValue(internalValue[0]);
+				binding.Infinite.SetValue(isInfinite[0]);
+			}
+			else
+			{
+				binding.Value.SetValueDirectly(internalValue[0]);
+				binding.Infinite.SetValueDirectly(isInfinite[0]);
+			}
 		}
 
-		void IntWithInifinite_HandleDestroyed(object sender, EventArgs e)
+		public override void OnDisposed()
 		{
-			Binding = null;
+			FixValue();
+		}
+
+		public override void Update()
+		{
+			isPopupShown = false;
+
+			if (binding != null)
+			{
+				internalValue[0] = binding.Value;
+				isInfinite[0] = binding.Infinite.Value;
+			}
+
+			valueChangingProp.Enable(binding);
+
+			Manager.NativeManager.PushItemWidth(60);
+
+			if (Manager.NativeManager.DragInt(id1, internalValue, binding.Value.Step, binding.Value.Min, binding.Value.Max))
+			{
+				if (EnableUndo)
+				{
+					binding.Value.SetValue(internalValue[0], isActive);
+				}
+				else
+				{
+					binding.Value.SetValueDirectly(internalValue[0]);
+				}
+			}
+
+			Popup();
+
+			Manager.NativeManager.PopItemWidth();
+
+			var isActive_Current = Manager.NativeManager.IsItemActive();
+
+			if (isActive && !isActive_Current)
+			{
+				FixValue();
+			}
+
+			isActive = isActive_Current;
+
+			Manager.NativeManager.SameLine();
+
+			var inf = Resources.GetString("Infinite");
+			if (Manager.NativeManager.Checkbox(inf + id2, isInfinite))
+			{
+				if (EnableUndo)
+				{
+					binding.Infinite.SetValue(isInfinite[0]);
+				}
+				else
+				{
+					binding.Infinite.SetValueDirectly(isInfinite[0]);
+				}
+			}
+
+			Popup();
+
+			if (binding.IsDynamicEquationEnabled)
+			{
+				DynamicSelector.SelectInComponent(id_d, binding.DynamicEquation);
+				Popup();
+			}
+
+			valueChangingProp.Disable();
+		}
+
+		void Popup()
+		{
+			if (isPopupShown) return;
+
+			if (!binding.CanSelectDynamicEquation) return;
+
+			if (Manager.NativeManager.BeginPopupContextItem(id_c))
+			{
+				DynamicSelector.Popup(id_c, binding.DynamicEquation, binding.IsDynamicEquationEnabled);
+
+				Manager.NativeManager.EndPopup();
+
+				isPopupShown = true;
+			}
 		}
 	}
 }

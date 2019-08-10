@@ -18,6 +18,7 @@
 #include "EffekseerRendererGL.ModelRenderer.h"
 #include "EffekseerRendererGL.TextureLoader.h"
 #include "EffekseerRendererGL.ModelLoader.h"
+#include "EffekseerRendererGL.MaterialLoader.h"
 
 #include "EffekseerRendererGL.GLExtension.h"
 
@@ -25,6 +26,7 @@
 #include "../../EffekseerRendererCommon/EffekseerRenderer.RibbonRendererBase.h"
 #include "../../EffekseerRendererCommon/EffekseerRenderer.RingRendererBase.h"
 #include "../../EffekseerRendererCommon/EffekseerRenderer.TrackRendererBase.h"
+#include "../../EffekseerRendererCommon/EffekseerRenderer.Renderer_Impl.h"
 
 #ifdef __EFFEKSEER_RENDERER_INTERNAL_LOADER__
 #include "../../EffekseerRendererCommon/EffekseerRenderer.PngTextureLoader.h"
@@ -306,6 +308,7 @@ RendererImplemented::RendererImplemented(int32_t squareMaxCount, OpenGLDeviceTyp
 	, m_vao_no_texture(nullptr)
 	, m_vao_distortion(nullptr)
 	, m_vao_no_texture_distortion(nullptr)
+	, m_vao_wire_frame(nullptr)
 	, m_distortingCallback(nullptr)
 
 	, m_deviceType(deviceType)
@@ -341,6 +344,7 @@ RendererImplemented::~RendererImplemented()
 	ES_SAFE_DELETE(m_vao_no_texture);
 	ES_SAFE_DELETE(m_vao_distortion);
 	ES_SAFE_DELETE(m_vao_no_texture_distortion);
+	ES_SAFE_DELETE(m_vao_wire_frame);
 
 	ES_SAFE_DELETE( m_renderState );
 	ES_SAFE_DELETE( m_vertexBuffer );
@@ -349,7 +353,7 @@ RendererImplemented::~RendererImplemented()
 
 	if (isVaoEnabled)
 	{
-		assert(GetRef() == -11);
+		assert(GetRef() == -12);
 	}
 	else
 	{
@@ -434,6 +438,18 @@ void RendererImplemented::GenerateIndexData()
 //----------------------------------------------------------------------------------
 bool RendererImplemented::Initialize()
 {
+	GLint currentVAO = 0;
+
+	if (GLExt::IsSupportedVertexArray())
+	{
+		glGetIntegerv(GL_VERTEX_ARRAY_BINDING, &currentVAO);
+	}
+
+	int arrayBufferBinding = 0;
+	int elementArrayBufferBinding = 0;
+	glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &arrayBufferBinding);
+	glGetIntegerv(GL_ELEMENT_ARRAY_BUFFER_BINDING, &elementArrayBufferBinding);
+
 	SetSquareMaxCount( m_squareMaxCount );
 
 	m_renderState = new RenderState( this );
@@ -642,6 +658,14 @@ bool RendererImplemented::Initialize()
 
 	m_standardRenderer = new EffekseerRenderer::StandardRenderer<RendererImplemented, Shader, Vertex, VertexDistortion>(this, m_shader, m_shader_no_texture, m_shader_distortion, m_shader_no_texture_distortion);
 
+	GLExt::glBindBuffer(GL_ARRAY_BUFFER, arrayBufferBinding);
+	GLExt::glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, elementArrayBufferBinding);
+
+	if (GLExt::IsSupportedVertexArray())
+	{
+		GLExt::glBindVertexArray(currentVAO);
+	}
+
 	return true;
 }
 
@@ -667,7 +691,7 @@ bool RendererImplemented::BeginRendering()
 
 	::Effekseer::Matrix44::Mul( m_cameraProj, m_camera, m_proj );
 
-	// ステートを保存する
+	// store state
 	if(m_restorationOfStates)
 	{
 		m_originalState.blend = glIsEnabled(GL_BLEND);
@@ -696,11 +720,11 @@ bool RendererImplemented::BeginRendering()
 	glEnable(GL_BLEND);
 	glDisable(GL_CULL_FACE);
 
+	m_currentTextures.clear();
 	m_renderState->GetActiveState().Reset();
 	m_renderState->Update( true );
-	m_currentTextures.clear();
-
-	// レンダラーリセット
+	
+	// reset renderer
 	m_standardRenderer->ResetAndRenderingIfRequired();
 
 	GLCheckError();
@@ -784,6 +808,11 @@ int32_t RendererImplemented::GetSquareMaxCount() const
 //----------------------------------------------------------------------------------
 void RendererImplemented::SetSquareMaxCount(int32_t count)
 {
+	int arrayBufferBinding = 0;
+	int elementArrayBufferBinding = 0;
+	glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &arrayBufferBinding);
+	glGetIntegerv(GL_ELEMENT_ARRAY_BUFFER_BINDING, &elementArrayBufferBinding);
+
 	m_squareMaxCount = count;
 
 	if (m_vertexBuffer != nullptr) AddRef();
@@ -820,8 +849,11 @@ void RendererImplemented::SetSquareMaxCount(int32_t count)
 	// 参照カウントの調整
 	Release();
 
-	// インデックスデータの生成
+	// generate index data
 	GenerateIndexData();
+
+	GLExt::glBindBuffer(GL_ARRAY_BUFFER, arrayBufferBinding);
+	GLExt::glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, elementArrayBufferBinding);
 }
 
 //----------------------------------------------------------------------------------
@@ -1009,6 +1041,14 @@ void RendererImplemented::SetCameraParameter(const ::Effekseer::Vector3D& front,
 #endif
 }
 
+::Effekseer::MaterialLoader* RendererImplemented::CreateMaterialLoader(::Effekseer::FileInterface* fileInterface) {
+#ifdef __EFFEKSEER_RENDERER_INTERNAL_LOADER__
+	return new MaterialLoader(this, fileInterface);
+#else
+	return nullptr;
+#endif
+}
+
 void RendererImplemented::SetBackground(GLuint background)
 {
 	m_background.UserID = background;
@@ -1101,8 +1141,8 @@ void RendererImplemented::DrawSprites( int32_t spriteCount, int32_t vertexOffset
 {
 	GLCheckError();
 
-	drawcallCount++;
-	drawvertexCount += spriteCount * 4;
+	impl->drawcallCount++;
+	impl->drawvertexCount += spriteCount * 4;
 
 	if( m_renderMode == ::Effekseer::RenderMode::Normal )
 	{
@@ -1123,8 +1163,8 @@ void RendererImplemented::DrawPolygon( int32_t vertexCount, int32_t indexCount)
 {
 	GLCheckError();
 
-	drawcallCount++;
-	drawvertexCount += vertexCount;
+	impl->drawcallCount++;
+	impl->drawvertexCount += vertexCount;
 
 	glDrawElements(GL_TRIANGLES, indexCount, GL_UNSIGNED_INT, NULL);
 
@@ -1246,16 +1286,18 @@ void RendererImplemented::EndShader(Shader* shader)
 	GLCheckError();
 }
 
-void RendererImplemented::SetVertexBufferToShader(const void* data, int32_t size)
+void RendererImplemented::SetVertexBufferToShader(const void* data, int32_t size, int32_t dstOffset)
 {
 	assert(currentShader != nullptr);
-	memcpy(currentShader->GetVertexConstantBuffer(), data, size);
+	auto p = static_cast<uint8_t*>(currentShader->GetVertexConstantBuffer()) + dstOffset;
+	memcpy(p, data, size);
 }
 
-void RendererImplemented::SetPixelBufferToShader(const void* data, int32_t size)
+void RendererImplemented::SetPixelBufferToShader(const void* data, int32_t size, int32_t dstOffset)
 {
 	assert(currentShader != nullptr);
-	memcpy(currentShader->GetPixelConstantBuffer(), data, size);
+	auto p = static_cast<uint8_t*>(currentShader->GetPixelConstantBuffer()) + dstOffset;
+	memcpy(p, data, size);
 }
 
 void RendererImplemented::SetTextures(Shader* shader, Effekseer::TextureData** textures, int32_t count)
@@ -1297,25 +1339,7 @@ void RendererImplemented::ResetRenderState()
 	m_renderState->Update( true );
 }
 
-int32_t RendererImplemented::GetDrawCallCount() const
-{
-	return drawcallCount;
-}
-
-int32_t RendererImplemented::GetDrawVertexCount() const
-{
-	return drawvertexCount;
-}
-
-void RendererImplemented::ResetDrawCallCount()
-{
-	drawcallCount = 0;
-}
-
-void RendererImplemented::ResetDrawVertexCount()
-{
-	drawvertexCount = 0;
-}
+bool RendererImplemented::IsVertexArrayObjectSupported() const { return GLExt::IsSupportedVertexArray(); }
 
 //----------------------------------------------------------------------------------
 //

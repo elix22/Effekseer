@@ -1,44 +1,33 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.ComponentModel;
-using System.Drawing;
-using System.Data;
 using System.Linq;
 using System.Text;
-using System.Windows.Forms;
+using System.Threading.Tasks;
 
 namespace Effekseer.GUI.Component
 {
-	public partial class Vector3D : UserControl
+	class Vector3D : Control, IParameterControl
 	{
-		public Vector3D()
-		{
-			InitializeComponent();
+		string id = "";
+		string id_d = "";
+		string id_c = "";
 
-			this.SuspendLayout();
-			Anchor = AnchorStyles.Left | AnchorStyles.Right;
-			this.ResumeLayout(false);
 
-			HandleDestroyed += new EventHandler(Vector3D_HandleDestroyed);
-		}
+		public string Label { get; set; } = string.Empty;
+
+		public string Description { get; set; } = string.Empty;
+
+		bool isActive = false;
+
+		bool isPopupShown = false;
 
 		Data.Value.Vector3D binding = null;
 
-		bool enableUndo = true;
-		public bool EnableUndo
-		{
-			get
-			{
-				return enableUndo;
-			}
-			set
-			{
-				enableUndo = value;
-				tb_x.EnableUndo = enableUndo;
-				tb_y.EnableUndo = enableUndo;
-				tb_z.EnableUndo = enableUndo;
-			}
-		}
+		ValueChangingProperty valueChangingProp = new ValueChangingProperty();
+
+		float[] internalValue = new float[] { 0.0f, 0.0f, 0.0f };
+
+		public bool EnableUndo { get; set; } = true;
 
 		public Data.Value.Vector3D Binding
 		{
@@ -50,22 +39,28 @@ namespace Effekseer.GUI.Component
 			{
 				if (binding == value) return;
 
-				if (binding != null)
-				{
-					tb_x.Binding = null;
-					tb_y.Binding = null;
-					tb_z.Binding = null;
-				}
-
 				binding = value;
 
 				if (binding != null)
 				{
-					tb_x.Binding = binding.X;
-					tb_y.Binding = binding.Y;
-					tb_z.Binding = binding.Z;
+					internalValue[0] = binding.X.Value;
+					internalValue[1] = binding.Y.Value;
+					internalValue[2] = binding.Z.Value;
 				}
 			}
+		}
+
+		public Vector3D(string label = null)
+		{
+			if (label != null)
+			{
+				Label = label;
+			}
+
+			var rand = new Random();
+			id = "###" + Manager.GetUniqueID().ToString();
+			id_d = "###" + Manager.GetUniqueID().ToString();
+			id_c = "###" + Manager.GetUniqueID().ToString();
 		}
 
 		public void SetBinding(object o)
@@ -74,9 +69,111 @@ namespace Effekseer.GUI.Component
 			Binding = o_;
 		}
 
-		void Vector3D_HandleDestroyed(object sender, EventArgs e)
+		public void FixValue()
 		{
-			Binding = null;
+			FixValueInternal(false);
+		}
+
+		void FixValueInternal(bool combined)
+		{
+			if (binding == null) return;
+
+			if (EnableUndo)
+			{
+				binding.X.SetValue(internalValue[0], combined);
+				binding.Y.SetValue(internalValue[1], combined);
+				binding.Z.SetValue(internalValue[2], combined);
+			}
+			else
+			{
+				binding.X.SetValueDirectly(internalValue[0]);
+				binding.Y.SetValueDirectly(internalValue[1]);
+				binding.Z.SetValueDirectly(internalValue[2]);
+			}
+		}
+
+		public override void OnDisposed()
+		{
+			FixValueInternal(false);
+		}
+
+		public override void Update()
+		{
+			isPopupShown = false;
+
+			if (binding == null) return;
+
+			valueChangingProp.Enable(binding);
+
+			float step = 1.0f;
+
+			if (binding != null)
+			{
+				internalValue[0] = binding.X.Value;
+				internalValue[1] = binding.Y.Value;
+				internalValue[2] = binding.Z.Value;
+
+				step = Binding.X.Step / 10.0f;
+			}
+
+			if (Manager.NativeManager.DragFloat3EfkEx(id, internalValue, step,
+				float.MinValue, float.MaxValue,
+				float.MinValue, float.MaxValue,
+				float.MinValue, float.MaxValue,
+				"X:" + "%.3f", "Y:" + "%.3f", "Z:" + "%.3f"))
+			{
+				FixValueInternal(isActive);
+			}
+
+			var isActive_Current = Manager.NativeManager.IsItemActive();
+
+			Popup();
+
+			if (isActive && !isActive_Current)
+			{
+				FixValue();
+			}
+
+			isActive = isActive_Current;
+
+			if (binding.IsDynamicEquationEnabled)
+			{
+				Manager.NativeManager.Text(Resources.GetString("DynamicEq"));
+				Manager.NativeManager.SameLine();
+
+				var nextParam = DynamicSelector.Select("", "", binding.DynamicEquation.Value, false, false);
+
+				if (binding.DynamicEquation.Value != nextParam)
+				{
+					binding.DynamicEquation.SetValue(nextParam);
+				}
+
+				Popup();
+			}
+
+			if (binding.IsDynamicEquationEnabled)
+			{
+				DynamicSelector.SelectInComponent(id_d, binding.DynamicEquation);
+				Popup();
+			}
+
+			valueChangingProp.Disable();
+		}
+
+		void Popup()
+		{
+			if (isPopupShown) return;
+
+			if (!binding.CanSelectDynamicEquation) return;
+
+			if (Manager.NativeManager.BeginPopupContextItem(id_c))
+			{
+				DynamicSelector.Popup(id_c, binding.DynamicEquation, binding.IsDynamicEquationEnabled);
+
+				Manager.NativeManager.EndPopup();
+
+				isPopupShown = true;
+			}
 		}
 	}
 }

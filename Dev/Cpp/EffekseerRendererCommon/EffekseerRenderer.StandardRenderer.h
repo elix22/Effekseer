@@ -35,6 +35,12 @@ struct StandardRendererState
 	::Effekseer::TextureWrapType		TextureWrapType;
 	::Effekseer::TextureData*			TexturePtr;
 
+	::Effekseer::MaterialData*			MaterialPtr;
+	int32_t MaterialUniformCount;
+	std::array<std::array<float, 4>, 16> MaterialUniforms;
+	int32_t MaterialTextureCount;
+	std::array<::Effekseer::TextureData*, 16> MaterialTextures;
+
 	StandardRendererState()
 	{
 		DepthTest = false;
@@ -48,6 +54,11 @@ struct StandardRendererState
 		TextureFilterType = ::Effekseer::TextureFilterType::Nearest;
 		TextureWrapType = ::Effekseer::TextureWrapType::Repeat;
 		TexturePtr = nullptr;
+		MaterialPtr = nullptr;
+
+		MaterialPtr = nullptr;
+		MaterialUniformCount = 0;
+		MaterialTextureCount = 0;
 	}
 
 	bool operator != (const StandardRendererState state)
@@ -61,7 +72,86 @@ struct StandardRendererState
 		if (TextureFilterType != state.TextureFilterType) return true;
 		if (TextureWrapType != state.TextureWrapType) return true;
 		if (TexturePtr != state.TexturePtr) return true;
+		if (MaterialPtr != state.MaterialPtr) return true;
+		if (MaterialUniformCount != state.MaterialUniformCount) return true;
+		if (MaterialTextureCount != state.MaterialTextureCount) return true;
+
+		for (int32_t i = 0; i < state.MaterialUniformCount; i++)
+		{
+			if (MaterialUniforms[i] != state.MaterialUniforms[i])
+				return true;
+		}
+
+		for (int32_t i = 0; i < state.MaterialTextureCount; i++)
+		{
+			if (MaterialTextures[i] != state.MaterialTextures[i])
+				return true;
+		}
+
 		return false;
+	}
+
+	void CopyMaterialFromParameterToState(Effekseer::Effect* effect, Effekseer::MaterialParameter* materialParam, int32_t colorTextureIndex)
+	{
+		if (materialParam != nullptr)
+		{
+			if (materialParam->MaterialIndex >= 0)
+			{
+				MaterialPtr = effect->GetMaterial(materialParam->MaterialIndex);
+
+				MaterialUniformCount = Effekseer::Min(materialParam->MaterialUniforms.size(), MaterialUniforms.size());
+				for (size_t i = 0; i < MaterialUniformCount; i++)
+				{
+					MaterialUniforms[i] = materialParam->MaterialUniforms[i];
+				}
+
+				MaterialTextureCount = Effekseer::Min(materialParam->MaterialTextures.size(), MaterialTextures.size());
+				for (size_t i = 0; i < MaterialTextureCount; i++)
+				{
+					if (materialParam->MaterialTextures[i].Type == 1)
+					{
+						if (materialParam->MaterialTextures[i].Index >= 0)
+						{
+							MaterialTextures[i] =
+								effect->GetNormalImage(materialParam->MaterialTextures[i].Index);
+						}
+						else
+						{
+							MaterialTextures[i] = nullptr;
+						}
+					}
+					else
+					{
+						if (materialParam->MaterialTextures[i].Index >= 0)
+						{
+							MaterialTextures[i] = effect->GetColorImage(materialParam->MaterialTextures[i].Index);
+						}
+						else
+						{
+							MaterialTextures[i] = nullptr;
+						}
+					}
+				}
+			}
+		}
+		else
+		{
+			if (colorTextureIndex >= 0)
+			{
+				if (Distortion)
+				{
+					TexturePtr = effect->GetDistortionImage(colorTextureIndex);
+				}
+				else
+				{
+					TexturePtr = effect->GetColorImage(colorTextureIndex);
+				}
+			}
+			else
+			{
+				TexturePtr = nullptr;
+			}
+		}
 	}
 };
 
@@ -259,31 +349,61 @@ public:
 
 		bool distortion = m_state.Distortion;
 
-		shader_ = m_renderer->GetShader(m_state.TexturePtr != nullptr, distortion);
+		if (m_state.MaterialPtr != nullptr)
+		{
+			shader_ = (SHADER*)m_state.MaterialPtr->UserPtr;
+
+			// validate
+			if (m_state.MaterialPtr->UniformCount != m_state.MaterialUniformCount)
+				return;
+
+			if (m_state.MaterialPtr->TextureCount != m_state.MaterialTextureCount)
+				return;
+		}
+		else
+		{
+			shader_ = m_renderer->GetShader(m_state.TexturePtr != nullptr, distortion);
+		}
 
 		m_renderer->BeginShader(shader_);
 
-		Effekseer::TextureData* textures[2];
-
-		if (m_state.TexturePtr != nullptr && m_state.TexturePtr != (Effekseer::TextureData*)0x01)
+		if (m_state.MaterialPtr != nullptr)
 		{
-			textures[0] = m_state.TexturePtr;
+			if (m_state.MaterialTextureCount > 0)
+			{
+				std::array<Effekseer::TextureData*, 16> textures;
+
+				for (size_t i = 0; i < Effekseer::Min(m_state.MaterialTextureCount, textures.size()); i++)
+				{
+					textures[i] = m_state.MaterialTextures[i];
+				}
+				m_renderer->SetTextures(shader_, textures.data(), Effekseer::Min(m_state.MaterialTextureCount, textures.size()));
+			}
 		}
 		else
 		{
-			textures[0] = nullptr;
-		}
+			Effekseer::TextureData* textures[2];
 
-		if (distortion)
-		{
-			textures[1] = m_renderer->GetBackground();
-			m_renderer->SetTextures(shader_, textures, 2);
-		}
-		else
-		{
-			m_renderer->SetTextures(shader_, textures, 1);
-		}
+			if (m_state.TexturePtr != nullptr && m_state.TexturePtr != (Effekseer::TextureData*)0x01)
+			{
+				textures[0] = m_state.TexturePtr;
+			}
+			else
+			{
+				textures[0] = nullptr;
+			}
 
+			if (distortion)
+			{
+				textures[1] = m_renderer->GetBackground();
+				m_renderer->SetTextures(shader_, textures, 2);
+			}
+			else
+			{
+				m_renderer->SetTextures(shader_, textures, 1);
+			}
+		}
+		
 		VertexConstantBuffer vcb;
 		vcb.constantVSBuffer[0] = mCamera;
 		vcb.constantVSBuffer[1] = mProj;
@@ -299,7 +419,12 @@ public:
 			vcb.uvInversed[1] = 1;
 		}
 
-		m_renderer->SetVertexBufferToShader(&vcb, sizeof(VertexConstantBuffer));
+		m_renderer->SetVertexBufferToShader(&vcb, sizeof(VertexConstantBuffer), 0);
+
+		if (m_state.MaterialPtr != nullptr)
+		{
+			// specify uniform buffer for vs
+		}
 
 		if (distortion)
 		{
@@ -317,7 +442,26 @@ public:
 				pcb.uvInversed[1] = 1.0f;
 			}
 	
-			m_renderer->SetPixelBufferToShader(&pcb, sizeof(DistortionPixelConstantBuffer));
+			m_renderer->SetPixelBufferToShader(&pcb, sizeof(DistortionPixelConstantBuffer), 0);
+		}
+		else
+		{
+			if (m_state.MaterialPtr != nullptr)
+			{
+				// specify uniform buffer for ps
+
+				// time
+				std::array<float, 4> predefined_uniforms;
+				predefined_uniforms.fill(0.5f);
+				predefined_uniforms[0] = m_renderer->GetTime();
+				m_renderer->SetPixelBufferToShader(predefined_uniforms.data(), sizeof(float) * 4, 0);
+
+				// others
+				for (size_t i = 0; i < m_state.MaterialUniformCount; i++)
+				{					
+					m_renderer->SetPixelBufferToShader(m_state.MaterialUniforms[i].data(), sizeof(float) * 4, sizeof(float) * 4 * (i + 1));
+				}
+			}
 		}
 
 		shader_->SetConstantBuffer();

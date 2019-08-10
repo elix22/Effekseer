@@ -7,13 +7,10 @@ project(Effekseer)
 # Check cmake version
 cmake_minimum_required(VERSION 2.8)
 
-option(BUILD_VIEWER "Build viewer" OFF)
-option(BUILD_TEST "Build test" OFF)
+set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_DEBUG_POSTFIX ".Debug")
 
-# For MSVC
-if (MSVC)
-	option(USE_MSVC_RUNTIME_LIBRARY_DLL "Use MSVC runtime library DLL" OFF)
-endif()
+option(BUILD_TEST "Build test" OFF)
 
 # For Mac
 if(APPLE)
@@ -22,10 +19,8 @@ endif()
 
 if (MSVC)
 
-elseif (MINGW)
-	set(CMAKE_CXX_FLAGS "-std=c++11" ${CMAKE_CXX_FLAGS})
 else()
-	set(CMAKE_CXX_FLAGS "-std=c++11 -fPIC" ${CMAKE_CXX_FLAGS})
+	set(CMAKE_CXX_FLAGS " -fPIC" ${CMAKE_CXX_FLAGS})
 endif()
 
 
@@ -42,6 +37,7 @@ endif()
 option(USE_OPENGLES2 "Use OpenGL ES2" OFF)
 option(USE_OPENGLES3 "Use OpenGL ES3" OFF)
 option(USE_OPENGL3 "Use OpenGL 3" OFF)
+option(USE_LLGI "Use LLGI" OFF)
 
 if (MSVC)
 option(USE_OPENAL "Use OpenAL" OFF)
@@ -57,7 +53,13 @@ endif()
 
 
 # Setup source codes
+file(GLOB effekseer_h
+    Effekseer/*.h
+	Effekseer/Effekseer/*.h
+	Effekseer/Effekseer/Culling/*.h)
+
 set(effekseer_src
+	Effekseer/Effekseer/Effekseer.CustomAllocator.cpp
 	Effekseer/Effekseer/Effekseer.Client.cpp
 	Effekseer/Effekseer/Effekseer.Color.cpp
 	Effekseer/Effekseer/Effekseer.DefaultEffectLoader.cpp
@@ -75,6 +77,7 @@ set(effekseer_src
 	Effekseer/Effekseer/Effekseer.InstanceContainer.cpp
 	Effekseer/Effekseer/Effekseer.InstanceGlobal.cpp
 	Effekseer/Effekseer/Effekseer.InstanceGroup.cpp
+	Effekseer/Effekseer/Effekseer.InternalScript.cpp
 	Effekseer/Effekseer/Effekseer.Manager.cpp
 	Effekseer/Effekseer/Effekseer.Matrix43.cpp
 	Effekseer/Effekseer/Effekseer.Matrix44.cpp
@@ -91,6 +94,9 @@ set(effekseer_src
 	Effekseer/Effekseer/Culling/Culling3D.ReferenceObject.cpp
 	Effekseer/Effekseer/Culling/Culling3D.Vector3DF.cpp
 	Effekseer/Effekseer/Culling/Culling3D.WorldInternal.cpp)
+
+file(GLOB effekseer_renderer_common_h
+    EffekseerRendererCommon/*.h)
 
 set(effekseer_renderer_common_src
 	EffekseerRendererCommon/EffekseerRenderer.CommonUtils.cpp
@@ -110,6 +116,7 @@ set(effekseer_renderer_dx9_src
 	EffekseerRendererDX9/EffekseerRenderer/EffekseerRendererDX9.DeviceObject.cpp
 	EffekseerRendererDX9/EffekseerRenderer/EffekseerRendererDX9.IndexBuffer.cpp
 	EffekseerRendererDX9/EffekseerRenderer/EffekseerRendererDX9.ModelLoader.cpp
+	EffekseerRendererDX9/EffekseerRenderer/EffekseerRendererDX9.MaterialLoader.cpp
 	EffekseerRendererDX9/EffekseerRenderer/EffekseerRendererDX9.ModelRenderer.cpp
 	EffekseerRendererDX9/EffekseerRenderer/EffekseerRendererDX9.Renderer.cpp
 	EffekseerRendererDX9/EffekseerRenderer/EffekseerRendererDX9.RenderState.cpp
@@ -122,6 +129,7 @@ set(effekseer_renderer_dx11_src
 	EffekseerRendererDX11/EffekseerRenderer/EffekseerRendererDX11.IndexBuffer.cpp
 	EffekseerRendererDX11/EffekseerRenderer/EffekseerRendererDX11.ModelLoader.cpp
 	EffekseerRendererDX11/EffekseerRenderer/EffekseerRendererDX11.ModelRenderer.cpp
+	EffekseerRendererDX11/EffekseerRenderer/EffekseerRendererDX11.MaterialLoader.cpp
 	EffekseerRendererDX11/EffekseerRenderer/EffekseerRendererDX11.Renderer.cpp
 	EffekseerRendererDX11/EffekseerRenderer/EffekseerRendererDX11.RenderState.cpp
 	EffekseerRendererDX11/EffekseerRenderer/EffekseerRendererDX11.Shader.cpp
@@ -134,6 +142,7 @@ set(effekseer_renderer_gl_src
 	EffekseerRendererGL/EffekseerRenderer/EffekseerRendererGL.IndexBuffer.cpp
 	EffekseerRendererGL/EffekseerRenderer/EffekseerRendererGL.ModelLoader.cpp
 	EffekseerRendererGL/EffekseerRenderer/EffekseerRendererGL.ModelRenderer.cpp
+	EffekseerRendererGL/EffekseerRenderer/EffekseerRendererGL.MaterialLoader.cpp
 	EffekseerRendererGL/EffekseerRenderer/EffekseerRendererGL.Renderer.cpp
 	EffekseerRendererGL/EffekseerRenderer/EffekseerRendererGL.RenderState.cpp
 	EffekseerRendererGL/EffekseerRenderer/EffekseerRendererGL.Shader.cpp
@@ -142,12 +151,15 @@ set(effekseer_renderer_gl_src
 	EffekseerRendererGL/EffekseerRenderer/EffekseerRendererGL.VertexBuffer.cpp)
 
 list(APPEND effekseer_renderer_dx9_src
+    ${effekseer_renderer_common_h}
 	${effekseer_renderer_common_src})
 
 list(APPEND effekseer_renderer_dx11_src
+    ${effekseer_renderer_common_h}
 	${effekseer_renderer_common_src})
 
 list(APPEND effekseer_renderer_gl_src
+    ${effekseer_renderer_common_h}
 	${effekseer_renderer_common_src})
 
 if (USE_INTERNAL_LOADER)
@@ -182,7 +194,9 @@ link_directories(
 	)
 
 # Add compile targets
-add_library( effekseer STATIC ${effekseer_src} )
+add_library( effekseer STATIC
+    ${effekseer_h}
+    ${effekseer_src} )
 
 if (WIN32)
 add_library( effekseer_renderer_dx9 STATIC ${effekseer_renderer_dx9_src} )
@@ -205,6 +219,11 @@ endif()
 
 if (USE_OSM OR BUILD_VIEWER)
 	add_subdirectory("EffekseerSoundOSMixer")
+endif()
+
+if (USE_LLGI)
+	add_subdirectory(3rdParty/LLGI)
+	add_subdirectory(EffekseerRendererDX12)
 endif()
 
 # Flags

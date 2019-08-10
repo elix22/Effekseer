@@ -1,88 +1,34 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.ComponentModel;
-using System.Drawing;
-using System.Data;
 using System.Linq;
 using System.Text;
-using System.Windows.Forms;
-using System.Windows.Forms.VisualStyles;
+using System.Threading.Tasks;
 
 namespace Effekseer.GUI.Component
 {
-	public partial class Enum : System.Windows.Forms.ComboBox
+	class Enum : Control, IParameterControl
 	{
-		public Enum()
-		{
-			InitializeComponent();
+		string id = "";
 
-			EnableUndo = true;
+		public string Label { get; set; } = string.Empty;
 
-			Reading = false;
-			Writing = false;
+		public string Description { get; set; } = string.Empty;
 
-			Reading = true;
-			Read();
-			Reading = false;
-
-			HandleCreated += new EventHandler(Enum_HandleCreated);
-			HandleDestroyed += new EventHandler(Enum_HandleDestroyed);
-			SelectedIndexChanged += new EventHandler(Enum_SelectedIndexChanged);
-		}
-
-		public void Initialize(Type enumType)
-		{
-			if (isInitialized) return;
-			isInitialized = true;
-
-			// GetValuesだと順番が狂うため、GetFieldsで取得
-			var list = new List<int>();
-			var fields = enumType.GetFields();
-			var iconBitmaps = new List<Bitmap>();
-			bool hasIcon = false;
-
-			foreach (var f in fields)
-			{
-				if (f.FieldType != enumType) continue;
-
-				var attributes = f.GetCustomAttributes(false);
-				var name = NameAttribute.GetName(attributes);
-				if (name == string.Empty)
-				{
-					name = f.ToString();
-				}
-
-				Bitmap icon = null;
-				var iconAttribute = IconAttribute.GetIcon(attributes);
-				if (iconAttribute != null)
-				{
-					icon = (Bitmap)Properties.Resources.ResourceManager.GetObject(iconAttribute.resourceName);
-					hasIcon = true;
-				}
-
-				Items.Add(name);
-				list.Add((int)f.GetValue(null));
-				iconBitmaps.Add(icon);
-			}
-			enums = list.ToArray();
-
-			if (hasIcon)
-			{
-				// アイコンが存在するときはカスタム描画に切り替える
-				icons = iconBitmaps.ToArray();
-				DrawMode = DrawMode.OwnerDrawFixed;
-				DrawItem += new DrawItemEventHandler(Enum_OnDrawItem);
-				ItemHeight += icons[0].Height / 2;
-			}
-		}
-
-		bool isInitialized = false;
-
-		int[] enums = null;
-		Bitmap[] icons = null;
 		Data.Value.EnumBase binding = null;
 
-		public bool EnableUndo { get; set; }
+		ValueChangingProperty valueChangingProp = new ValueChangingProperty();
+
+		int[] enums = null;
+
+		public List<string> FieldNames = new List<string>();
+		
+		List<swig.ImageResource> icons = new List<swig.ImageResource>();
+
+		public bool EnableUndo { get; set; } = true;
+
+		int selectedValues = -1;
+		string preview_value = string.Empty;
+		bool isInitialized = false;
 
 		public Data.Value.EnumBase Binding
 		{
@@ -94,22 +40,59 @@ namespace Effekseer.GUI.Component
 			{
 				if (binding == value) return;
 
-				if (binding != null)
-				{
-					binding.OnChanged -= OnChanged;
-				}
-
 				binding = value;
 
 				if (binding != null)
 				{
-					binding.OnChanged += OnChanged;
+					selectedValues = binding.GetValueAsInt();
+				}
+			}
+		}
+
+		public void Initialize(Type enumType)
+		{
+			if (isInitialized) return;
+			isInitialized = true;
+
+			// to avoid to change placesGetValues, use  GetFields
+			var list = new List<int>();
+			var fields = enumType.GetFields();
+			//var iconBitmaps = new List<Bitmap>();
+			//bool hasIcon = false;
+
+			foreach (var f in fields)
+			{
+				if (f.FieldType != enumType) continue;
+
+				var attributes = f.GetCustomAttributes(false);
+				var name = NameAttribute.GetName(attributes);
+				if (name == string.Empty)
+				{
+					name = f.ToString();
+				}
+				
+				var iconAttribute = IconAttribute.GetIcon(attributes);
+				swig.ImageResource icon = null;
+				if (iconAttribute != null)
+				{
+					icon = Images.GetIcon(iconAttribute.resourceName);
 				}
 
-				Reading = true;
-				Read();
-				Reading = false;
+				list.Add((int)f.GetValue(null));
+				FieldNames.Add(name);
+				icons.Add(icon);
 			}
+			enums = list.ToArray();
+		}
+
+		public Enum(string label = null)
+		{
+			if (label != null)
+			{
+				Label = label;
+			}
+
+			id = "###" + Manager.GetUniqueID().ToString();
 		}
 
 		public void SetBinding(object o)
@@ -118,107 +101,48 @@ namespace Effekseer.GUI.Component
 			Binding = o_;
 		}
 
-		/// <summary>
-		/// 他のクラスからデータ読み込み中
-		/// </summary>
-		public bool Reading
+		public void FixValue()
 		{
-			get;
-			private set;
 		}
 
-		/// <summary>
-		/// 他のクラスにデータ書き込み中
-		/// </summary>
-		public bool Writing
+		public override void Update()
 		{
-			get;
-			private set;
-		}
-
-		void Read()
-		{
-			if (!Reading) throw new Exception();
-
 			if (binding != null)
 			{
-				for (int i = 0; i < enums.Length; i++)
-				{
-					if (enums[i] == binding.GetValueAsInt())
-					{
-						SelectedIndex = i;
-						break;
-					}
-				}
-
-				Enabled = true;
+				selectedValues = binding.GetValueAsInt();
 			}
 			else
 			{
-				SelectedIndex = -1;
-				Enabled = false;
+				selectedValues = -1;
 			}
-		}
 
-		void OnChanged(object sender, ChangedValueEventArgs e)
-		{
-			if (Writing) return;
+			valueChangingProp.Enable(binding);
 
-			Reading = true;
-			Read();
-			Reading = false;
-		}
+			var v = enums.Select((_, i) => Tuple.Create(_, i)).Where(_ => _.Item1 == selectedValues).FirstOrDefault();
 
-		void Enum_HandleCreated(object sender, EventArgs e)
-		{
-		
-		}
-
-		void Enum_HandleDestroyed(object sender, EventArgs e)
-		{
-			Binding = null;
-		}
-
-		void Enum_SelectedIndexChanged(object sender, EventArgs e)
-		{
-			if (binding != null)
+			if(Manager.NativeManager.BeginCombo(id, FieldNames[v.Item2], swig.ComboFlags.None, icons[v.Item2]))
 			{
-				Writing = true;
-				if (SelectedIndex >= 0)
+				for(int i = 0; i < FieldNames.Count; i++)
 				{
-					if (EnableUndo)
+					bool is_selected = (FieldNames[v.Item2] == FieldNames[i]);
+
+					if (Manager.NativeManager.Selectable(FieldNames[i], is_selected, swig.SelectableFlags.None, icons[i]))
 					{
-						binding.SetValue(enums[SelectedIndex]);
+						selectedValues = enums[i];
+						binding.SetValue(selectedValues);
 					}
-					else
+						
+					if (is_selected)
 					{
-						binding.SetValueDirectly(enums[SelectedIndex]);
+						Manager.NativeManager.SetItemDefaultFocus();
 					}
+
 				}
-				Writing = false;
-			}
-		}
 
-		void Enum_OnDrawItem(object sender, DrawItemEventArgs e)
-		{
-			if (e.Index == -1) return;
-			
-			e.DrawBackground();
-			
-			var icon = icons[e.Index];
-			e.Graphics.DrawImage(icon, e.Bounds.X, e.Bounds.Y);
-			
-			var font = this.Font;
-			using (var brush = new SolidBrush(e.ForeColor))
-			{
-				e.Graphics.DrawString(Items[e.Index].ToString(), font, brush, 
-					e.Bounds.X + icon.Width + 2, 
-					e.Bounds.Y + (icon.Height - font.Height) / 2 + 1);
+				Manager.NativeManager.EndCombo();
 			}
 
-			e.DrawFocusRectangle();
-			
-
+			valueChangingProp.Disable();
 		}
 	}
 }

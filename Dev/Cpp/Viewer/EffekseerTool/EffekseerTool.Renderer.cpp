@@ -112,8 +112,7 @@ namespace EffekseerTool
 			}
 
 			viewRenderTexture.reset();
-			viewDepthTexture.reset();
-
+			
 			if (LostedDevice != nullptr)
 			{
 				LostedDevice();
@@ -180,6 +179,9 @@ bool Renderer::Initialize( void* handle, int width, int height )
 	// 背景作成
 	m_background = ::EffekseerRenderer::Paste::Create(graphics);
 
+	// create postprocessings
+	m_bloomEffect.reset(efk::PostEffect::CreateBloom(graphics));
+	m_tonemapEffect.reset(efk::PostEffect::CreateTonemap(graphics));
 
 	if( m_projection == PROJECTION_TYPE_PERSPECTIVE )
 	{
@@ -220,7 +222,7 @@ void Renderer::SetProjectionType( eProjectionType type )
 	}
 	else if( m_projection == PROJECTION_TYPE_ORTHOGRAPHIC )
 	{
-		SetOrthographic(currentWidth, currentHeight);
+		SetOrthographic( currentWidth, currentHeight );
 	}
 }
 
@@ -233,12 +235,12 @@ void Renderer::SetPerspectiveFov( int width, int height )
 		if (IsRightHand)
 		{
 			// Right hand coordinate
-			proj.PerspectiveFovRH_OpenGL(60.0f / 180.0f * 3.141592f, (float)width / (float)height, 1.0f, 300.0f);
+			proj.PerspectiveFovRH_OpenGL(60.0f / 180.0f * 3.141592f, (float)width / (float)height, ClippingStart, ClippingEnd);
 		}
 		else
 		{
 			// Left hand coordinate
-			proj.PerspectiveFovLH_OpenGL(60.0f / 180.0f * 3.141592f, (float)width / (float)height, 1.0f, 300.0f);
+			proj.PerspectiveFovLH_OpenGL(60.0f / 180.0f * 3.141592f, (float)width / (float)height, ClippingStart, ClippingEnd);
 		}
 	}
 	else
@@ -246,12 +248,12 @@ void Renderer::SetPerspectiveFov( int width, int height )
 		if (IsRightHand)
 		{
 			// Right hand coordinate
-			proj.PerspectiveFovRH(60.0f / 180.0f * 3.141592f, (float)width / (float)height, 1.0f, 300.0f);
+			proj.PerspectiveFovRH(60.0f / 180.0f * 3.141592f, (float)width / (float)height, ClippingStart, ClippingEnd);
 		}
 		else
 		{
 			// Left hand coordinate
-			proj.PerspectiveFovLH(60.0f / 180.0f * 3.141592f, (float)width / (float)height, 1.0f, 300.0f);
+			proj.PerspectiveFovLH(60.0f / 180.0f * 3.141592f, (float)width / (float)height, ClippingStart, ClippingEnd);
 		}
 	}
 	
@@ -269,12 +271,14 @@ void Renderer::SetOrthographic( int width, int height )
 	if( IsRightHand )
 	{
 		// Right hand coordinate
-		proj.OrthographicRH( (float)width / 16.0f / RateOfMagnification, (float)height / 16.0f / RateOfMagnification, 1.0f, 300.0f );
+		proj.OrthographicRH(
+			(float)width / 16.0f / RateOfMagnification, (float)height / 16.0f / RateOfMagnification, ClippingStart, ClippingEnd);
 	}
 	else
 	{
 		// Left hand coordinate
-		proj.OrthographicLH( (float)width / 16.0f / RateOfMagnification, (float)height / 16.0f / RateOfMagnification, 1.0f, 300.0f );
+		proj.OrthographicLH(
+			(float)width / 16.0f / RateOfMagnification, (float)height / 16.0f / RateOfMagnification, ClippingStart, ClippingEnd);
 	}
 
 	m_renderer->SetProjectionMatrix( proj );
@@ -319,6 +323,37 @@ void Renderer::RecalcProjection()
 
 bool Renderer::BeginRendering()
 {
+	if (m_bloomEffect == nullptr &&  m_tonemapEffect == nullptr)
+	{
+		targetRenderTexture = graphics->GetRenderTexture();
+		targetDepthTexture = graphics->GetDepthTexture();
+		graphics->SetRenderTarget(targetRenderTexture, targetDepthTexture);
+	}
+	else
+	{
+	
+		if (hdrRenderTexture == nullptr || hdrRenderTexture->GetWidth() != screenWidth || hdrRenderTexture->GetHeight() != screenHeight)
+		{
+			hdrRenderTexture = std::shared_ptr<efk::RenderTexture>(efk::RenderTexture::Create(graphics));
+			hdrRenderTexture->Initialize(screenWidth, screenHeight, efk::TextureFormat::RGBA16F, msaaSamples);
+			depthTexture = std::shared_ptr<efk::DepthTexture>(efk::DepthTexture::Create(graphics));
+			depthTexture->Initialize(screenWidth, screenHeight, msaaSamples);
+	
+			if (msaaSamples > 1)
+			{
+				postfxRenderTexture = std::shared_ptr<efk::RenderTexture>(efk::RenderTexture::Create(graphics));
+				postfxRenderTexture->Initialize(screenWidth, screenHeight, efk::TextureFormat::RGBA16F);
+			}
+			else
+			{
+				postfxRenderTexture = hdrRenderTexture;
+			}
+		}
+		targetRenderTexture = graphics->GetRenderTexture();
+		targetDepthTexture = graphics->GetDepthTexture();
+		graphics->SetRenderTarget(hdrRenderTexture.get(), depthTexture.get());	
+	}
+	
 	graphics->BeginScene();
 
 	if (!m_recording)
@@ -392,7 +427,7 @@ bool Renderer::BeginRendering()
 		m_renderer->SetProjectionMatrix(proj);
 	}
 	
-	// Distoriton
+	/*// Distoriton
 	if (Distortion == eDistortionType::DistortionType_Current)
 	{
 		CopyToBackground();
@@ -445,7 +480,7 @@ bool Renderer::BeginRendering()
 
 		m_distortionCallback->Blit = false;
 		m_distortionCallback->IsEnabled = false;
-	}
+	}*/
 
 	m_renderer->SetRenderMode(RenderingMode);
 
@@ -500,9 +535,9 @@ bool Renderer::BeginRenderToView(int32_t width, int32_t height)
 	if (viewRenderTexture == nullptr || viewRenderTexture->GetWidth() != width || viewRenderTexture->GetHeight() != height)
 	{
 		viewRenderTexture = std::shared_ptr<efk::RenderTexture>(efk::RenderTexture::Create(graphics));
-		viewDepthTexture = std::shared_ptr<efk::DepthTexture>(efk::DepthTexture::Create(graphics));
+		viewRenderTexture->Initialize(width, height, efk::TextureFormat::RGBA8U);
 
-		viewRenderTexture->Initialize(width, height);
+		viewDepthTexture = std::shared_ptr<efk::DepthTexture>(efk::DepthTexture::Create(graphics));
 		viewDepthTexture->Initialize(width, height);
 	}
 
@@ -542,7 +577,36 @@ bool Renderer::EndRenderToView()
 
 	currentWidth = m_windowWidth;
 	currentHeight = m_windowHeight;
+
 	return true;
+}
+
+void Renderer::RenderPostEffect()
+{
+	auto src = hdrRenderTexture.get();
+	auto dest = postfxRenderTexture.get();
+	
+	// all post effects are disabled
+	if (m_bloomEffect == nullptr && m_tonemapEffect == nullptr)
+	{
+		return;
+	}
+
+	if (src != dest)
+	{
+		graphics->ResolveRenderTarget(src, dest);
+		src = dest;
+	}
+
+	if (m_bloomEffect) {
+		// Bloom processing (specifying the same target for src and dest is faster)
+		m_bloomEffect->Render(src, src);
+	}
+	if (m_tonemapEffect) {
+		// Tone map processing(final target is specified as dest)
+		dest = targetRenderTexture;
+		m_tonemapEffect->Render(src, dest);
+	}
 }
 
 bool Renderer::BeginRecord( int32_t width, int32_t height )
@@ -552,9 +616,9 @@ bool Renderer::BeginRecord( int32_t width, int32_t height )
 	m_recordingWidth = width;
 	m_recordingHeight = height;
 
-	graphics->BeginRecord(m_recordingWidth, m_recordingHeight);
-
 	m_recording = true;
+
+	graphics->BeginRecord(m_recordingWidth, m_recordingHeight);
 
 	return true;
 }

@@ -1,39 +1,37 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.ComponentModel;
-using System.Drawing;
-using System.Data;
 using System.Linq;
 using System.Text;
-using System.Windows.Forms;
+using System.Threading.Tasks;
 
 namespace Effekseer.GUI.Component
 {
-	public partial class Vector3DWithRandom : UserControl
+	class Vector3DWithRandom : Control, IParameterControl
 	{
-		public Vector3DWithRandom()
-		{
-			InitializeComponent();
+		string id1 = "";
+		string id2 = "";
+		string id_r1 = "";
+		string id_r2 = "";
+		string id_c = "";
+		string id_d1 = "";
+		string id_d2 = "";
 
-			EnableUndo = true;
+		bool isPopupShown = false;
 
-			this.SuspendLayout();
-			Anchor = AnchorStyles.Left | AnchorStyles.Right;
-			this.ResumeLayout(false);
+		bool isActive = false;
 
-			Reading = false;
-			Writing = false;
+		public string Label { get; set; } = string.Empty;
 
-			Reading = true;
-			Read();
-			Reading = false;
-
-			HandleDestroyed += new EventHandler(_HandleDestroyed);
-		}
+		public string Description { get; set; } = string.Empty;
 
 		Data.Value.Vector3DWithRandom binding = null;
 
-		public bool EnableUndo { get; set; }
+		ValueChangingProperty valueChangingProp = new ValueChangingProperty();
+
+		float[] internalValue1 = new float[] { 0.0f, 0.0f, 0.0f };
+		float[] internalValue2 = new float[] { 0.0f, 0.0f, 0.0f };
+
+		public bool EnableUndo { get; set; } = true;
 
 		public Data.Value.Vector3DWithRandom Binding
 		{
@@ -45,236 +43,46 @@ namespace Effekseer.GUI.Component
 			{
 				if (binding == value) return;
 
-				if (binding != null)
-				{
-					binding.X.OnChanged -= OnChanged;
-					binding.Y.OnChanged -= OnChanged;
-					binding.Z.OnChanged -= OnChanged;
-					tb_x_v1.ReadMethod = null;
-					tb_x_v1.WriteMethod = null;
-					tb_x_v2.ReadMethod = null;
-					tb_x_v2.WriteMethod = null;
-					tb_y_v1.ReadMethod = null;
-					tb_y_v1.WriteMethod = null;
-					tb_y_v2.ReadMethod = null;
-					tb_y_v2.WriteMethod = null;
-					tb_z_v1.ReadMethod = null;
-					tb_z_v1.WriteMethod = null;
-					tb_z_v2.ReadMethod = null;
-					tb_z_v2.WriteMethod = null;
-				}
-
 				binding = value;
 
 				if (binding != null)
 				{
-					binding.X.OnChanged += OnChanged;
-					binding.Y.OnChanged += OnChanged;
-					binding.Z.OnChanged += OnChanged;
-					tb_x_v1.WheelStep = binding.X.Step;
-					tb_x_v2.WheelStep = binding.X.Step;
-					tb_y_v1.WheelStep = binding.Y.Step;
-					tb_y_v2.WheelStep = binding.Y.Step;
-					tb_z_v1.WheelStep = binding.Z.Step;
-					tb_z_v2.WheelStep = binding.Z.Step;
-
-					tb_x_v1.ReadMethod += () =>
+					if (binding.DrawnAs == Data.DrawnAs.CenterAndAmplitude)
 					{
-						if (binding.DrawnAs == Data.DrawnAs.MaxAndMin)
-						{
-							return binding.X.Max;
-						}
-						else if (binding.DrawnAs == Data.DrawnAs.CenterAndAmplitude)
-						{
-							return binding.X.Center;
-						}
-						else
-						{
-							throw new Exception();
-						}
-					};
-
-					tb_x_v1.WriteMethod += (f,wheel) =>
+						internalValue1[0] = binding.X.Center;
+						internalValue1[1] = binding.Y.Center;
+						internalValue1[2] = binding.Z.Center;
+						internalValue2[0] = binding.X.Amplitude;
+						internalValue2[1] = binding.Y.Amplitude;
+						internalValue2[2] = binding.Z.Amplitude;
+					}
+					else
 					{
-						if (binding.DrawnAs == Data.DrawnAs.MaxAndMin)
-						{
-							binding.X.SetMax(f, wheel);
-						}
-						else if (binding.DrawnAs == Data.DrawnAs.CenterAndAmplitude)
-						{
-							binding.X.SetCenter(f, wheel);
-						}
-						else
-						{
-							throw new Exception();
-						}
-					};
-
-					tb_x_v2.ReadMethod += () =>
-					{
-						if (binding.DrawnAs == Data.DrawnAs.MaxAndMin)
-						{
-							return binding.X.Min;
-						}
-						else if (binding.DrawnAs == Data.DrawnAs.CenterAndAmplitude)
-						{
-							return binding.X.Amplitude;
-						}
-						else
-						{
-							throw new Exception();
-						}
-					};
-
-					tb_x_v2.WriteMethod += (f, wheel) =>
-					{
-						if (binding.DrawnAs == Data.DrawnAs.MaxAndMin)
-						{
-							binding.X.SetMin(f, wheel);
-						}
-						else if (binding.DrawnAs == Data.DrawnAs.CenterAndAmplitude)
-						{
-							binding.X.SetAmplitude(f, wheel);
-						}
-						else
-						{
-							throw new Exception();
-						}
-					};
-
-					tb_y_v1.ReadMethod += () =>
-					{
-						if (binding.DrawnAs == Data.DrawnAs.MaxAndMin)
-						{
-							return binding.Y.Max;
-						}
-						else if (binding.DrawnAs == Data.DrawnAs.CenterAndAmplitude)
-						{
-							return binding.Y.Center;
-						}
-						else
-						{
-							throw new Exception();
-						}
-					};
-
-					tb_y_v1.WriteMethod += (f, wheel) =>
-					{
-						if (binding.DrawnAs == Data.DrawnAs.MaxAndMin)
-						{
-							binding.Y.SetMax(f, wheel);
-						}
-						else if (binding.DrawnAs == Data.DrawnAs.CenterAndAmplitude)
-						{
-							binding.Y.SetCenter(f, wheel);
-						}
-						else
-						{
-							throw new Exception();
-						}
-					};
-
-					tb_y_v2.ReadMethod += () =>
-					{
-						if (binding.DrawnAs == Data.DrawnAs.MaxAndMin)
-						{
-							return binding.Y.Min;
-						}
-						else if (binding.DrawnAs == Data.DrawnAs.CenterAndAmplitude)
-						{
-							return binding.Y.Amplitude;
-						}
-						else
-						{
-							throw new Exception();
-						}
-					};
-
-					tb_y_v2.WriteMethod += (f, wheel) =>
-					{
-						if (binding.DrawnAs == Data.DrawnAs.MaxAndMin)
-						{
-							binding.Y.SetMin(f, wheel);
-						}
-						else if (binding.DrawnAs == Data.DrawnAs.CenterAndAmplitude)
-						{
-							binding.Y.SetAmplitude(f, wheel);
-						}
-						else
-						{
-							throw new Exception();
-						}
-					};
-
-					tb_z_v1.ReadMethod += () =>
-					{
-						if (binding.DrawnAs == Data.DrawnAs.MaxAndMin)
-						{
-							return binding.Z.Max;
-						}
-						else if (binding.DrawnAs == Data.DrawnAs.CenterAndAmplitude)
-						{
-							return binding.Z.Center;
-						}
-						else
-						{
-							throw new Exception();
-						}
-					};
-
-					tb_z_v1.WriteMethod += (f, wheel) =>
-					{
-						if (binding.DrawnAs == Data.DrawnAs.MaxAndMin)
-						{
-							binding.Z.SetMax(f, wheel);
-						}
-						else if (binding.DrawnAs == Data.DrawnAs.CenterAndAmplitude)
-						{
-							binding.Z.SetCenter(f, wheel);
-						}
-						else
-						{
-							throw new Exception();
-						}
-					};
-
-					tb_z_v2.ReadMethod += () =>
-					{
-						if (binding.DrawnAs == Data.DrawnAs.MaxAndMin)
-						{
-							return binding.Z.Min;
-						}
-						else if (binding.DrawnAs == Data.DrawnAs.CenterAndAmplitude)
-						{
-							return binding.Z.Amplitude;
-						}
-						else
-						{
-							throw new Exception();
-						}
-					};
-
-					tb_z_v2.WriteMethod += (f, wheel) =>
-					{
-						if (binding.DrawnAs == Data.DrawnAs.MaxAndMin)
-						{
-							binding.Z.SetMin(f, wheel);
-						}
-						else if (binding.DrawnAs == Data.DrawnAs.CenterAndAmplitude)
-						{
-							binding.Z.SetAmplitude(f, wheel);
-						}
-						else
-						{
-							throw new Exception();
-						}
-					};
+						internalValue1[0] = binding.X.Min;
+						internalValue1[1] = binding.Y.Min;
+						internalValue1[2] = binding.Z.Min;
+						internalValue2[0] = binding.X.Max;
+						internalValue2[1] = binding.Y.Max;
+						internalValue2[2] = binding.Z.Max;
+					}
 				}
-
-				Reading = true;
-				Read();
-				Reading = false;
 			}
+		}
+
+		public Vector3DWithRandom(string label = null)
+		{
+			if (label != null)
+			{
+				Label = label;
+			}
+
+			id1 = "###" + Manager.GetUniqueID().ToString();
+			id2 = "###" + Manager.GetUniqueID().ToString();
+			id_r1 = "###" + Manager.GetUniqueID().ToString();
+			id_r2 = "###" + Manager.GetUniqueID().ToString();
+			id_c = "###" + Manager.GetUniqueID().ToString();
+			id_d1 = "###" + Manager.GetUniqueID().ToString();
+			id_d2 = "###" + Manager.GetUniqueID().ToString();
 		}
 
 		public void SetBinding(object o)
@@ -283,135 +91,236 @@ namespace Effekseer.GUI.Component
 			Binding = o_;
 		}
 
-		/// <summary>
-		/// 他のクラスからデータ読み込み中
-		/// </summary>
-		public bool Reading
+		public void FixValue()
 		{
-			get;
-			private set;
 		}
 
-		/// <summary>
-		/// 他のクラスにデータ書き込み中
-		/// </summary>
-		public bool Writing
+		void FixValueInternal(bool combined)
 		{
-			get;
-			private set;
-		}
-
-		void Read()
-		{
-			if (!Reading) throw new Exception();
-
-			if (binding != null)
+			if (EnableUndo)
 			{
-				drawnas_1.Enabled = true;
-				drawnas_2.Enabled = true;
-				drawnas_1.Checked = binding.DrawnAs == Data.DrawnAs.MaxAndMin;
-				drawnas_2.Checked = binding.DrawnAs == Data.DrawnAs.CenterAndAmplitude;
-
-				if (drawnas_1.Checked)
+				if (binding.DrawnAs == Data.DrawnAs.CenterAndAmplitude)
 				{
-					lb_v1.Text = Properties.Resources.Max;
-					lb_v2.Text = Properties.Resources.Min;
+					binding.X.SetCenter(internalValue1[0], combined);
+					binding.Y.SetCenter(internalValue1[1], combined);
+					binding.Z.SetCenter(internalValue1[2], combined);
 				}
-
-				if (drawnas_2.Checked)
+				else
 				{
-					lb_v1.Text = Properties.Resources.Mean;
-					lb_v2.Text = Properties.Resources.Deviation;
+					binding.X.SetMin(internalValue1[0], combined);
+					binding.Y.SetMin(internalValue1[1], combined);
+					binding.Z.SetMin(internalValue1[2], combined);
 				}
 			}
 			else
 			{
-				drawnas_1.Enabled = false;
-				drawnas_2.Enabled = false;
-				drawnas_1.Checked = false;
-				drawnas_2.Checked = false;
-
-				lb_v1.Text = string.Empty;
-				lb_v2.Text = string.Empty;
+				throw new Exception("Not Implemented.");
 			}
 
-			tb_x_v1.Reload();
-			tb_x_v2.Reload();
-			tb_y_v1.Reload();
-			tb_y_v2.Reload();
-			tb_z_v1.Reload();
-			tb_z_v2.Reload();
-		}
-
-		void Write()
-		{
-			if (!Writing) throw new Exception();
-
-			if (drawnas_1.Checked)
+			if (EnableUndo)
 			{
-				binding.DrawnAs = Data.DrawnAs.MaxAndMin;
+				if (binding.DrawnAs == Data.DrawnAs.CenterAndAmplitude)
+				{
+					binding.X.SetAmplitude(internalValue2[0], combined);
+					binding.Y.SetAmplitude(internalValue2[1], combined);
+					binding.Z.SetAmplitude(internalValue2[2], combined);
+				}
+				else
+				{
+					binding.X.SetMax(internalValue2[0], combined);
+					binding.Y.SetMax(internalValue2[1], combined);
+					binding.Z.SetMax(internalValue2[2], combined);
+				}
 			}
-			if (drawnas_2.Checked)
+			else
 			{
-				binding.DrawnAs = Data.DrawnAs.CenterAndAmplitude;
+				throw new Exception("Not Implemented.");
 			}
 		}
 
-		void OnChanged(object sender, ChangedValueEventArgs e)
+		public override void OnDisposed()
 		{
-			if (Writing) return;
-
-			Reading = true;
-			Read();
-			Reading = false;
 		}
 
-		private void drawnas_1_CheckedChanged(object sender, EventArgs e)
+		public override void Update()
 		{
-			if (Reading) return;
-			if (Writing) return;
+			isPopupShown = false;
 
-			Writing = true;
-			Write();
-			Writing = false;
+			if (binding == null) return;
 
-			Reading = true;
-			Read();
-			Reading = false;
+			valueChangingProp.Enable(binding);
+
+			float step = 1.0f;
+
+			if (binding != null)
+			{
+				if (binding.DrawnAs == Data.DrawnAs.CenterAndAmplitude && !binding.IsDynamicEquationEnabled)
+				{
+					internalValue1[0] = binding.X.Center;
+					internalValue1[1] = binding.Y.Center;
+					internalValue1[2] = binding.Z.Center;
+					internalValue2[0] = binding.X.Amplitude;
+					internalValue2[1] = binding.Y.Amplitude;
+					internalValue2[2] = binding.Z.Amplitude;
+				}
+				else
+				{
+					internalValue1[0] = binding.X.Min;
+					internalValue1[1] = binding.Y.Min;
+					internalValue1[2] = binding.Z.Min;
+					internalValue2[0] = binding.X.Max;
+					internalValue2[1] = binding.Y.Max;
+					internalValue2[2] = binding.Z.Max;
+				}
+
+				step = Binding.X.Step / 10.0f;
+			}
+
+			var txt_r1 = string.Empty;
+			var txt_r2 = string.Empty;
+
+			if (binding.DrawnAs == Data.DrawnAs.CenterAndAmplitude && !binding.IsDynamicEquationEnabled)
+			{
+				txt_r1 = Resources.GetString("Mean");
+				txt_r2 = Resources.GetString("Deviation");
+			}
+			else
+			{
+				txt_r1 = Resources.GetString("Max");
+				txt_r2 = Resources.GetString("Min");
+			}
+
+			Manager.NativeManager.PushItemWidth(Manager.NativeManager.GetColumnWidth() - 60);
+			if (Manager.NativeManager.DragFloat3EfkEx(id1, internalValue1, step,
+				float.MinValue, float.MaxValue,
+				float.MinValue, float.MaxValue,
+				float.MinValue, float.MaxValue,
+				"X:%.3f", "Y:%.3f", "Z:%.3f"))
+			{
+				if (EnableUndo)
+				{
+					if (binding.DrawnAs == Data.DrawnAs.CenterAndAmplitude && !binding.IsDynamicEquationEnabled)
+					{
+						binding.X.SetCenter(internalValue1[0], isActive);
+						binding.Y.SetCenter(internalValue1[1], isActive);
+						binding.Z.SetCenter(internalValue1[2], isActive);
+					}
+					else
+					{
+						binding.X.SetMin(internalValue1[0], isActive);
+						binding.Y.SetMin(internalValue1[1], isActive);
+						binding.Z.SetMin(internalValue1[2], isActive);
+					}
+				}
+				else
+				{
+					throw new Exception("Not Implemented.");
+				}
+			}
+
+			var isActive_Current = Manager.NativeManager.IsItemActive();
+
+			Popup();
+
+			Manager.NativeManager.SameLine();
+			Manager.NativeManager.Text(txt_r1);
+
+			if (binding.IsDynamicEquationEnabled)
+			{
+				DynamicSelector.SelectMaxInComponent(id_d1, binding.DynamicEquationMax);
+				Popup();
+			}
+
+			if (Manager.NativeManager.DragFloat3EfkEx(id2, internalValue2, step,
+				float.MinValue, float.MaxValue,
+				float.MinValue, float.MaxValue,
+				float.MinValue, float.MaxValue,
+				"X:" + "%.3f", "Y:" + "%.3f", "Z:" + "%.3f"))
+			{
+				if (EnableUndo)
+				{
+					if (binding.DrawnAs == Data.DrawnAs.CenterAndAmplitude && !binding.IsDynamicEquationEnabled)
+					{
+						binding.X.SetAmplitude(internalValue2[0], isActive);
+						binding.Y.SetAmplitude(internalValue2[1], isActive);
+						binding.Z.SetAmplitude(internalValue2[2], isActive);
+					}
+					else
+					{
+						binding.X.SetMax(internalValue2[0], isActive);
+						binding.Y.SetMax(internalValue2[1], isActive);
+						binding.Z.SetMax(internalValue2[2], isActive);
+					}
+				}
+				else
+				{
+					throw new Exception("Not Implemented.");
+				}
+			}
+
+			isActive_Current |= Manager.NativeManager.IsItemActive();
+
+			if (isActive && !isActive_Current)
+			{
+				FixValue();
+			}
+
+			isActive = isActive_Current;
+
+			Popup();
+
+			Manager.NativeManager.SameLine();
+			Manager.NativeManager.Text(txt_r2);
+
+			if (binding.IsDynamicEquationEnabled)
+			{
+				DynamicSelector.SelectMinInComponent(id_d2, binding.DynamicEquationMin);
+				Popup();
+			}
+
+
+			Manager.NativeManager.PopItemWidth();
+
+			valueChangingProp.Disable();
 		}
 
-		private void drawnas_2_CheckedChanged(object sender, EventArgs e)
+		void Popup()
 		{
-			if (Reading) return;
-			if (Writing) return;
+			if (isPopupShown) return;
 
-			Writing = true;
-			Write();
-			Writing = false;
+			if (Manager.NativeManager.BeginPopupContextItem(id_c))
+			{
+				if (binding.CanSelectDynamicEquation)
+				{
+					DynamicSelector.Popup(id_c, binding.DynamicEquationMax, binding.DynamicEquationMin, binding.IsDynamicEquationEnabled);
+				}
 
-			Reading = true;
-			Read();
-			Reading = false;
+				if (binding.IsDynamicEquationEnabled)
+				{
+					// None
+				}
+				else
+				{
+					var txt_r_r1 = Resources.GetString("Gauss");
+					var txt_r_r2 = Resources.GetString("Range");
+
+					if (Manager.NativeManager.RadioButton(txt_r_r1 + id_r1, binding.DrawnAs == Data.DrawnAs.CenterAndAmplitude))
+					{
+						binding.DrawnAs = Data.DrawnAs.CenterAndAmplitude;
+					}
+
+					Manager.NativeManager.SameLine();
+
+					if (Manager.NativeManager.RadioButton(txt_r_r2 + id_r2, binding.DrawnAs == Data.DrawnAs.MaxAndMin))
+					{
+						binding.DrawnAs = Data.DrawnAs.MaxAndMin;
+					}
+				}
+
+				Manager.NativeManager.EndPopup();
+				isPopupShown = true;
+			}
 		}
 
-		void _HandleDestroyed(object sender, EventArgs e)
-		{
-			tb_x_v1.ReadMethod = null;
-			tb_x_v1.WriteMethod = null;
-			tb_x_v2.ReadMethod = null;
-			tb_x_v2.WriteMethod = null;
-
-			tb_y_v1.ReadMethod = null;
-			tb_y_v1.WriteMethod = null;
-			tb_y_v2.ReadMethod = null;
-			tb_y_v2.WriteMethod = null;
-
-			tb_z_v1.ReadMethod = null;
-			tb_z_v1.WriteMethod = null;
-			tb_z_v2.ReadMethod = null;
-			tb_z_v2.WriteMethod = null;
-
-			Binding = null;
-		}
 	}
 }

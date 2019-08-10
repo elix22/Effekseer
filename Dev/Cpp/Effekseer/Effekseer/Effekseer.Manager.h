@@ -6,6 +6,7 @@
 // Include
 //----------------------------------------------------------------------------------
 #include "Effekseer.Base.h"
+#include "Effekseer.Vector3D.h"
 
 //----------------------------------------------------------------------------------
 //
@@ -22,6 +23,31 @@ namespace Effekseer
 class Manager
 	: public IReference
 {
+public:
+	/**
+	@brief
+		@brief
+		\~English Parameters for Manager::Draw and Manager::DrawHandle
+		\~Japanese Manager::Draw and Manager::DrawHandleに使用するパラメーター
+	*/
+	struct DrawParameter
+	{
+		Vector3D CameraPosition;
+		Vector3D CameraDirection;
+
+		/**
+			@brief
+			\~English A bitmask to show effects
+			\~Japanese エフェクトを表示するためのビットマスク
+			@note
+			\~English For example, if effect's layer is 1 and CameraCullingMask's first bit is 1, this effect is shown.
+			\~Japanese 例えば、エフェクトのレイヤーが0でカリングマスクの最初のビットが1のときエフェクトは表示される。
+		*/
+		int32_t CameraCullingMask;
+
+		DrawParameter();
+	};
+
 protected:
 	Manager() {}
     virtual ~Manager() {}
@@ -43,24 +69,30 @@ public:
 	virtual void Destroy() = 0;
 
 	/**
-		@brief	メモリ確保関数を取得する。
+		@brief
+		\~English get an allocator
+		\~Japanese メモリ確保関数を取得する。
 	*/
 	virtual MallocFunc GetMallocFunc() const = 0;
 
 	/**
-		@brief	メモリ確保関数を設定する。
+		\~English specify an allocator
+		\~Japanese メモリ確保関数を設定する。
 	*/
-	virtual void SetMallocFunc( MallocFunc func ) = 0;
+	virtual void SetMallocFunc(MallocFunc func) = 0;
 
 	/**
-		@brief	メモリ破棄関数を取得する。
+		@brief
+		\~English get a deallocator
+		\~Japanese メモリ破棄関数を取得する。
 	*/
 	virtual FreeFunc GetFreeFunc() const = 0;
 
 	/**
-		@brief	メモリ破棄関数を設定する。
+		\~English specify a deallocator
+		\~Japanese メモリ破棄関数を設定する。
 	*/
-	virtual void SetFreeFunc( FreeFunc func ) = 0;
+	virtual void SetFreeFunc(FreeFunc func) = 0;
 
 	/**
 		@brief	ランダム関数を取得する。
@@ -209,6 +241,26 @@ public:
 	virtual void SetModelLoader( ModelLoader* modelLoader ) = 0;
 
 	/**
+		@brief
+		\~English get a material loader
+		\~Japanese マテリアルローダーを取得する。
+		@return
+		\~English	loader
+		\~Japanese ローダー
+	*/
+	virtual MaterialLoader* GetMaterialLoader() = 0;
+
+	/**
+		@brief
+		\~English specfiy a material loader
+		\~Japanese マテリアルローダーを設定する。
+		@param	loader
+		\~English	loader
+		\~Japanese ローダー
+	*/
+	virtual void SetMaterialLoader(MaterialLoader* loader) = 0;
+
+	/**
 		@brief	エフェクトを停止する。
 		@param	handle	[in]	インスタンスのハンドル
 	*/
@@ -334,6 +386,20 @@ public:
 	virtual void SetTargetLocation( Handle handle, const Vector3D& location ) = 0;
 
 	/**
+		@brief
+		\~English get a dynamic parameter, which changes effect parameters dynamically while playing
+		\~Japanese 再生中にエフェクトのパラメーターを変更する動的パラメーターを取得する。
+	*/
+	virtual float GetDynamicInput(Handle handle, int32_t index) = 0;
+
+	/**
+		@brief
+		\~English specfiy a dynamic parameter, which changes effect parameters dynamically while playing
+		\~Japanese 再生中にエフェクトのパラメーターを変更する動的パラメーターを設定する。
+	*/
+	virtual void SetDynamicInput(Handle handle, int32_t index, float value) = 0;
+
+	/**
 		@brief	エフェクトのベース行列を取得する。
 		@param	handle	[in]	インスタンスのハンドル
 		@return	ベース行列
@@ -399,6 +465,23 @@ public:
 	virtual void SetPausedToAllEffects(bool paused) = 0;
 
 	/**
+		@brief
+		\~English	Get a layer index
+		\~Japanese	レイヤーのインデックスを取得する
+		@note
+		\~English For example, if effect's layer is 1 and CameraCullingMask's first bit is 1, this effect is shown.
+		\~Japanese 例えば、エフェクトのレイヤーが0でカリングマスクの最初のビットが1のときエフェクトは表示される。
+	*/
+	virtual int GetLayer(Handle handle) = 0;
+
+	/**
+		@brief
+		\~English	Set a layer index
+		\~Japanese	レイヤーのインデックスを設定する
+	*/
+	virtual void SetLayer(Handle handle, int32_t layer) = 0;
+
+	/**
 	@brief
 	\~English	Get a playing speed of particle of effect.
 	\~Japanese	エフェクトのパーティクルの再生スピードを取得する。
@@ -431,30 +514,49 @@ public:
 	virtual void Flip() = 0;
 
 	/**
-		@brief	更新処理を行う。
-		@param	deltaFrame	[in]	更新するフレーム数(60fps基準)	
+		@brief
+		\~English	Update all effects.
+		\~Japanese	全てのエフェクトの更新処理を行う。
+		@param	deltaFrame
+		\~English	passed time (1 is 1/60 seconds)
+		\~Japanese	更新するフレーム数(60fps基準)
 	*/
 	virtual void Update( float deltaFrame = 1.0f ) = 0;
 
 	/**
-		@brief	更新処理を開始する。
+		@brief
+		\~English	Start to update effects.
+		\~Japanese	更新処理を開始する。
 		@note
-		Updateを実行する際は、実行する必要はない。
+		\~English	It is not required if Update is called.
+		\~Japanese	Updateを実行する際は、実行する必要はない。
 	*/
 	virtual void BeginUpdate() = 0;
 
 	/**
-		@brief	更新処理を終了する。
+		@brief
+		\~English	Stop to update effects.
+		\~Japanese	更新処理を終了する。
 		@note
-		Updateを実行する際は、実行する必要はない。
+		\~English	It is not required if Update is called.
+		\~Japanese	Updateを実行する際は、実行する必要はない。
 	*/
 	virtual void EndUpdate() = 0;
 
 	/**
-		@brief	ハンドル単位の更新を行う。
-		@param	handle		[in]	ハンドル
-		@param	deltaFrame	[in]	更新するフレーム数(60fps基準)
+		@brief	
+		\~English	Update an effect by a handle.
+		\~Japanese	ハンドル単位の更新を行う。
+		@param	handle
+		\~English	a handle.
+		\~Japanese	ハンドル
+		@param	deltaFrame
+		\~English	passed time (1 is 1/60 seconds)
+		\~Japanese	更新するフレーム数(60fps基準)
 		@note
+		\~English
+		You need to call BeginUpdate before starting update and EndUpdate after stopping update.
+		\~Japanese	
 		更新する前にBeginUpdate、更新し終わった後にEndUpdateを実行する必要がある。
 	*/
 	virtual void UpdateHandle( Handle handle, float deltaFrame = 1.0f ) = 0;
@@ -464,42 +566,42 @@ public:
 	\~English	Draw particles.
 	\~Japanese	描画処理を行う。
 	*/
-	virtual void Draw() = 0;
+	virtual void Draw(const Manager::DrawParameter& drawParameter = Manager::DrawParameter()) = 0;
 	
 	/**
 	@brief
 	\~English	Draw particles in the back of priority 0.
 	\~Japanese	背面の描画処理を行う。
 	*/
-	virtual void DrawBack() = 0;
+	virtual void DrawBack(const Manager::DrawParameter& drawParameter = Manager::DrawParameter()) = 0;
 
 	/**
 	@brief
 	\~English	Draw particles in the front of priority 0.
 	\~Japanese	前面の描画処理を行う。
 	*/
-	virtual void DrawFront() = 0;
+	virtual void DrawFront(const Manager::DrawParameter& drawParameter = Manager::DrawParameter()) = 0;
 
 	/**
 	@brief
 	\~English	Draw particles with a handle.
 	\~Japanese	ハンドル単位の描画処理を行う。
 	*/
-	virtual void DrawHandle( Handle handle ) = 0;
+	virtual void DrawHandle(Handle handle, const Manager::DrawParameter& drawParameter = Manager::DrawParameter()) = 0;
 
 	/**
 	@brief
 	\~English	Draw particles in the back of priority 0.
 	\~Japanese	背面のハンドル単位の描画処理を行う。
 	*/
-	virtual void DrawHandleBack(Handle handle) = 0;
+	virtual void DrawHandleBack(Handle handle, const Manager::DrawParameter& drawParameter = Manager::DrawParameter()) = 0;
 	
 	/**
 	@brief
 	\~English	Draw particles in the front of priority 0.
 	\~Japanese	前面のハンドル単位の描画処理を行う。
 	*/
-	virtual void DrawHandleFront(Handle handle) = 0;
+	virtual void DrawHandleFront(Handle handle, const Manager::DrawParameter& drawParameter = Manager::DrawParameter()) = 0;
 
 	/**
 		@brief	再生する。
@@ -526,6 +628,13 @@ public:
 		\~Japanese	途中から再生するための時間
 	*/
 	virtual Handle Play(Effect* effect, const Vector3D& position, int32_t startFrame = 0) = 0;
+
+	/**
+		@brief
+		\~English	Get a camera's culling mask to show all effects
+		\~Japanese	全てのエフェクトを表示するためのカメラのカリングマスクを取得する。
+	*/
+	virtual int GetCameraCullingMaskToShowAllEffects() = 0;
 
 	/**
 		@brief	Update処理時間を取得。

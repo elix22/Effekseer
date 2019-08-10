@@ -6,14 +6,6 @@ using System.Reflection;
 using System.Resources;
 using System.Threading;
 
-using System;
-using System.Collections.Generic;
-using System.Globalization;
-using System.IO;
-using System.Runtime.Serialization;
-using System.Runtime.Serialization.Json;
-using System.Text;
-
 namespace Effekseer
 {
 	/// <summary>
@@ -53,6 +45,12 @@ namespace Effekseer
 		}
 	}
 
+	public enum LogLevel
+	{
+		Info,
+		Warning,
+	}
+
 	/// <summary>
 	/// 言語
 	/// </summary>
@@ -64,6 +62,24 @@ namespace Effekseer
         [Name(value = "英語", language = Language.Japanese)]
         [Name(value = "English", language = Language.English)]
 		English,
+	}
+
+	/// <summary>
+	/// a class for get default language
+	/// </summary>
+	public class LanguageGetter
+	{
+		public static Language GetLanguage()
+		{
+			// Switch the language according to the OS settings
+			var culture = System.Globalization.CultureInfo.CurrentCulture;
+			if (culture.Name == "ja-JP")
+			{
+				return Language.Japanese;
+			}
+
+			return Language.English;
+		}
 	}
 
     // アセンブリからリソースファイルをロードする
@@ -103,7 +119,7 @@ namespace Effekseer
 				if (strs.Length < 2) continue;
 
 				var key = strs[0];
-				var value = string.Join(",", strs.Skip(1));
+				var value = string.Join(",", strs.Skip(1).ToArray());
 				value = value.Replace(@"\n", "\n");
 
 				keyToStrings.Add(key, value);
@@ -317,4 +333,30 @@ namespace Effekseer
 			NFI = culture.NumberFormat;
 		}
 	}
+
+    public class Tuple35<T1, T2>
+    {
+        public T1 Item1;
+        public T2 Item2;
+
+        public Tuple35()
+        {
+            Item1 = default(T1);
+            Item2 = default(T2);
+        }
+
+        public Tuple35(T1 t1, T2 t2)
+        {
+            Item1 = t1;
+            Item2 = t2;
+        }
+    }
+
+    public class Tuple35
+    {
+        public static Tuple35<TV1, TV2> Create<TV1, TV2>(TV1 t1, TV2 t2)
+        {
+            return new Tuple35<TV1, TV2>(t1, t2);
+        }
+    }
 }

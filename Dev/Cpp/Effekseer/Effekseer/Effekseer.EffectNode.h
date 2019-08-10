@@ -32,6 +32,15 @@ enum class BindType : int32_t
 	Always = 2,
 };
 
+/**!
+	@brief indexes of dynamic parameter
+*/
+struct RefMinMax
+{
+	int32_t Max = -1;
+	int32_t Min = -1;
+};
+
 //----------------------------------------------------------------------------------
 //
 //----------------------------------------------------------------------------------
@@ -128,16 +137,31 @@ struct ParameterCommonValues_8
 
 struct ParameterCommonValues
 {
-	int MaxGeneration;
-	BindType TranslationBindType;
-	BindType RotationBindType;
-	BindType ScalingBindType;
-	int		RemoveWhenLifeIsExtinct;
-	int		RemoveWhenParentIsRemoved;
-	int		RemoveWhenChildrenIsExtinct;
+	int32_t RefEqMaxGeneration = -1;
+	RefMinMax RefEqLife;
+	RefMinMax RefEqGenerationTime;
+	RefMinMax RefEqGenerationTimeOffset;
+
+	int MaxGeneration = 1;
+	BindType TranslationBindType = BindType::Always;
+	BindType RotationBindType = BindType::Always;
+	BindType ScalingBindType = BindType::Always;
+	int RemoveWhenLifeIsExtinct = 1;
+	int RemoveWhenParentIsRemoved = 0;
+	int RemoveWhenChildrenIsExtinct = 0;
 	random_int	life;
 	random_float GenerationTime;
 	random_float GenerationTimeOffset;
+
+	ParameterCommonValues()
+	{
+		life.max = 1;
+		life.min = 1;
+		GenerationTime.max = 1;
+		GenerationTime.min = 1;
+		GenerationTimeOffset.max = 0;
+		GenerationTimeOffset.min = 0;
+	}
 };
 
 struct ParameterDepthValues
@@ -148,6 +172,8 @@ struct ParameterDepthValues
 	ZSortType	ZSort;
 	int32_t	DrawingPriority;
 	float	SoftParticle;
+
+	NodeRendererDepthParameter DepthParameter;
 
 	ParameterDepthValues()
 	{
@@ -180,6 +206,8 @@ enum ParameterTranslationType
 //----------------------------------------------------------------------------------
 struct ParameterTranslationFixed
 {
+	int32_t RefEq = -1;
+
 	Vector3D Position;
 };
 
@@ -188,9 +216,19 @@ struct ParameterTranslationFixed
 //----------------------------------------------------------------------------------
 struct ParameterTranslationPVA
 {
+	RefMinMax RefEqP;
+	RefMinMax RefEqV;
+	RefMinMax RefEqA;
 	random_vector3d	location;
 	random_vector3d	velocity;
 	random_vector3d	acceleration;
+};
+
+struct ParameterTranslationEasing
+{
+	RefMinMax RefEqS;
+	RefMinMax RefEqE;
+	easing_vector3d location;
 };
 
 //----------------------------------------------------------------------------------
@@ -248,6 +286,7 @@ enum ParameterRotationType
 //----------------------------------------------------------------------------------
 struct ParameterRotationFixed
 {
+	int32_t RefEq = -1;
 	Vector3D Position;
 };
 
@@ -256,9 +295,19 @@ struct ParameterRotationFixed
 //----------------------------------------------------------------------------------
 struct ParameterRotationPVA
 {
+	RefMinMax RefEqP;
+	RefMinMax RefEqV;
+	RefMinMax RefEqA;
 	random_vector3d	rotation;
 	random_vector3d	velocity;
 	random_vector3d	acceleration;
+};
+
+struct ParameterRotationEasing
+{
+	RefMinMax RefEqS;
+	RefMinMax RefEqE;
+	easing_vector3d rotation;
 };
 
 //----------------------------------------------------------------------------------
@@ -303,6 +352,8 @@ enum ParameterScalingType
 //----------------------------------------------------------------------------------
 struct ParameterScalingFixed
 {
+	int32_t RefEq = -1;
+
 	Vector3D Position;
 };
 
@@ -311,9 +362,20 @@ struct ParameterScalingFixed
 //----------------------------------------------------------------------------------
 struct ParameterScalingPVA
 {
+	RefMinMax RefEqP;
+	RefMinMax RefEqV;
+	RefMinMax RefEqA;
+
 	random_vector3d Position;
 	random_vector3d Velocity;
 	random_vector3d Acceleration;
+};
+
+struct ParameterScalingEasing
+{
+	RefMinMax RefEqS;
+	RefMinMax RefEqE;
+	easing_vector3d Position;
 };
 
 //----------------------------------------------------------------------------------
@@ -465,22 +527,40 @@ struct ParameterGenerationLocation
 
 struct ParameterRendererCommon
 {
-	int32_t				ColorTextureIndex;
-	AlphaBlendType		AlphaBlend;
+	/**
+		@brief	material type
+	*/
+	enum class RendererMaterialType : int32_t
+	{
+		Default = 0,
+		File = 128,
+	};
 
-	TextureFilterType	FilterType;
+	RendererMaterialType MaterialType = RendererMaterialType::Default;
 
-	TextureWrapType		WrapType;
+	/**
+		@brief	texture index in MaterialType::Default
+	*/
+	int32_t				ColorTextureIndex = -1;
 
-	bool				ZWrite;
+	//! material index in MaterialType::File
+	MaterialParameter Material;
 
-	bool				ZTest;
+	AlphaBlendType AlphaBlend = AlphaBlendType::Opacity;
 
-	bool				Distortion;
+	TextureFilterType FilterType = TextureFilterType::Nearest;
 
-	float				DistortionIntensity;
+	TextureWrapType WrapType = TextureWrapType::Repeat;
 
-	BindType			ColorBindType;
+	bool				ZWrite = false;
+
+	bool				ZTest = false;
+
+	bool				Distortion = false;
+
+	float				DistortionIntensity = 0;
+
+	BindType ColorBindType = BindType::NotBind;
 
 	enum
 	{
@@ -579,18 +659,63 @@ struct ParameterRendererCommon
 
 	} UV;
 
+	ParameterRendererCommon()
+	{
+		FadeInType = FADEIN_OFF;
+		FadeOutType = FADEOUT_OFF;
+		UVType = UV_DEFAULT;
+	}
+
 	void reset()
 	{
-		memset(this, 0, sizeof(ParameterRendererCommon));
+		// with constructor
+		//memset(this, 0, sizeof(ParameterRendererCommon));
 	}
 
 	void load(uint8_t*& pos, int32_t version)
 	{
-		memset(this, 0, sizeof(ParameterRendererCommon));
+		//memset(this, 0, sizeof(ParameterRendererCommon));
 
-		memcpy(&ColorTextureIndex, pos, sizeof(int));
-		pos += sizeof(int);
+		if (version >= 15)
+		{
+			memcpy(&MaterialType, pos, sizeof(int));
+			pos += sizeof(int);
 
+			if (MaterialType == RendererMaterialType::Default)
+			{
+				memcpy(&ColorTextureIndex, pos, sizeof(int));
+				pos += sizeof(int);
+			}
+			else
+			{
+				memcpy(&Material.MaterialIndex, pos, sizeof(int));
+				pos += sizeof(int);
+
+				int32_t textures = 0;
+				int32_t uniforms = 0;
+
+				memcpy(&textures, pos, sizeof(int));
+				pos += sizeof(int);
+
+				
+				Material.MaterialTextures.resize(textures);
+				memcpy(Material.MaterialTextures.data(), pos, sizeof(MaterialTextureParameter) * textures);
+				pos += (sizeof(MaterialTextureParameter) * textures);
+
+				memcpy(&uniforms, pos, sizeof(int));
+				pos += sizeof(int);
+
+				Material.MaterialUniforms.resize(uniforms);
+				memcpy(Material.MaterialUniforms.data(), pos, sizeof(float) * 4 * uniforms);
+				pos += (sizeof(float) * 4 * uniforms);
+			}
+		}
+		else
+		{
+			memcpy(&ColorTextureIndex, pos, sizeof(int));
+			pos += sizeof(int);
+		}
+		
 		memcpy(&AlphaBlend, pos, sizeof(int));
 		pos += sizeof(int);
 
@@ -770,6 +895,29 @@ struct ParameterSound
 	random_int		Delay;
 };
 
+/**
+	@brief	a factor to calculate original parameter for dynamic parameter
+*/
+struct DynamicFactorParameter
+{
+	std::array<float, 3> Tra;
+	std::array<float, 3> TraInv;
+	std::array<float, 3> Rot;
+	std::array<float, 3> RotInv;
+	std::array<float, 3> Scale;
+	std::array<float, 3> ScaleInv;
+
+	DynamicFactorParameter()
+	{ 
+		Tra.fill(1.0f);
+		TraInv.fill(1.0f);
+		Rot.fill(1.0f);
+		RotInv.fill(1.0f);
+		Scale.fill(1.0f);
+		ScaleInv.fill(1.0f);
+	}
+};
+
 //----------------------------------------------------------------------------------
 //
 //----------------------------------------------------------------------------------
@@ -781,9 +929,6 @@ enum eRenderingOrder
 	RenderingOrder_DWORD = 0x7fffffff,
 };
 
-//----------------------------------------------------------------------------------
-//
-//----------------------------------------------------------------------------------
 
 /**
 @brief	ノードインスタンス生成クラス
@@ -836,7 +981,7 @@ public:
 	ParameterTranslationType	TranslationType;
 	ParameterTranslationFixed	TranslationFixed;
 	ParameterTranslationPVA		TranslationPVA;
-	easing_vector3d				TranslationEasing;
+	ParameterTranslationEasing TranslationEasing;
 	FCurveVector3D*				TranslationFCurve;
 
 	LocationAbsParameter		LocationAbs;
@@ -844,7 +989,7 @@ public:
 	ParameterRotationType		RotationType;
 	ParameterRotationFixed		RotationFixed;
 	ParameterRotationPVA		RotationPVA;
-	easing_vector3d				RotationEasing;
+	ParameterRotationEasing RotationEasing;
 	FCurveVector3D*				RotationFCurve;
 
 	ParameterRotationAxisPVA	RotationAxisPVA;
@@ -853,7 +998,7 @@ public:
 	ParameterScalingType		ScalingType;
 	ParameterScalingFixed		ScalingFixed;
 	ParameterScalingPVA			ScalingPVA;
-	easing_vector3d				ScalingEasing;
+	ParameterScalingEasing ScalingEasing;
 	ParameterScalingSinglePVA	ScalingSinglePVA;
 	easing_float				ScalingSingleEasing;
 	FCurveVector3D*				ScalingFCurve;
@@ -870,6 +1015,8 @@ public:
 	eRenderingOrder				RenderingOrder;
 
 	int32_t						RenderingPriority = -1;
+
+	DynamicFactorParameter DynamicFactor;
 
 	Effect* GetEffect() const override;
 
@@ -934,6 +1081,8 @@ public:
 	@brief	サウンド再生
 	*/
 	virtual void PlaySound_(Instance& instance, SoundTag tag, Manager* manager);
+
+	EffectInstanceTerm CalculateInstanceTerm(EffectInstanceTerm& parentTerm) const override;
 
 	/**
 	@brief	エフェクトノード生成

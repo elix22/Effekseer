@@ -1,143 +1,88 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.ComponentModel;
-using System.Drawing;
-using System.Data;
 using System.Linq;
 using System.Text;
-using System.Windows.Forms;
+using System.Threading.Tasks;
 
 namespace Effekseer.GUI.Component
 {
-	public partial class Boolean : System.Windows.Forms.CheckBox
-	{
-		public Boolean()
-		{
-			InitializeComponent();
+    class Boolean : Control, IParameterControl
+    {
+        string id = "";
 
-			EnableUndo = true;
+        public string Label { get; set; } = string.Empty;
 
-			Reading = false;
-			Writing = false;
-
-			Reading = true;
-			Read();
-			Reading = false;
-
-			HandleCreated += new EventHandler(Boolean_HandleCreated);
-			HandleDestroyed += new EventHandler(Boolean_HandleDestroyed);
-			CheckedChanged += new EventHandler(Boolean_CheckedChanged);
-		}
+		public string Description { get; set; } = string.Empty;
 
 		Data.Value.Boolean binding = null;
 
-		public bool EnableUndo { get; set; }
+		ValueChangingProperty valueChangingProp = new ValueChangingProperty();
 
-		public Data.Value.Boolean Binding
-		{
-			get
-			{
-				return binding;
-			}
-			set
-			{
-				if (binding == value) return;
+		bool[] internalValue = new bool[] { false };
 
-				if (binding != null)
-				{
-					binding.OnChanged -= OnChanged;
-				}
+		public bool EnableUndo { get; set; } = true;
+
+        public Data.Value.Boolean Binding
+        {
+            get
+            {
+                return binding;
+            }
+            set
+            {
+                if (binding == value) return;
 
 				binding = value;
 
-				if (binding != null)
-				{
-					binding.OnChanged += OnChanged;
-				}
+                if(binding != null)
+                {
+                    internalValue[0] = binding.Value;
+                }
+            }
+        }
 
-				Reading = true;
-				Read();
-				Reading = false;
-			}
-		}
-
-		public void SetBinding(object o)
-		{ 
-			var o_ = o as Data.Value.Boolean;
-			Binding = o_;
-		}
-
-		/// <summary>
-		/// 他のクラスからデータ読み込み中
-		/// </summary>
-		public bool Reading
-		{
-			get;
-			private set;
-		}
-
-		/// <summary>
-		/// 他のクラスにデータ書き込み中
-		/// </summary>
-		public bool Writing
-		{
-			get;
-			private set;
-		}
-
-		void Read()
-		{
-			if (!Reading) throw new Exception();
-
-			if (binding != null)
+        public Boolean(string label = null)
+        {
+			if(label != null)
 			{
-				Checked = binding;
-				Enabled = true;
+				Label = label;
 			}
-			else
-			{
-				Checked = false;
-				Enabled = false;
-			}
+
+			id = "###" + Manager.GetUniqueID().ToString();
 		}
 
-		void OnChanged(object sender, ChangedValueEventArgs e)
+        public void SetBinding(object o)
+        {
+            var o_ = o as Data.Value.Boolean;
+            Binding = o_;
+        }
+
+		public void FixValue()
 		{
-			if (Writing) return;
-
-			Reading = true;
-			Read();
-			Reading = false;
 		}
 
-
-		void Boolean_HandleCreated(object sender, EventArgs e)
-		{
-			
-		}
-
-		void Boolean_HandleDestroyed(object sender, EventArgs e)
-		{
-			Binding = null;
-		}
-
-		void Boolean_CheckedChanged(object sender, EventArgs e)
+		public override void Update()
 		{
 			if (binding != null)
 			{
-				Writing = true;
+				internalValue[0] = binding.Value;
+			}
 
+			valueChangingProp.Enable(binding);
+
+			if (Manager.NativeManager.Checkbox(id, internalValue))
+			{
 				if (EnableUndo)
 				{
-					binding.SetValue(Checked);
+					binding.SetValue(internalValue[0]);
 				}
 				else
 				{
-					binding.SetValueDirectly(Checked);
+					binding.SetValueDirectly(internalValue[0]);
 				}
-
-				Writing = false;
 			}
+
+			valueChangingProp.Disable();
 		}
-	}
+    }
 }

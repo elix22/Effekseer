@@ -1,44 +1,28 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.ComponentModel;
-using System.Drawing;
-using System.Data;
 using System.Linq;
 using System.Text;
-using System.Windows.Forms;
+using System.Threading.Tasks;
 
 namespace Effekseer.GUI.Component
 {
-	public partial class String : System.Windows.Forms.TextBox
+	class String : Control, IParameterControl
 	{
-		public String()
-		{
-			InitializeComponent();
+		string id = "";
 
-			EnableUndo = true;
+		public string Label { get; set; } = string.Empty;
 
-			Reading = false;
-			Writing = false;
-	
-			Reading = true;
-			Read();
-			Reading = false;
-
-			HandleCreated += new EventHandler(String_HandleCreated);
-			HandleDestroyed += new EventHandler(String_HandleDestroyed);
-			TextChanged += new EventHandler(String_TextChanged);
-			KeyDown += new KeyEventHandler(String_KeyDown);
-			Leave += new EventHandler(String_Leave);
-		}
-
-		bool changed = false;
-
-		Color edited_color = Colors.EditedString;
-		Color editing_color = Colors.EditingString;
+		public string Description { get; set; } = string.Empty;
 
 		Data.Value.String binding = null;
 
-		public bool EnableUndo { get; set; }
+		ValueChangingProperty valueChangingProp = new ValueChangingProperty();
+
+		string internalValue = string.Empty;
+
+		bool isActive = false;
+
+		public bool EnableUndo { get; set; } = true;
 
 		public Data.Value.String Binding
 		{
@@ -50,22 +34,28 @@ namespace Effekseer.GUI.Component
 			{
 				if (binding == value) return;
 
-				if (binding != null)
+				if(binding != null)
 				{
-					binding.OnChanged -= OnChanged;
+					FixValue();
 				}
 
 				binding = value;
 
 				if (binding != null)
 				{
-					binding.OnChanged += OnChanged;
+					internalValue = binding.Value;
 				}
-
-				Reading = true;
-				Read();
-				Reading = false;
 			}
+		}
+
+		public String(string label = null)
+		{
+			if (label != null)
+			{
+				Label = label;
+			}
+
+			id = "###" + Manager.GetUniqueID().ToString();
 		}
 
 		public void SetBinding(object o)
@@ -74,103 +64,77 @@ namespace Effekseer.GUI.Component
 			Binding = o_;
 		}
 
-		/// <summary>
-		/// 他のクラスからデータ読み込み中
-		/// </summary>
-		public bool Reading
+		public void FixValue()
 		{
-			get;
-			private set;
+			if (binding == null) return;
+			if (binding.Value == internalValue) return;
+			binding.SetValue(internalValue);
 		}
 
-		/// <summary>
-		/// 他のクラスにデータ書き込み中
-		/// </summary>
-		public bool Writing
+		public override void OnDisposed()
 		{
-			get;
-			private set;
-		}
-
-		void Read()
-		{
-			if (!Reading) throw new Exception();
-
-			changed = false;
-			BackColor = edited_color;
-
-			if (binding != null)
-			{
-				Text = binding;
-				Enabled = true;
-			}
-			else
-			{
-				Text = string.Empty;
-				Enabled = false;
-				BackColor = Colors.Disable;
-			}
-		}
-
-		void Write()
-		{
-			if (binding != null && changed)
-			{
-				Writing = true;
-				binding.SetValue(Text);
-				Writing = false;
-			}
-		}
-
-		void OnChanged(object sender, ChangedValueEventArgs e)
-		{
-			if (Writing) return;
-
-			Reading = true;
-			Read();
-			Reading = false;
-		}
-
-		void String_HandleCreated(object sender, EventArgs e)
-		{
-
-		}
-
-		void String_HandleDestroyed(object sender, EventArgs e)
-		{
+			FixValue();
 			Binding = null;
 		}
 
-		void String_TextChanged(object sender, EventArgs e)
+		public override void Update()
 		{
-			if (Reading) return;
-
-			changed = true;
-			BackColor = editing_color;
-		}
-
-		void String_KeyDown(object sender, KeyEventArgs e)
-		{
-			if (e.KeyCode == Keys.Enter && changed)
+			string initialValue = string.Empty;
+			if (binding != null)
 			{
-				// ビープ音防止
-				e.SuppressKeyPress = true;
-
-				Write();
-
-				Reading = true;
-				Read();
-				Reading = false;
+				initialValue = binding.Value;
 			}
-		}
+			else
+			{
+				initialValue = internalValue;
+			}
 
-		void String_Leave(object sender, EventArgs e)
-		{
-			Write();
+			valueChangingProp.Enable(binding);
 
-			Reading = true;
-			Read();
-			Reading = false;
+			if(binding.IsMultiLine)
+			{
+				if (Manager.NativeManager.InputTextMultiline(id, initialValue))
+				{
+					var v = Manager.NativeManager.GetInputTextResult();
+
+					if (EnableUndo)
+					{
+						internalValue = v;
+					}
+					else
+					{
+						throw new Exception();
+					}
+				}
+			}
+			else
+			{
+				if (Manager.NativeManager.InputText(id, initialValue))
+				{
+					var v = Manager.NativeManager.GetInputTextResult();
+
+					if (EnableUndo)
+					{
+						internalValue = v;
+					}
+					else
+					{
+						throw new Exception();
+					}
+				}
+			}
+
+
+			var isActive_Current = Manager.NativeManager.IsItemActive();
+
+			if(isActive && !isActive_Current)
+			{
+				FixValue();
+			}
+
+			isActive = isActive_Current;
+
+			valueChangingProp.Disable();
 		}
 	}
 }

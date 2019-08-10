@@ -22,6 +22,7 @@
 #include "../../EffekseerRendererCommon/EffekseerRenderer.RibbonRendererBase.h"
 #include "../../EffekseerRendererCommon/EffekseerRenderer.RingRendererBase.h"
 #include "../../EffekseerRendererCommon/EffekseerRenderer.TrackRendererBase.h"
+#include "../../EffekseerRendererCommon/EffekseerRenderer.Renderer_Impl.h"
 
 #ifdef __EFFEKSEER_RENDERER_INTERNAL_LOADER__
 #include "../../EffekseerRendererCommon/EffekseerRenderer.PngTextureLoader.h"
@@ -799,7 +800,7 @@ void RendererImplemented::SetCameraParameter(const ::Effekseer::Vector3D& front,
 ::Effekseer::TextureLoader* RendererImplemented::CreateTextureLoader( ::Effekseer::FileInterface* fileInterface )
 {
 #ifdef __EFFEKSEER_RENDERER_INTERNAL_LOADER__
-	return new TextureLoader(GetDevice(), fileInterface );
+	return new TextureLoader(this, fileInterface );
 #else
 	return NULL;
 #endif
@@ -811,7 +812,7 @@ void RendererImplemented::SetCameraParameter(const ::Effekseer::Vector3D& front,
 ::Effekseer::ModelLoader* RendererImplemented::CreateModelLoader( ::Effekseer::FileInterface* fileInterface )
 {
 #ifdef __EFFEKSEER_RENDERER_INTERNAL_LOADER__
-	return new ModelLoader(GetDevice(), fileInterface );
+	return new ModelLoader(this, fileInterface );
 #else
 	return NULL;
 #endif
@@ -883,8 +884,8 @@ void RendererImplemented::SetLayout( Shader* shader )
 //----------------------------------------------------------------------------------
 void RendererImplemented::DrawSprites( int32_t spriteCount, int32_t vertexOffset )
 {
-	drawcallCount++;
-	drawvertexCount += spriteCount * 4;
+	impl->drawcallCount++;
+	impl->drawvertexCount += spriteCount * 4;
 
 	if( m_renderMode == ::Effekseer::RenderMode::Normal )
 	{
@@ -901,8 +902,8 @@ void RendererImplemented::DrawSprites( int32_t spriteCount, int32_t vertexOffset
 //----------------------------------------------------------------------------------
 void RendererImplemented::DrawPolygon( int32_t vertexCount, int32_t indexCount)
 {
-	drawcallCount++;
-	drawvertexCount += vertexCount;
+	impl->drawcallCount++;
+	impl->drawvertexCount += vertexCount;
 
 	GetDevice()->DrawIndexedPrimitive( D3DPT_TRIANGLELIST, 0, 0, vertexCount, 0, indexCount / 3 );
 }
@@ -954,14 +955,18 @@ void RendererImplemented::EndShader(Shader* shader)
 	currentShader = nullptr;
 }
 
-void RendererImplemented::SetVertexBufferToShader(const void* data, int32_t size)
+void RendererImplemented::SetVertexBufferToShader(const void* data, int32_t size, int32_t dstOffset)
 {
-	memcpy(currentShader->GetVertexConstantBuffer(), data, size);
+	assert(currentShader != nullptr);
+	auto p = static_cast<uint8_t*>(currentShader->GetVertexConstantBuffer()) + dstOffset;
+	memcpy(p, data, size);
 }
 
-void RendererImplemented::SetPixelBufferToShader(const void* data, int32_t size)
+void RendererImplemented::SetPixelBufferToShader(const void* data, int32_t size, int32_t dstOffset)
 {
-	memcpy(currentShader->GetPixelConstantBuffer(), data, size);
+	assert(currentShader != nullptr);
+	auto p = static_cast<uint8_t*>(currentShader->GetPixelConstantBuffer()) + dstOffset;
+	memcpy(p, data, size);
 }
 
 //----------------------------------------------------------------------------------
@@ -1004,26 +1009,6 @@ void RendererImplemented::ResetRenderState()
 {
 	m_renderState->GetActiveState().Reset();
 	m_renderState->Update( true );
-}
-
-int32_t RendererImplemented::GetDrawCallCount() const
-{
-	return drawcallCount;
-}
-
-int32_t RendererImplemented::GetDrawVertexCount() const
-{
-	return drawvertexCount;
-}
-
-void RendererImplemented::ResetDrawCallCount()
-{
-	drawcallCount = 0;
-}
-
-void RendererImplemented::ResetDrawVertexCount()
-{
-	drawvertexCount = 0;
 }
 
 //----------------------------------------------------------------------------------

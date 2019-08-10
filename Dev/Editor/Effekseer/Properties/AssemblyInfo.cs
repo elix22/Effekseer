@@ -5,12 +5,12 @@ using System.Runtime.InteropServices;
 // General Information about an assembly is controlled through the following 
 // set of attributes. Change these attribute values to modify the information
 // associated with an assembly.
-[assembly: AssemblyTitle("Effekseer")]
+[assembly: AssemblyTitle("EffekseerMP")]
 [assembly: AssemblyDescription("")]
 [assembly: AssemblyConfiguration("")]
 [assembly: AssemblyCompany("")]
-[assembly: AssemblyProduct("Effekseer")]
-[assembly: AssemblyCopyright("Copyright © Effekseer Project")]
+[assembly: AssemblyProduct("EffekseerMP")]
+[assembly: AssemblyCopyright("Copyright ©  2018")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
 
@@ -20,7 +20,7 @@ using System.Runtime.InteropServices;
 [assembly: ComVisible(false)]
 
 // The following GUID is for the ID of the typelib if this project is exposed to COM
-[assembly: Guid("86ab1191-6dde-4070-b146-4901e9985512")]
+[assembly: Guid("30984eba-2329-4baf-9e9d-88a5b62d7014")]
 
 // Version information for an assembly consists of the following four values:
 //

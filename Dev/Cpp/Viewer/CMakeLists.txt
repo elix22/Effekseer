@@ -40,8 +40,9 @@ list(APPEND cpps
 	3rdParty/nfd/nfd_win.cpp
 	3rdParty/Boxer/boxer_win.cpp
 	3rdParty/imgui_platform/imgui_impl_glfw.cpp
-	3rdParty/imgui_platform/imgui_impl_gl3.cpp
+	3rdParty/imgui_platform/imgui_impl_opengl3.cpp
 	3rdParty/imgui_platform/imgui_impl_dx9.cpp
+	3rdParty/imgui_platform/imgui_impl_dx11.cpp
 	GUI/Platform/efk.Language_Other.cpp
 )
 
@@ -86,11 +87,13 @@ endif()
 if (WIN32)
 FILE(GLOB hs_g
 	Graphics/Platform/DX9/*.h
+	Graphics/Platform/DX11/*.h
 	Graphics/Platform/GL/*.h
 )
 
 FILE(GLOB cpps_g
 	Graphics/Platform/DX9/*.cpp
+	Graphics/Platform/DX11/*.cpp
 	Graphics/Platform/GL/*.cpp
 )
 else()
@@ -122,9 +125,9 @@ foreach(FILE ${hs})
 
     # Group into "Source Files" and "Header Files"
     if ("${FILE}" MATCHES ".*\\.cpp")
-       set(GROUP "Files${GROUP}")
+       set(GROUP "Files/${GROUP}")
     elseif("${FILE}" MATCHES ".*\\.h")
-       set(GROUP "Files${GROUP}")
+       set(GROUP "Files/${GROUP}")
     endif()
 
     source_group("${GROUP}" FILES "${FILE}")
@@ -142,9 +145,9 @@ foreach(FILE ${cpps})
 
     # Group into "Source Files" and "Header Files"
     if ("${FILE}" MATCHES ".*\\.cpp")
-       set(GROUP "Files${GROUP}")
+       set(GROUP "Files/${GROUP}")
     elseif("${FILE}" MATCHES ".*\\.h")
-       set(GROUP "Files${GROUP}")
+       set(GROUP "Files/${GROUP}")
     endif()
 
     source_group("${GROUP}" FILES "${FILE}")
@@ -171,10 +174,8 @@ if (MSVC)
 	endif()
 endif()
 
-add_library(Viewer SHARED ${cpps} ${hs})
-add_executable(ViewerTest ${cpps} ${hs} test.cpp)
-
 include_directories(
+	${EFK_THIRDPARTY_INCLUDES}
 	3rdParty/imgui/
 	../include/
 	../EffekseerRendererDX9/
@@ -183,16 +184,68 @@ include_directories(
 	../
 )
 
-link_directories(
+add_library(Viewer SHARED ${cpps} ${hs})
+target_link_directories(
+	Viewer
+	PRIVATE
+	${EFK_THIRDPARTY_LIBRARY_DIRECTORIES}
+)
+target_link_libraries(
+	Viewer
+	debug glfw3d
+	debug OpenSoundMixerd
+	optimized glfw3
+	optimized OpenSoundMixer
+)
+add_dependencies(Viewer ExternalProject_zlib ExternalProject_libpng ExternalProject_libgd ExternalProject_glew ExternalProject_glfw ExternalProject_OpenSoundMixer)
 
+add_executable(ViewerTest ${cpps} ${hs} test.cpp)
+target_link_directories(
+	ViewerTest
+	PRIVATE
+	${EFK_THIRDPARTY_LIBRARY_DIRECTORIES}
+)
+target_link_libraries(
+	ViewerTest 
+	debug glfw3d
+	debug OpenSoundMixerd
+	optimized glfw3
+	optimized OpenSoundMixer
+)
+add_dependencies(ViewerTest ExternalProject_zlib ExternalProject_libpng ExternalProject_libgd ExternalProject_glew ExternalProject_glfw ExternalProject_OpenSoundMixer)
+
+link_directories(
+	
     ${PROJECT_SOURCE_DIR}/../lib/
 
 )
 
 if (WIN32)
 
-target_link_libraries(Viewer effekseer effekseer_renderer_dx9 effekseer_renderer_gl EffekseerSoundOSMixer)
-target_link_libraries(ViewerTest effekseer effekseer_renderer_dx9 effekseer_renderer_gl EffekseerSoundOSMixer)
+target_link_libraries(
+	Viewer
+	effekseer
+	effekseer_renderer_dx9
+	effekseer_renderer_dx11
+	effekseer_renderer_gl
+	EffekseerSoundOSMixer
+	debug libgd_staticd
+	debug libglew32d
+	optimized libgd_static
+	optimized libglew32
+)
+target_link_libraries(
+	ViewerTest
+	effekseer
+	effekseer_renderer_dx9
+	effekseer_renderer_dx11
+	effekseer_renderer_gl
+	EffekseerSoundOSMixer
+	debug libgd_staticd
+	debug libglew32d
+	optimized libgd_static
+	optimized libglew32
+)
 
 elseif(APPLE)
 
@@ -212,11 +265,12 @@ target_link_libraries(
 	effekseer
 	effekseer_renderer_gl
 	EffekseerSoundOSMixer
-	glfw3
-	gd
+	debug gdd
+	debug GLEWd
+	optimized gd
+	optimized GLEW
+	png
 	z
-	png16
-	OpenSoundMixer
 	${OpenAL_LIBRARY}
 	"-framework OpenAL"
 	${CMAKE_THREAD_LIBS_INIT}
@@ -232,11 +286,12 @@ target_link_libraries(
 	effekseer
 	effekseer_renderer_gl
 	EffekseerSoundOSMixer
-	glfw3
-	gd
+	debug gdd
+	debug GLEWd
+	optimized gd
+	optimized GLEW
+	png
 	z
-	png16
-	OpenSoundMixer
 	${OpenAL_LIBRARY}
 	"-framework OpenAL"
 	${CMAKE_THREAD_LIBS_INIT}
@@ -305,5 +360,13 @@ target_link_libraries(
 
 endif()
 
+add_definitions(-D__EFFEKSEER_VIEWER_BUILD_AS_CMAKE__)
+
 set_target_properties(Viewer PROPERTIES LINKER_LANGUAGE CXX)
 set_target_properties(ViewerTest PROPERTIES LINKER_LANGUAGE CXX)
+
+add_custom_command(TARGET Viewer POST_BUILD        # Adds a post-build event to MyTest
+    COMMAND ${CMAKE_COMMAND} -E copy  # which executes "cmake - E copy_if_different..."
+	$<TARGET_FILE:Viewer>
+	${CMAKE_SOURCE_DIR}/Dev/release/Viewer.dll )                 # <--this is out-file path
+		

@@ -1,32 +1,28 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.ComponentModel;
-using System.Drawing;
-using System.Data;
 using System.Linq;
 using System.Text;
-using System.Windows.Forms;
+using System.Threading.Tasks;
 
 namespace Effekseer.GUI.Component
 {
-	public partial class Vector2D : UserControl
+	class Vector2D : Control, IParameterControl
 	{
-		public Vector2D()
-		{
-			InitializeComponent();
+		string id = "";
 
-			EnableUndo = true;
+		public string Label { get; set; } = string.Empty;
 
-			this.SuspendLayout();
-			Anchor = AnchorStyles.Left | AnchorStyles.Right;
-			this.ResumeLayout(false);
-
-			HandleDestroyed += new EventHandler(Vector2D_HandleDestroyed);
-		}
+		public string Description { get; set; } = string.Empty;
 
 		Data.Value.Vector2D binding = null;
 
-		public bool EnableUndo { get; set; }
+		ValueChangingProperty valueChangingProp = new ValueChangingProperty();
+
+		bool isActive = false;
+
+		float[] internalValue = new float[] { 0.0f, 0.0f };
+
+		public bool EnableUndo { get; set; } = true;
 
 		public Data.Value.Vector2D Binding
 		{
@@ -38,20 +34,24 @@ namespace Effekseer.GUI.Component
 			{
 				if (binding == value) return;
 
-				if (binding != null)
-				{
-					tb_x.Binding = null;
-					tb_y.Binding = null;
-				}
-
 				binding = value;
 
 				if (binding != null)
 				{
-					tb_x.Binding = binding.X;
-					tb_y.Binding = binding.Y;
+					internalValue[0] = binding.X.Value;
+					internalValue[1] = binding.Y.Value;
 				}
 			}
+		}
+
+		public Vector2D(string label = null)
+		{
+			if (label != null)
+			{
+				Label = label;
+			}
+
+			id = "###" + Manager.GetUniqueID().ToString();
 		}
 
 		public void SetBinding(object o)
@@ -60,9 +60,64 @@ namespace Effekseer.GUI.Component
 			Binding = o_;
 		}
 
-		void Vector2D_HandleDestroyed(object sender, EventArgs e)
+		public void FixValue()
 		{
-			Binding = null;
+			FixValueInternal(false);
+		}
+
+		void FixValueInternal(bool combined)
+		{
+			if (binding == null) return;
+
+			if (EnableUndo)
+			{
+				binding.X.SetValue(internalValue[0], combined);
+				binding.Y.SetValue(internalValue[1], combined);
+			}
+			else
+			{
+				binding.X.SetValueDirectly(internalValue[0]);
+				binding.Y.SetValueDirectly(internalValue[1]);
+			}
+		}
+
+		public override void OnDisposed()
+		{
+			FixValueInternal(false);
+		}
+
+		public override void Update()
+		{
+			if (binding == null) return;
+
+			valueChangingProp.Enable(binding);
+
+			float step = 1.0f;
+			if (binding != null)
+			{
+				internalValue[0] = binding.X.Value;
+				internalValue[1] = binding.Y.Value;
+				step = binding.X.Step / 10.0f;
+			}
+
+			if (Manager.NativeManager.DragFloat2EfkEx(id, internalValue, step,
+				float.MinValue, float.MaxValue,
+				float.MinValue, float.MaxValue,
+				"X:" + "%.3f", "Y:" + "%.3f"))
+			{
+				FixValueInternal(isActive);
+			}
+
+			var isActive_Current = Manager.NativeManager.IsItemActive();
+
+			if (isActive && !isActive_Current)
+			{
+				FixValue();
+			}
+
+			isActive = isActive_Current;
+
+			valueChangingProp.Disable();
 		}
 	}
 }

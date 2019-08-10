@@ -1,42 +1,28 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.ComponentModel;
-using System.Drawing;
-using System.Data;
 using System.Linq;
 using System.Text;
-using System.Windows.Forms;
+using System.Threading.Tasks;
 
 namespace Effekseer.GUI.Component
 {
-	public partial class Int : System.Windows.Forms.TextBox
+	class Int : Control, IParameterControl
 	{
-		public Int()
-		{
-			InitializeComponent();
+		string id = "";
 
-			EnableUndo = true;
+		public string Label { get; set; } = string.Empty;
 
-			Reading = false;
-			Writing = false;
-	
-			Reading = true;
-			Read();
-			Reading = false;
-
-			HandleCreated += new EventHandler(Int_HandleCreated);
-			HandleDestroyed += new EventHandler(Int_HandleDestroyed);
-			TextChanged += new EventHandler(Int_TextChanged);
-			KeyDown += new KeyEventHandler(Int_KeyDown);
-			Enter += new EventHandler(Int_Enter);
-			Leave += new EventHandler(Int_Leave);
-		}
-
-		bool changed = false;
+		public string Description { get; set; } = string.Empty;
 
 		Data.Value.Int binding = null;
 
-		public bool EnableUndo { get; set; }
+		ValueChangingProperty valueChangingProp = new ValueChangingProperty();
+
+		int[] internalValue = new int[] { 0 };
+
+		bool isActive = false;
+
+		public bool EnableUndo { get; set; } = true;
 
 		public Data.Value.Int Binding
 		{
@@ -48,22 +34,23 @@ namespace Effekseer.GUI.Component
 			{
 				if (binding == value) return;
 
-				if (binding != null)
-				{
-					binding.OnChanged -= OnChanged;
-				}
-
 				binding = value;
 
 				if (binding != null)
 				{
-					binding.OnChanged += OnChanged;
+					internalValue[0] = binding.Value;
 				}
-
-				Reading = true;
-				Read();
-				Reading = false;
 			}
+		}
+
+		public Int(string label = null)
+		{
+			if (label != null)
+			{
+				Label = label;
+			}
+
+			id = "###" + Manager.GetUniqueID().ToString();
 		}
 
 		public void SetBinding(object o)
@@ -72,193 +59,56 @@ namespace Effekseer.GUI.Component
 			Binding = o_;
 		}
 
-		/// <summary>
-		/// 外部からの有効指定
-		/// </summary>
-		public Func<bool> IsEnable
+		public void FixValue()
 		{
-			get;
-			set;
-		}
+			if (binding == null) return;
 
-		/// <summary>
-		/// 他のクラスからデータ読み込み中
-		/// </summary>
-		public bool Reading
-		{
-			get;
-			private set;
-		}
-
-		/// <summary>
-		/// 他のクラスにデータ書き込み中
-		/// </summary>
-		public bool Writing
-		{
-			get;
-			private set;
-		}
-
-		/// <summary>
-		/// 再読込
-		/// </summary>
-		public void Reload()
-		{
-			if (Writing) return;
-
-			Reading = true;
-			Read();
-			Reading = false;
-		}
-
-		void Read()
-		{
-			if (!Reading) throw new Exception();
-
-			changed = false;
-			BackColor = Colors.EditedInt;
-
-			bool enable = binding != null;
-			if (IsEnable != null && enable)
-			{
-				enable = IsEnable();
-			}
-
-			if (enable)
-			{
-				Text = binding.Value.ToString();
-				Enabled = true;
-			}
-			else
-			{
-				Text = string.Empty;
-				Enabled = false;
-				BackColor = Colors.Disable;
-			}
-		}
-
-		void Write()
-		{
-			if (binding != null && changed)
-			{
-				int parsed = 0;
-				if (int.TryParse(Text, System.Globalization.NumberStyles.Integer, Setting.NFI, out parsed))
-				{
-					Writing = true;
-					if (EnableUndo)
-					{
-						binding.SetValue(parsed);
-					}
-					else
-					{
-						binding.SetValueDirectly(parsed);
-					}
-					Writing = false;
-				}
-			}
-		}
-
-		void OnChanged(object sender, ChangedValueEventArgs e)
-		{
-			if (Writing) return;
-
-			Reading = true;
-			Read();
-			Reading = false;
-		}
-
-		void Int_HandleCreated(object sender, EventArgs e)
-		{
-
-		}
-
-		void Int_HandleDestroyed(object sender, EventArgs e)
-		{
-			Binding = null;
-		}
-
-		void Int_TextChanged(object sender, EventArgs e)
-		{
-			if (Reading) return;
-
-			changed = true;
-			BackColor = Colors.EditingInt;
-		}
-
-		void Int_KeyDown(object sender, KeyEventArgs e)
-		{
-			if (e.KeyCode == Keys.Enter && changed)
-			{
-				// ビープ音防止
-				e.SuppressKeyPress = true;
-
-				Write();
-
-				Reading = true;
-				Read();
-				Reading = false;
-			}
-		}
-		
-		void Int_Enter(object sender, EventArgs e)
-		{
-			this.BeginInvoke(new MethodInvoker(() => this.SelectAll()));
-		}
-
-		void Int_Leave(object sender, EventArgs e)
-		{
-			Write();
-
-			Reading = true;
-			Read();
-			Reading = false;
-		}
-		
-		void _MouseWheel(int delta)
-		{
-			int wheel = (delta / 120);
 			if (EnableUndo)
 			{
-				Binding.SetValue(Binding.GetValue() + wheel * Binding.Step, true);
+				binding.SetValue(internalValue[0]);
 			}
 			else
 			{
-				Binding.SetValueDirectly(Binding.GetValue() + wheel * Binding.Step);
+				binding.SetValueDirectly(internalValue[0]);
 			}
-
-			Reload();
-			SelectAll();
-			changed = true;
 		}
 
-		protected override void WndProc(ref Message m)
+		public override void OnDisposed()
 		{
-			if (m.Msg == 0x020A)
+			FixValue();
+		}
+
+		public override void Update()
+		{
+			if (binding != null)
 			{
-				var pos = this.PointToClient(Cursor.Position);
-				if (0 <= pos.X &&
-					pos.X <= Size.Width &&
-					0 <= pos.Y &&
-					pos.Y <= Size.Height)
+				internalValue[0] = binding.Value;
+			}
+
+			valueChangingProp.Enable(binding);
+
+			if (Manager.NativeManager.DragInt(id, internalValue, binding.Step))
+			{
+				if (EnableUndo)
 				{
-					if ((int)m.WParam > 0)
-					{
-						_MouseWheel(120);
-					}
-					else if ((int)m.WParam < 0)
-					{
-						_MouseWheel(-120);
-					}
+					binding.SetValue(internalValue[0], isActive);
 				}
 				else
 				{
-					base.WndProc(ref m);
+					binding.SetValueDirectly(internalValue[0]);
 				}
 			}
-			else
+
+			var isActive_Current = Manager.NativeManager.IsItemActive();
+
+			if (isActive && !isActive_Current)
 			{
-				base.WndProc(ref m);
+				FixValue();
 			}
+
+			isActive = isActive_Current;
+
+			valueChangingProp.Disable();
 		}
 	}
 }

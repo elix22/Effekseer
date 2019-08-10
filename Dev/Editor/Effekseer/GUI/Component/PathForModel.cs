@@ -1,45 +1,31 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.ComponentModel;
-using System.Drawing;
-using System.Data;
 using System.Linq;
 using System.Text;
-using System.Windows.Forms;
+using System.Threading.Tasks;
+using System.IO;
 using System.Text.RegularExpressions;
 
 namespace Effekseer.GUI.Component
 {
-	public partial class PathForModel : UserControl
+	class PathForModel : Control, IParameterControl
 	{
-		public PathForModel()
-		{
-			InitializeComponent();
+		string id1 = "";
+		string id2 = "";
+		string id3 = "";
 
-			EnableUndo = true;
+		public string Label { get; set; } = string.Empty;
 
-			this.SuspendLayout();
-			Anchor = AnchorStyles.Left | AnchorStyles.Right;
-			this.ResumeLayout(false);
+		public string Description { get; set; } = string.Empty;
 
-			Read();
+		Data.Value.PathForModel binding = null;
 
-			HandleDestroyed += new EventHandler(Path_HandleDestroyed);
-			Core.OnAfterNew += Core_OnAfterNew;
-			Core.OnAfterSave += Core_OnAfterSave;
-			Core.OnAfterLoad += Core_OnAfterLoad;
-			Core.OnReload += Core_OnReload;
+		string filePath = string.Empty;
+		bool isHovered = false;
 
-			this.btn_load.Text = global::Effekseer.Properties.Resources.Load;
-			this.btn_delete.Text = global::Effekseer.Properties.Resources.Delete;
-			this.btn_reload.Text = global::Effekseer.Properties.Resources.ResetMaginification;
-		}
+		public bool EnableUndo { get; set; } = true;
 
-		Data.Value.Path binding = null;
-
-		public bool EnableUndo { get; set; }
-
-		public Data.Value.Path Binding
+		public Data.Value.PathForModel Binding
 		{
 			get
 			{
@@ -49,56 +35,121 @@ namespace Effekseer.GUI.Component
 			{
 				if (binding == value) return;
 
-				if (binding != null)
-				{
-					
-				}
-
 				binding = value;
-
-				if (binding != null)
-				{
-					
-				}
 
 				Read();
 			}
 		}
 
+		public PathForModel(string label = null)
+		{
+			if (label != null)
+			{
+				Label = label;
+			}
+
+			id1 = "###" + Manager.GetUniqueID().ToString();
+			id2 = "###" + Manager.GetUniqueID().ToString();
+			id3 = "###" + Manager.GetUniqueID().ToString();
+		}
+
 		public void SetBinding(object o)
 		{
-			var o_ = o as Data.Value.Path;
+			var o_ = o as Data.Value.PathForModel;
 			Binding = o_;
 		}
 
-		void Read()
+		public void FixValue()
 		{
-			if (binding != null)
+		}
+
+		public override void OnDisposed()
+		{
+		}
+
+		public override void OnDropped(string path, ref bool handle)
+		{
+			if (isHovered)
 			{
-				btn_load.Enabled = true;
-				lbl_file.Text = binding.GetRelativePath();
-			}
-			else
-			{
-				btn_load.Enabled = false;
-				lbl_file.Text = string.Empty;
+				if (CheckExtension(path))
+				{
+					binding.SetAbsolutePath(path);
+					Read();
+				}
+
+				handle = true;
 			}
 		}
 
-		private void btn_load_Click(object sender, EventArgs e)
+		public override void Update()
+		{
+			isHovered = false;
+
+			if (binding == null) return;
+			
+			float buttonSizeX = Manager.NativeManager.GetTextLineHeightWithSpacing() * 2;
+
+			if (Manager.NativeManager.Button(Resources.GetString("Load") + id1, buttonSizeX))
+			{
+				btn_load_Click();
+			}
+
+			isHovered = isHovered || Manager.NativeManager.IsItemHovered();
+
+			Manager.NativeManager.SameLine();
+
+			Manager.NativeManager.Text(filePath);
+
+			if (Manager.NativeManager.IsItemHovered())
+			{
+				Manager.NativeManager.SetTooltip(filePath);
+			}
+
+			isHovered = isHovered || Manager.NativeManager.IsItemHovered();
+			
+			if (filePath != string.Empty)
+			{
+				if (Manager.NativeManager.Button(Resources.GetString("Delete") + id2, buttonSizeX))
+				{
+					btn_delete_Click();
+				}
+
+				Manager.NativeManager.SameLine();
+
+				isHovered = isHovered || Manager.NativeManager.IsItemHovered();
+
+				if (Manager.NativeManager.Button(Resources.GetString("ResetMaginification") + id3, buttonSizeX * 2))
+				{
+					btn_reload_Click();
+				}
+
+				isHovered = isHovered || Manager.NativeManager.IsItemHovered();
+			}
+		}
+
+		private void btn_load_Click()
 		{
 			if (binding == null) return;
 
-			OpenFileDialog ofd = new OpenFileDialog();
+			var filter = Resources.GetString("ModelFilter");
+			var result = swig.FileDialog.OpenDialog(filter, System.IO.Directory.GetCurrentDirectory());
 
-			ofd.InitialDirectory = System.IO.Directory.GetCurrentDirectory();
-			ofd.Filter = binding.Filter;
-			ofd.FilterIndex = 2;
-			ofd.Multiselect = false;
-
-			if (ofd.ShowDialog() == DialogResult.OK)
+			if (!string.IsNullOrEmpty(result))
 			{
+				var filepath = result;
+				/*
+				OpenFileDialog ofd = new OpenFileDialog();
+
+				ofd.InitialDirectory = System.IO.Directory.GetCurrentDirectory();
+				ofd.Filter = binding.Filter;
+				ofd.FilterIndex = 2;
+				ofd.Multiselect = false;
+
+				if (ofd.ShowDialog() == DialogResult.OK)
+				{
 				var filepath = ofd.FileName;
+					*/
+
 				LoadFile(filepath, false);
 			}
 			else
@@ -109,88 +160,7 @@ namespace Effekseer.GUI.Component
 			Read();
 		}
 
-		void Core_OnAfterLoad(object sender, EventArgs e)
-		{
-			Read();
-		}
-
-		void Core_OnAfterSave(object sender, EventArgs e)
-		{
-			Read();
-		}
-
-		void Core_OnReload(object sender, EventArgs e)
-		{
-			Read();
-		}
-
-		void Core_OnAfterNew(object sender, EventArgs e)
-		{
-			Read();
-		}
-
-		void Path_HandleDestroyed(object sender, EventArgs e)
-		{
-			Binding = null;
-			Core.OnAfterNew -= Core_OnAfterNew;
-			Core.OnAfterSave -= Core_OnAfterSave;
-			Core.OnAfterLoad -= Core_OnAfterLoad;
-			Core.OnReload -= Core_OnReload;
-		}
-		
-		private bool CheckExtension(string path)
-		{
-			Match match = Regex.Match(binding.Filter, "\\*(\\.[a-zA-Z0-9]*)");
-			string extension = match.Value.Substring(1);
-			return System.IO.Path.GetExtension(path) == extension;
-		}
-
-		private string GetDragFile(DragEventArgs e)
-		{
-			{	// FileViewerからのDrag
-				var fileItem = e.Data.GetData(typeof(DockFileViewer.FileItem)) as DockFileViewer.FileItem;
-				if (fileItem != null) {
-					return fileItem.FilePath;
-				}
-			}
-
-			{	// ExplorerからのDrag
-				var dropFiles = (string[])e.Data.GetData(DataFormats.FileDrop);
-				if (dropFiles != null && dropFiles.Length == 1) {
-					return dropFiles[0];
-				}
-			}
-			return null;
-		}
-
-		private void Path_DragEnter(object sender, DragEventArgs e)
-		{
-			string filePath = GetDragFile(e);
-			
-			if (filePath != null) {
-				if (CheckExtension(filePath)) {
-					e.Effect = DragDropEffects.Link;
-				}
-			}
-		}
-
-		private void Path_DragLeave(object sender, EventArgs e)
-		{
-		}
-
-		private void Path_DragDrop(object sender, DragEventArgs e)
-		{
-			string filePath = GetDragFile(e);
-			
-			if (filePath != null) {
-				if (CheckExtension(filePath)) {
-					binding.SetAbsolutePath(filePath);
-					Read();
-				}
-			}
-		}
-
-		private void btn_delete_Click(object sender, EventArgs e)
+		private void btn_delete_Click()
 		{
 			if (binding == null) return;
 			binding.SetAbsolutePath(string.Empty);
@@ -198,7 +168,7 @@ namespace Effekseer.GUI.Component
 			Read();
 		}
 
-		private void btn_reload_Click(object sender, EventArgs e)
+		private void btn_reload_Click()
 		{
 			if (binding == null) return;
 			var filepath = binding.AbsolutePath;
@@ -206,6 +176,24 @@ namespace Effekseer.GUI.Component
 			LoadFile(filepath, true);
 
 			Read();
+		}
+
+		void Read()
+		{
+			if (binding != null)
+			{
+				filePath = binding.GetRelativePath();
+			}
+			else
+			{
+				filePath = string.Empty;
+			}
+		}
+
+		private bool CheckExtension(string path)
+		{
+			var filters = binding.Filter.Split(',');
+			return filters.Any(_ => "." + _ == System.IO.Path.GetExtension(path).ToLower());
 		}
 
 		void LoadFile(string filepath, bool isReloading)
@@ -219,7 +207,7 @@ namespace Effekseer.GUI.Component
 			Effekseer.Utl.ModelInformation modelInfo = new Utl.ModelInformation();
 			if (modelInfo.Load(newFilepath))
 			{
-				if(!isReloading)
+				if (!isReloading)
 				{
 					binding.SetAbsolutePath(filepath);
 					System.IO.Directory.SetCurrentDirectory(System.IO.Path.GetDirectoryName(filepath));
@@ -242,82 +230,193 @@ namespace Effekseer.GUI.Component
 				}
 			}
 
-			Dialog.OpenModelDialog omd = new Dialog.OpenModelDialog(modelInfo.Scale);
+			Dialog.OpenModel omd = new Dialog.OpenModel(modelInfo.Scale);
 
 			if (ext == "fbx" || ext == "mqo")
 			{
-				omd.ShowDialog();
-				if (!omd.OK) return;
+				omd.Show("");
+			}
+			else
+			{
+				binding.SetAbsolutePath(filepath);
+
+				System.IO.Directory.SetCurrentDirectory(System.IO.Path.GetDirectoryName(filepath));
+
+				Manager.Viewer.Reload(true);
 			}
 
-			if (ext == "fbx")
+			omd.OnOK = () =>
 			{
-				var oldFilepath = filepath;
-				bool doGenerate = false;
 
-				if (!System.IO.File.Exists(newFilepath) ||
-					System.IO.File.GetLastWriteTime(oldFilepath) != System.IO.File.GetLastWriteTime(newFilepath) ||
-					modelInfo.Scale != omd.Magnification)
+				if (ext == "fbx")
 				{
-					doGenerate = true;
-				}
+					var oldFilepath = filepath;
+					bool doGenerate = false;
 
-				if (doGenerate)
-				{
-					string appPath = System.Reflection.Assembly.GetExecutingAssembly().Location;
-					string converterPath = System.IO.Path.GetDirectoryName(appPath) + "/tools/fbxToEffekseerModelConverter";
-
-					System.Diagnostics.ProcessStartInfo info = new System.Diagnostics.ProcessStartInfo();
-					info.FileName = converterPath;
-					info.Arguments = "\"" + oldFilepath + "\" \"" + newFilepath + "\" -scale " + omd.Magnification.ToString();
-
-					System.Diagnostics.Process p = System.Diagnostics.Process.Start(info);
-					p.WaitForExit();
-					p.Dispose();
-
-					if (System.IO.File.Exists(newFilepath))
+					if (!System.IO.File.Exists(newFilepath) ||
+						System.IO.File.GetLastWriteTime(oldFilepath) != System.IO.File.GetLastWriteTime(newFilepath) ||
+						modelInfo.Scale != omd.Magnification)
 					{
-						System.IO.File.SetLastWriteTime(newFilepath, System.IO.File.GetLastWriteTime(oldFilepath));
+						doGenerate = true;
+					}
+
+					if (doGenerate)
+					{
+						string converterPath = Manager.GetEntryDirectory() + "/tools/fbxToEffekseerModelConverter";
+
+						// japanese file path is not supported.
+						try
+						{
+							string tempFilePath = Path.GetTempPath() + System.IO.Path.GetFileName(filepath);
+							System.IO.File.Copy(oldFilepath, tempFilePath);
+							oldFilepath = tempFilePath;
+						}
+						catch
+						{
+
+						}
+
+
+						System.Diagnostics.ProcessStartInfo info = new System.Diagnostics.ProcessStartInfo();
+
+						var os = System.Environment.OSVersion;
+						if (os.Platform == PlatformID.Win32NT ||
+							os.Platform == PlatformID.Win32S ||
+							os.Platform == PlatformID.Win32Windows ||
+							os.Platform == PlatformID.WinCE)
+						{
+							converterPath += ".exe";
+						}
+
+						info.FileName = converterPath;
+
+						info.Arguments = "\"" + oldFilepath + "\" \"" + newFilepath + "\" -scale " + omd.Magnification.ToString();
+
+						if (!System.IO.File.Exists(oldFilepath))
+						{
+							var msg = oldFilepath + " is not found.";
+
+							swig.GUIManager.show(msg, "Error", swig.DialogStyle.Error, swig.DialogButtons.OK);
+							return;
+						}
+
+						if (!System.IO.File.Exists(converterPath))
+						{
+							var msg = converterPath + " is not found.";
+
+							swig.GUIManager.show(msg, "Error", swig.DialogStyle.Error, swig.DialogButtons.OK);
+							return;
+						}
+
+						info.UseShellExecute = false;
+						info.RedirectStandardOutput = true;
+						info.RedirectStandardInput = false;
+						info.CreateNoWindow = true;
+
+						System.Diagnostics.Process p = System.Diagnostics.Process.Start(info);
+
+						string outputs = p.StandardOutput.ReadToEnd();
+
+						p.WaitForExit();
+						p.Dispose();
+						
+
+						if (System.IO.File.Exists(newFilepath))
+						{
+							System.IO.File.SetLastWriteTime(newFilepath, System.IO.File.GetLastWriteTime(oldFilepath));
+						}
+						else
+						{
+							var msg =" Failed to load. \n" + outputs;
+
+							swig.GUIManager.show(msg, "Error", swig.DialogStyle.Error, swig.DialogButtons.OK);
+						}
+
+						try
+						{
+							string tempFilePath = Path.GetTempPath() + System.IO.Path.GetFileName(filepath);
+							System.IO.File.Delete(tempFilePath);
+						}
+						catch
+						{
+
+						}
 					}
 				}
-			}
 
-			if (ext == "mqo")
-			{
-				var oldFilepath = filepath;
-
-				bool doGenerate = false;
-
-				if (!System.IO.File.Exists(newFilepath) ||
-					System.IO.File.GetLastWriteTime(oldFilepath) != System.IO.File.GetLastWriteTime(newFilepath) ||
-					modelInfo.Scale != omd.Magnification)
+				if (ext == "mqo")
 				{
-					doGenerate = true;
-				}
+					var oldFilepath = filepath;
 
-				if (doGenerate)
-				{
-					string appPath = System.Reflection.Assembly.GetExecutingAssembly().Location;
-					string converterPath = System.IO.Path.GetDirectoryName(appPath) + "/tools/mqoToEffekseerModelConverter";
+					bool doGenerate = false;
 
-					System.Diagnostics.ProcessStartInfo info = new System.Diagnostics.ProcessStartInfo();
-					info.FileName = converterPath;
-					info.Arguments = "\"" + oldFilepath + "\" \"" + newFilepath + "\" -scale " + omd.Magnification.ToString();
-
-					System.Diagnostics.Process p = System.Diagnostics.Process.Start(info);
-					p.WaitForExit();
-					p.Dispose();
-
-					if (System.IO.File.Exists(newFilepath))
+					if (!System.IO.File.Exists(newFilepath) ||
+						System.IO.File.GetLastWriteTime(oldFilepath) != System.IO.File.GetLastWriteTime(newFilepath) ||
+						modelInfo.Scale != omd.Magnification)
 					{
-						System.IO.File.SetLastWriteTime(newFilepath, System.IO.File.GetLastWriteTime(oldFilepath));
+						doGenerate = true;
+					}
+
+					if (doGenerate)
+					{
+						string converterPath = Manager.GetEntryDirectory() + "/tools/mqoToEffekseerModelConverter";
+
+						// japanese file path is not supported.
+						try
+						{
+							string tempFilePath = Path.GetTempPath() + System.IO.Path.GetFileName(filepath);
+							System.IO.File.Copy(oldFilepath, tempFilePath);
+							oldFilepath = tempFilePath;
+						}
+						catch
+						{
+
+						}
+
+						System.Diagnostics.ProcessStartInfo info = new System.Diagnostics.ProcessStartInfo();
+
+						var os = System.Environment.OSVersion;
+						if (os.Platform == PlatformID.Win32NT ||
+							os.Platform == PlatformID.Win32S ||
+							os.Platform == PlatformID.Win32Windows ||
+							os.Platform == PlatformID.WinCE)
+						{
+							converterPath += ".exe";
+						}
+
+						info.FileName = converterPath;
+						info.Arguments = "\"" + oldFilepath + "\" \"" + newFilepath + "\" -scale " + omd.Magnification.ToString();
+
+						System.Diagnostics.Process p = System.Diagnostics.Process.Start(info);
+						p.WaitForExit();
+						p.Dispose();
+
+						if (System.IO.File.Exists(newFilepath))
+						{
+							System.IO.File.SetLastWriteTime(newFilepath, System.IO.File.GetLastWriteTime(oldFilepath));
+						}
+
+						try
+						{
+							string tempFilePath = Path.GetTempPath() + System.IO.Path.GetFileName(filepath);
+							System.IO.File.Delete(tempFilePath);
+						}
+						catch
+						{
+
+						}
 					}
 				}
-			}
 
-			binding.SetAbsolutePath(filepath);
+				binding.SetAbsolutePath(filepath);
 
-			System.IO.Directory.SetCurrentDirectory(System.IO.Path.GetDirectoryName(filepath));
+				System.IO.Directory.SetCurrentDirectory(System.IO.Path.GetDirectoryName(filepath));
+
+				Manager.Viewer.Reload(true);
+
+                Read();
+			};
 		}
+
 	}
 }

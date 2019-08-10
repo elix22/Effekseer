@@ -1,28 +1,22 @@
-# Debug Release‚ÉŒÀ’è
+ï»¿# Debug Releaseã«é™å®š
 set(CMAKE_CONFIGURATION_TYPES Debug Release CACHE TYPE INTERNAL FORCE )
 
-# ƒvƒƒWƒFƒNƒg–¼
+# ãƒ—ãƒ­ã‚¸ã‚§ã‚¯ãƒˆå
 project(Test)
 
-# CMake ƒo[ƒWƒ‡ƒ“ƒ`ƒFƒbƒN
+# CMake ãƒãƒ¼ã‚¸ãƒ§ãƒ³ãƒã‚§ãƒƒã‚¯
 cmake_minimum_required(VERSION 2.8)
 
-# ƒRƒ“ƒpƒCƒ‹İ’è
-if (MSVC)
-	# “Á‚É‰½‚à
-else()
-	set(CMAKE_CXX_FLAGS "-std=c++11" ${CMAKE_CXX_FLAGS})
-endif()
-
-# ƒ\[ƒXƒR[ƒhİ’è
-set(effekseer_src
+# ã‚½ãƒ¼ã‚¹ã‚³ãƒ¼ãƒ‰è¨­å®š
+set(effekseer_test_src
 	graphics_gl.cpp
-	sound_al.cpp
 #	window.cpp
 	main.cpp)
+	
 
-# ƒCƒ“ƒNƒ‹[ƒh‚Ìİ’è
+# ã‚¤ãƒ³ã‚¯ãƒ«ãƒ¼ãƒ‰ã®è¨­å®š
 include_directories(
+	${EFK_THIRDPARTY_INCLUDES}
 	../Effekseer/
 	../EffekseerRendererGL/
 	../EffekseerSoundAL/
@@ -34,26 +28,24 @@ link_directories(${PROJECT_SOURCE_DIR}/../lib/)
 set(common_lib)
 set(common_inc)
 
-list(APPEND common_lib Effekseer )
-list(APPEND common_lib EffekseerRendererGL )
-list(APPEND common_lib EffekseerSoundAL )
+list(APPEND common_lib effekseer )
+list(APPEND common_lib effekseer_renderer_gl )
 
-list(APPEND common_lib glfw3 )
+if (USE_XAUDIO2)
+	list(APPEND effekseer_test_src sound_xaudio2.cpp)
+	list(APPEND common_lib EffekseerSoundXAudio2)
+endif()
+
+if (USE_OPENAL)
+	list(APPEND effekseer_test_src sound_al.cpp)
+	list(APPEND common_lib EffekseerSoundAL)
+endif()
 
 if (MSVC)
 
 else()
-	list(APPEND common_lib GLEW )
-
-	find_package(PNG REQUIRED)
-	list(APPEND common_lib ${PNG_LIBRARY})
-
 	find_package(Threads REQUIRED)
 	list(APPEND common_lib ${CMAKE_THREAD_LIBS_INIT})
-
-	find_package(X11 REQUIRED)
-	list(APPEND common_inc ${X11_INCLUDE_DIR})
-	list(APPEND common_lib ${X11_LIBRARIES})
 
 	find_package(OpenGL)
 	list(APPEND common_inc ${OPENGL_INCLUDE_DIR})
@@ -77,33 +69,49 @@ else()
 			${IOKIT_FRAMEWORK}
 			${CORE_FOUNDATION_FRAMEWORK}
 			${CORE_VIDEO_FRAMEWORK})
+	else()
+		list(APPEND common_lib GLEW )
+		find_package(X11 REQUIRED)
+		list(APPEND common_inc ${X11_INCLUDE_DIR})
+		list(APPEND common_lib ${X11_LIBRARIES})
 	endif()
 
 endif()
 
-# ƒRƒ“ƒpƒCƒ‹æ‚ğ’Ç‰Á
-add_executable( effekseer ${effekseer_src} )
-target_link_libraries(effekseer ${common_lib}) 
+# ã‚³ãƒ³ãƒ‘ã‚¤ãƒ«å…ˆã‚’è¿½åŠ 
+add_executable(effekseer_test ${effekseer_test_src} )
+target_link_directories(effekseer_test PRIVATE ${EFK_THIRDPARTY_LIBRARY_DIRECTORIES})
+target_link_libraries(
+	effekseer_test
+	${common_lib}
+	debug glfw3d
+	debug OpenSoundMixerd
+	optimized glfw3
+	optimized OpenSoundMixer
+)
 
-# ƒtƒ‰ƒOˆ—
+# ãƒ•ãƒ©ã‚°å‡¦ç†
 add_definitions(-D__EFFEKSEER_RENDERER_GL_GLEW__)
 
 add_definitions(-D__EFFEKSEER_RENDERER_INTERNAL_LOADER__)
+
+# FIXME: Mixed measures with sln. for VS2015
+add_definitions(-D__EFFEKSEER_TEST_BUILD_AS_CMAKE__)
 
 if (APPLE)
 	add_definitions(-D__EFFEKSEER_RENDERER_GL3__)
 endif()
 
-# o—Íæ‚Ìİ’è
+# å‡ºåŠ›å…ˆã®è¨­å®š
 if (MSVC)
-set_target_properties(effekseer PROPERTIES OUTPUT_NAME_DEBUG "Test" )
-set_target_properties(effekseer PROPERTIES OUTPUT_NAME_RELEASE "Test" )
+set_target_properties(effekseer_test PROPERTIES OUTPUT_NAME_DEBUG "Test" )
+set_target_properties(effekseer_test PROPERTIES OUTPUT_NAME_RELEASE "Test" )
 else()
-set_target_properties(effekseer PROPERTIES OUTPUT_NAME "Test" )
+set_target_properties(effekseer_test PROPERTIES OUTPUT_NAME "Test" )
 endif()
 
 install(
-	TARGETS effekseer
+	TARGETS effekseer_test
 	RUNTIME DESTINATION bin
 	ARCHIVE DESTINATION bin
 	LIBRARY DESTINATION bin)

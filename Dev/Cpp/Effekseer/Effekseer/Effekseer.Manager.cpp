@@ -46,9 +46,11 @@ static int64_t GetTime(void)
 	return std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
 }
 
-//----------------------------------------------------------------------------------
-//
-//----------------------------------------------------------------------------------
+Manager::DrawParameter::DrawParameter()
+{ 
+	CameraCullingMask = 1; 
+}
+
 Manager* Manager::Create( int instance_max, bool autoFlip )
 {
 	return new ManagerImplemented( instance_max, autoFlip );
@@ -188,29 +190,21 @@ void ManagerImplemented::GCDrawSet( bool isRemovingManager )
 					if( pRootInstance && pRootInstance->GetState() == INSTANCE_STATE_ACTIVE )
 					{
 						int maxcreate_count = 0;
-						for( int i = 0; i < Min(pRootInstance->m_pEffectNode->GetChildrenCount(), Instance::ChildrenMax); i++ )
+						bool canRemoved = true;
+						for( int i = 0; i < pRootInstance->m_pEffectNode->GetChildrenCount(); i++ )
 						{
 							auto child = (EffectNodeImplemented*) pRootInstance->m_pEffectNode->GetChild(i);
 
-							float last_generation_time = 
-								child->CommonValues.GenerationTime.max *
-								(child->CommonValues.MaxGeneration - 1) +
-								child->CommonValues.GenerationTimeOffset.max +
-								1.0f;
-
-							if( pRootInstance->m_LivingTime >= last_generation_time )
+							if (pRootInstance->maxGenerationChildrenCount[i] > pRootInstance->m_generatedChildrenCount[i])
 							{
-								maxcreate_count++;
-							}
-							else
-							{
+								canRemoved = false;
 								break;
 							}
 						}
 					
-						if( maxcreate_count == pRootInstance->m_pEffectNode->GetChildrenCount() )
+						if (canRemoved)
 						{
-							// 音が再生中でないとき
+							// when a sound is not playing.
 							if (!GetSoundPlayer() || !GetSoundPlayer()->CheckPlayingTag(draw_set.GlobalPointer))
 							{
 								isRemoving = true;
@@ -719,6 +713,10 @@ void ManagerImplemented::SetModelLoader( ModelLoader* modelLoader )
 	m_setting->SetModelLoader(modelLoader);
 }
 
+MaterialLoader* ManagerImplemented::GetMaterialLoader() { return m_setting->GetMaterialLoader(); }
+
+void ManagerImplemented::SetMaterialLoader(MaterialLoader* loader) { m_setting->SetMaterialLoader(loader); }
+
 //----------------------------------------------------------------------------------
 //
 //----------------------------------------------------------------------------------
@@ -1046,6 +1044,37 @@ void ManagerImplemented::SetTargetLocation( Handle handle, const Vector3D& locat
 	}
 }
 
+float ManagerImplemented::GetDynamicInput(Handle handle, int32_t index) 
+{
+	auto it = m_DrawSets.find(handle);
+	if (it != m_DrawSets.end())
+	{
+		auto globalPtr = it->second.GlobalPointer;
+		if (index < 0 || globalPtr->dynamicInputParameters.size() <= index)
+			return 0.0f;
+
+		return globalPtr->dynamicInputParameters[index];
+	}
+
+	return 0.0f;
+}
+
+void ManagerImplemented::SetDynamicInput(Handle handle, int32_t index, float value) {
+	if (m_DrawSets.count(handle) > 0)
+	{
+		DrawSet& drawSet = m_DrawSets[handle];
+
+		InstanceGlobal* instanceGlobal = drawSet.GlobalPointer;
+
+		if (index < 0 || instanceGlobal->dynamicInputParameters.size() <= index)
+			return;
+
+		instanceGlobal->dynamicInputParameters[index] = value;
+
+		drawSet.IsParameterChanged = true;
+	}
+}
+
 //----------------------------------------------------------------------------------
 //
 //----------------------------------------------------------------------------------
@@ -1126,6 +1155,23 @@ void ManagerImplemented::SetPausedToAllEffects(bool paused)
 	{
 		(*it).second.IsPaused = paused;
 		++it;
+	}
+}
+
+int ManagerImplemented::GetLayer(Handle handle)
+{
+	if (m_DrawSets.count(handle) > 0)
+	{
+		return m_DrawSets[handle].Layer;
+	}
+	return 0;
+}
+
+void ManagerImplemented::SetLayer(Handle handle, int32_t layer)
+{
+	if (m_DrawSets.count(handle) > 0)
+	{
+		m_DrawSets[handle].Layer = layer;
 	}
 }
 
@@ -1377,6 +1423,29 @@ void ManagerImplemented::UpdateHandle( Handle handle, float deltaFrame )
 //----------------------------------------------------------------------------------
 void ManagerImplemented::UpdateHandle( DrawSet& drawSet, float deltaFrame )
 {
+	// calculate dynamic parameters
+	auto e = static_cast<EffectImplemented*>(drawSet.ParameterPointer);
+	assert(e != nullptr);
+	assert(drawSet.GlobalPointer->dynamicEqResults.size() >= e->dynamicEquation.size());
+
+	std::array<float, 1> globals;
+	globals[0] = drawSet.GlobalPointer->GetUpdatedFrame() / 60.0f;
+
+	for (size_t i = 0; i < e->dynamicEquation.size(); i++)
+	{
+		if (e->dynamicEquation[i].GetRunningPhase() != InternalScript::RunningPhaseType::Global)
+			continue;
+
+		drawSet.GlobalPointer->dynamicEqResults[i] =
+			e->dynamicEquation[i].Execute(
+				drawSet.GlobalPointer->dynamicInputParameters,
+				globals,
+				std::array<float, 5>(),
+				InstanceGlobal::Rand, 
+				InstanceGlobal::RandSeed, 
+				drawSet.GlobalPointer);
+	}
+
 	if (!drawSet.IsPreupdated)
 	{
 		Preupdate(drawSet);
@@ -1412,10 +1481,26 @@ void ManagerImplemented::Preupdate(DrawSet& drawSet)
 	drawSet.IsPreupdated = true;
 }
 
-//----------------------------------------------------------------------------------
-//
-//----------------------------------------------------------------------------------
-void ManagerImplemented::Draw()
+bool ManagerImplemented::IsClippedWithDepth(DrawSet& drawSet, InstanceContainer* container, const Manager::DrawParameter& drawParameter) {
+	
+	// don't use this parameter
+	if (container->m_pEffectNode->DepthValues.DepthParameter.DepthClipping > FLT_MAX / 10)
+		return false;
+
+	Vector3D pos;
+	drawSet.GlobalMatrix.GetTranslation(pos);
+	auto distance = Vector3D::Dot(drawParameter.CameraPosition - pos, drawParameter.CameraDirection);
+	if (container->m_pEffectNode->DepthValues.DepthParameter.DepthClipping < distance)
+	{
+		return true;
+	}
+	else
+	{
+		return false;
+	}
+}
+
+void ManagerImplemented::Draw(const Manager::DrawParameter& drawParameter)
 {
 	std::lock_guard<std::mutex> lock(m_renderingMutex);
 
@@ -1428,12 +1513,15 @@ void ManagerImplemented::Draw()
 		{
 			DrawSet& drawSet = *m_culledObjects[i];
 
-			if( drawSet.IsShown && drawSet.IsAutoDrawing )
+			if( drawSet.IsShown && drawSet.IsAutoDrawing && ((drawParameter.CameraCullingMask & (1 << drawSet.Layer)) != 0))
 			{
 				if (drawSet.GlobalPointer->RenderedInstanceContainers.size() > 0)
 				{
 					for (auto& c : drawSet.GlobalPointer->RenderedInstanceContainers)
 					{
+						if (IsClippedWithDepth(drawSet, c, drawParameter))
+							continue;
+
 						c->Draw(false);
 					}
 				}
@@ -1450,12 +1538,15 @@ void ManagerImplemented::Draw()
 		{
 			DrawSet& drawSet = m_renderingDrawSets[i];
 
-			if( drawSet.IsShown && drawSet.IsAutoDrawing )
+			if( drawSet.IsShown && drawSet.IsAutoDrawing && ((drawParameter.CameraCullingMask & (1 << drawSet.Layer)) != 0))
 			{
 				if (drawSet.GlobalPointer->RenderedInstanceContainers.size() > 0)
 				{
 					for (auto& c : drawSet.GlobalPointer->RenderedInstanceContainers)
 					{
+						if (IsClippedWithDepth(drawSet, c, drawParameter))
+							continue;
+
 						c->Draw(false);
 					}
 				}
@@ -1471,7 +1562,7 @@ void ManagerImplemented::Draw()
 	m_drawTime = (int)(Effekseer::GetTime() - beginTime);
 }
 
-void ManagerImplemented::DrawBack()
+void ManagerImplemented::DrawBack(const Manager::DrawParameter& drawParameter)
 {
 	std::lock_guard<std::mutex> lock(m_renderingMutex);
 	
@@ -1484,11 +1575,14 @@ void ManagerImplemented::DrawBack()
 		{
 			DrawSet& drawSet = *m_culledObjects[i];
 
-			if (drawSet.IsShown && drawSet.IsAutoDrawing)
+			if (drawSet.IsShown && drawSet.IsAutoDrawing && ((drawParameter.CameraCullingMask & (1 << drawSet.Layer)) != 0))
 			{
 				auto e = (EffectImplemented*)drawSet.ParameterPointer;
 				for (int32_t j = 0; j < e->renderingNodesThreshold; j++)
 				{
+					if (IsClippedWithDepth(drawSet, drawSet.GlobalPointer->RenderedInstanceContainers[j], drawParameter))
+						continue;
+
 					drawSet.GlobalPointer->RenderedInstanceContainers[j]->Draw(false);
 				}
 			}
@@ -1500,11 +1594,14 @@ void ManagerImplemented::DrawBack()
 		{
 			DrawSet& drawSet = m_renderingDrawSets[i];
 
-			if (drawSet.IsShown && drawSet.IsAutoDrawing)
+			if (drawSet.IsShown && drawSet.IsAutoDrawing && ((drawParameter.CameraCullingMask & (1 << drawSet.Layer)) != 0))
 			{
 				auto e = (EffectImplemented*)drawSet.ParameterPointer;
 				for (int32_t j = 0; j < e->renderingNodesThreshold; j++)
 				{
+					if (IsClippedWithDepth(drawSet, drawSet.GlobalPointer->RenderedInstanceContainers[j], drawParameter))
+						continue;
+
 					drawSet.GlobalPointer->RenderedInstanceContainers[j]->Draw(false);
 				}
 			}
@@ -1515,7 +1612,7 @@ void ManagerImplemented::DrawBack()
 	m_drawTime = (int)(Effekseer::GetTime() - beginTime);
 }
 
-void ManagerImplemented::DrawFront()
+void ManagerImplemented::DrawFront(const Manager::DrawParameter& drawParameter)
 {
 	std::lock_guard<std::mutex> lock(m_renderingMutex);
 
@@ -1528,13 +1625,16 @@ void ManagerImplemented::DrawFront()
 		{
 			DrawSet& drawSet = *m_culledObjects[i];
 
-			if (drawSet.IsShown && drawSet.IsAutoDrawing)
+			if (drawSet.IsShown && drawSet.IsAutoDrawing && ((drawParameter.CameraCullingMask & (1 << drawSet.Layer)) != 0))
 			{
 				if (drawSet.GlobalPointer->RenderedInstanceContainers.size() > 0)
 				{
 					auto e = (EffectImplemented*)drawSet.ParameterPointer;
 					for (size_t j = e->renderingNodesThreshold; j < drawSet.GlobalPointer->RenderedInstanceContainers.size(); j++)
 					{
+						if (IsClippedWithDepth(drawSet, drawSet.GlobalPointer->RenderedInstanceContainers[j], drawParameter))
+							continue;
+
 						drawSet.GlobalPointer->RenderedInstanceContainers[j]->Draw(false);
 					}
 				}
@@ -1551,13 +1651,16 @@ void ManagerImplemented::DrawFront()
 		{
 			DrawSet& drawSet = m_renderingDrawSets[i];
 
-			if (drawSet.IsShown && drawSet.IsAutoDrawing)
+			if (drawSet.IsShown && drawSet.IsAutoDrawing && ((drawParameter.CameraCullingMask & (1 << drawSet.Layer)) != 0))
 			{
 				if (drawSet.GlobalPointer->RenderedInstanceContainers.size() > 0)
 				{
 					auto e = (EffectImplemented*)drawSet.ParameterPointer;
 					for (size_t j = e->renderingNodesThreshold; j < drawSet.GlobalPointer->RenderedInstanceContainers.size(); j++)
 					{
+						if (IsClippedWithDepth(drawSet, drawSet.GlobalPointer->RenderedInstanceContainers[j], drawParameter))
+							continue;
+
 						drawSet.GlobalPointer->RenderedInstanceContainers[j]->Draw(false);
 					}
 				}
@@ -1586,7 +1689,7 @@ Handle ManagerImplemented::Play(Effect* effect, const Vector3D& position, int32_
 
 	// Create root
 	InstanceGlobal* pGlobal = new InstanceGlobal();
-
+	
 	if (e->m_defaultRandomSeed >= 0)
 	{
 		pGlobal->SetSeed(e->m_defaultRandomSeed);
@@ -1595,6 +1698,8 @@ Handle ManagerImplemented::Play(Effect* effect, const Vector3D& position, int32_
 	{
 		pGlobal->SetSeed(GetRandFunc()());
 	}
+
+	pGlobal->dynamicInputParameters = e->defaultDynamicInputs;
 
 	pGlobal->RenderedInstanceContainers.resize(e->renderingNodesCount);
 	for (size_t i = 0; i < pGlobal->RenderedInstanceContainers.size(); i++)
@@ -1619,7 +1724,20 @@ Handle ManagerImplemented::Play(Effect* effect, const Vector3D& position, int32_
 	return handle;
 }
 
-void ManagerImplemented::DrawHandle( Handle handle )
+int ManagerImplemented::GetCameraCullingMaskToShowAllEffects()
+{
+	int mask = 0;
+
+	for (auto& ds : m_DrawSets)
+	{
+		auto layer = 1 << ds.second.Layer;
+		mask |= layer;
+	}
+
+	return mask;
+}
+
+void ManagerImplemented::DrawHandle(Handle handle, const Manager::DrawParameter& drawParameter)
 {
 	std::lock_guard<std::mutex> lock(m_renderingMutex);
 
@@ -1638,6 +1756,9 @@ void ManagerImplemented::DrawHandle( Handle handle )
 					{
 						for (auto& c : drawSet.GlobalPointer->RenderedInstanceContainers)
 						{
+							if (IsClippedWithDepth(drawSet, c, drawParameter))
+								continue;
+
 							c->Draw(false);
 						}
 					}
@@ -1656,6 +1777,9 @@ void ManagerImplemented::DrawHandle( Handle handle )
 				{
 					for (auto& c : drawSet.GlobalPointer->RenderedInstanceContainers)
 					{
+						if (IsClippedWithDepth(drawSet, c, drawParameter))
+							continue;
+
 						c->Draw(false);
 					}
 				}
@@ -1668,7 +1792,7 @@ void ManagerImplemented::DrawHandle( Handle handle )
 	}
 }
 
-void ManagerImplemented::DrawHandleBack(Handle handle)
+void ManagerImplemented::DrawHandleBack(Handle handle, const Manager::DrawParameter& drawParameter)
 {
 	std::lock_guard<std::mutex> lock(m_renderingMutex);
 
@@ -1686,6 +1810,9 @@ void ManagerImplemented::DrawHandleBack(Handle handle)
 					auto e = (EffectImplemented*)drawSet.ParameterPointer;
 					for (int32_t i = 0; i < e->renderingNodesThreshold; i++)
 					{
+						if (IsClippedWithDepth(drawSet, drawSet.GlobalPointer->RenderedInstanceContainers[i], drawParameter))
+							continue;
+
 						drawSet.GlobalPointer->RenderedInstanceContainers[i]->Draw(false);
 					}
 				}
@@ -1698,6 +1825,9 @@ void ManagerImplemented::DrawHandleBack(Handle handle)
 				auto e = (EffectImplemented*)drawSet.ParameterPointer;
 				for (int32_t i = 0; i < e->renderingNodesThreshold; i++)
 				{
+					if (IsClippedWithDepth(drawSet, drawSet.GlobalPointer->RenderedInstanceContainers[i], drawParameter))
+						continue;
+
 					drawSet.GlobalPointer->RenderedInstanceContainers[i]->Draw(false);
 				}
 			}
@@ -1705,7 +1835,7 @@ void ManagerImplemented::DrawHandleBack(Handle handle)
 	}
 }
 
-void ManagerImplemented::DrawHandleFront(Handle handle)
+void ManagerImplemented::DrawHandleFront(Handle handle, const Manager::DrawParameter& drawParameter)
 {
 	std::lock_guard<std::mutex> lock(m_renderingMutex);
 
@@ -1725,6 +1855,9 @@ void ManagerImplemented::DrawHandleFront(Handle handle)
 						auto e = (EffectImplemented*)drawSet.ParameterPointer;
 						for (size_t i = e->renderingNodesThreshold; i < drawSet.GlobalPointer->RenderedInstanceContainers.size(); i++)
 						{
+							if (IsClippedWithDepth(drawSet, drawSet.GlobalPointer->RenderedInstanceContainers[i], drawParameter))
+								continue;
+
 							drawSet.GlobalPointer->RenderedInstanceContainers[i]->Draw(false);
 						}
 					}
@@ -1744,6 +1877,9 @@ void ManagerImplemented::DrawHandleFront(Handle handle)
 					auto e = (EffectImplemented*)drawSet.ParameterPointer;
 					for (size_t i = e->renderingNodesThreshold; i < drawSet.GlobalPointer->RenderedInstanceContainers.size(); i++)
 					{
+						if (IsClippedWithDepth(drawSet, drawSet.GlobalPointer->RenderedInstanceContainers[i], drawParameter))
+							continue;
+
 						drawSet.GlobalPointer->RenderedInstanceContainers[i]->Draw(false);
 					}
 				}

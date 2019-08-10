@@ -5,8 +5,296 @@ using System.Text;
 
 namespace Effekseer.Data
 {
+
+	public class MaterialFileParameter : IEditableValueCollection
+	{
+		[Shown(Shown = true)]
+		[Name(language = Language.Japanese, value = "パス")]
+		[Name(language = Language.English, value = "Path")]
+		public Value.PathForMaterial Path
+		{
+			get;
+			private set;
+		}
+
+		public Dictionary<string, object> KeyValues
+		{
+			get
+			{
+				return keyToValues;
+			}
+		}
+
+		Dictionary<string, object> keyToValues = new Dictionary<string, object>();
+
+		public MaterialFileParameter()
+		{
+			Path = new Value.PathForMaterial(Resources.GetString("MaterialFilter"), true);
+			Path.OnChanged += Path_OnChanged;
+		}
+
+		private void Path_OnChanged(object sender, ChangedValueEventArgs e)
+		{
+			// Apply values
+			Utl.MaterialInformation info = new Utl.MaterialInformation();
+			info.Load(Path.GetAbsolutePath());
+
+			ApplyMaterial(info);
+		}
+
+		public EditableValue[] GetValues()
+		{
+			var ret = new List<EditableValue>();
+
+			// self
+			{
+				EditableValue ev = new EditableValue();
+				ev.Value = this;
+				ev.Title = "";
+				ev.Description = "";
+				ev.IsShown = true;
+				ev.IsUndoEnabled = false;
+				//ret.Add(ev);
+			}
+
+			// need to filter
+			var propPath = EditableValue.Create(Path, this.GetType().GetProperty("Path"));
+			ret.Add(propPath);
+
+			foreach(var kv in keyToValues)
+			{
+				EditableValue ev = new EditableValue();
+				var status = kv.Value as ValueStatus;
+				ev.Value = status.Value;
+				ev.Title = status.Name;
+				ev.Description = status.Description;
+				ev.IsShown = status.IsShown;
+				ev.IsUndoEnabled = true;
+				ret.Add(ev);
+
+			}
+
+			return ret.ToArray();
+		}
+
+		public void ApplyMaterial(Utl.MaterialInformation info)
+		{
+			bool isChanged = false;
+
+			var textureKeys = info.Textures.Select(_ => CreateKey(_)).ToList();
+
+			foreach (var kts in keyToValues)
+			{
+				if(!textureKeys.Contains(kts.Key))
+				{
+					var status = kts.Value as ValueStatus;
+					if(status.IsShown)
+					{
+						status.IsShown = false;
+						isChanged = true;
+					}
+				}
+			}
+
+			var uniformKeys = info.Uniforms.Select(_ => CreateKey(_)).ToList();
+
+			foreach (var kts in keyToValues)
+			{
+				if (!uniformKeys.Contains(kts.Key))
+				{
+					var status = kts.Value as ValueStatus;
+					if (status.IsShown)
+					{
+						status.IsShown = false;
+						isChanged = true;
+					}
+				}
+			}
+
+			foreach (var texture in info.Textures)
+			{
+				var key = CreateKey(texture);
+
+				if(keyToValues.ContainsKey(key))
+				{
+					var status = keyToValues[key] as ValueStatus;
+					if(status.IsShown != texture.IsParam)
+					{
+						status.IsShown = texture.IsParam;
+						isChanged = true;
+					}
+				}
+				else
+				{
+					var status = new ValueStatus();
+					var value = new Value.PathForImage(Resources.GetString("ImageFilter"), true);
+					status.Key = key;
+					status.Value = value;
+					status.Name = texture.Name;
+					status.Description = "";
+					status.IsShown = texture.IsParam;
+					keyToValues.Add(key, status);
+					value.SetAbsolutePathDirectly(texture.DefaultPath);
+					isChanged = true;
+				}
+			}
+
+			foreach(var uniform in info.Uniforms)
+			{
+				var key = CreateKey(uniform);
+
+				if (keyToValues.ContainsKey(key))
+				{
+					var status = keyToValues[key] as ValueStatus;
+					if (!status.IsShown)
+					{
+						status.IsShown = true;
+						isChanged = true;
+					}
+				}
+				else
+				{
+					if(uniform.Type == 0)
+					{
+						var status = new ValueStatus();
+						status.Key = key;
+						status.Value = new Value.Float();
+						status.Name = uniform.Name;
+						status.Description = "";
+						status.IsShown = true;
+						keyToValues.Add(key, status);
+						isChanged = true;
+					}
+					else
+					{
+						var status = new ValueStatus();
+						status.Key = key;
+						status.Value = new Value.Vector4D();
+						status.Name = uniform.Name;
+						status.Description = "";
+						status.IsShown = true;
+						keyToValues.Add(key, status);
+						isChanged = true;
+					}
+				}
+			}
+
+			if(isChanged && OnChanged != null)
+			{
+				OnChanged(this, null);
+			}
+		}
+
+		public List<Tuple35<ValueStatus, bool>> GetTextures(Utl.MaterialInformation info)
+		{
+			var ret = new List<Tuple35<ValueStatus, bool>>();
+
+			foreach (var texture in info.Textures)
+			{
+				var key = CreateKey(texture);
+
+				if(texture.IsValueTexture)
+				{
+					if (keyToValues.ContainsKey(key))
+					{
+						ret.Add(Tuple35.Create(keyToValues[key] as ValueStatus, true));
+					}
+					else
+					{
+						ret.Add(Tuple35.Create((ValueStatus)(null), true));
+					}
+				}
+				else
+				{
+					if (keyToValues.ContainsKey(key))
+					{
+						ret.Add(Tuple35.Create(keyToValues[key] as ValueStatus, false));
+					}
+					else
+					{
+						ret.Add(Tuple35.Create((ValueStatus)(null), false));
+					}
+				}
+			}
+
+			return ret;
+		}
+
+		public List<ValueStatus> GetUniforms(Utl.MaterialInformation info)
+		{
+			var ret = new List<ValueStatus>();
+
+			foreach (var uniform in info.Uniforms)
+			{
+				var key = CreateKey(uniform);
+				if (keyToValues.ContainsKey(key))
+				{
+					ret.Add(keyToValues[key] as ValueStatus);
+				}
+				else
+				{
+					ret.Add(null);
+				}
+			}
+
+			return ret;
+		}
+
+		public string CreateKey<T>(string name)
+		{
+			if(typeof(T) == typeof(Value.Float))
+			{
+				return name + "__TYPE__U0";
+			}
+
+			if (typeof(T) == typeof(Value.Vector4D))
+			{
+				return name + "__TYPE__U3";
+			}
+
+			if (typeof(T) == typeof(Value.PathForImage))
+			{
+				return name + "__TYPE__T";
+			}
+
+			throw new Exception();
+		}
+		public string CreateKey(Utl.MaterialInformation.UniformInformation info)
+		{
+			return info.Name + "__TYPE__U" + info.Type;
+		}
+
+		public string CreateKey(Utl.MaterialInformation.TextureInformation info)
+		{
+			return info.Name + "__TYPE__T";
+		}
+
+		public class ValueStatus
+		{
+			public string Key = string.Empty;
+			public object Value = null;
+			public string Name = string.Empty;
+			public string Description = string.Empty;
+			public bool IsShown = false;
+		}
+
+		public event ChangedValueEventHandler OnChanged;
+	}
+
 	public class RendererCommonValues
 	{
+#if MATERIAL_ENABLED
+		[Selector(ID = 3)]
+		[Name(language = Language.Japanese, value = "マテリアル")]
+		[Name(language = Language.English, value = "Material")]
+		public Value.Enum<MaterialType> Material
+		{
+			get;
+			private set;
+		}
+#endif
+
+		[Selected(ID = 3, Value = 0)]
 		[Name(language = Language.Japanese, value = "色/歪み画像")]
 		[Description(language = Language.Japanese, value = "色/歪みを表す画像")]
 		[Name(language = Language.English, value = "Texture")]
@@ -16,6 +304,16 @@ namespace Effekseer.Data
 			get;
 			private set;
 		}
+
+#if MATERIAL_ENABLED
+		[Selected(ID = 3, Value = (int)MaterialType.File)]
+		[IO(Export = true)]
+		public MaterialFileParameter MaterialFile
+		{
+			get;
+			private set;
+		}
+#endif
 
 		[Name(language = Language.Japanese, value = "ブレンド")]
 		[Name(language = Language.English, value = "Blend")]
@@ -136,7 +434,11 @@ namespace Effekseer.Data
 
 		internal RendererCommonValues()
 		{
-            ColorTexture = new Value.PathForImage(Resources.GetString("ImageFilter"), true, "");
+#if MATERIAL_ENABLED
+			Material = new Value.Enum<MaterialType>(MaterialType.Default);
+			MaterialFile = new MaterialFileParameter();
+#endif
+			ColorTexture = new Value.PathForImage(Resources.GetString("ImageFilter"), true, "");
 			
 			AlphaBlend = new Value.Enum<AlphaBlendType>(AlphaBlendType.Blend);
 			Filter = new Value.Enum<FilterType>(FilterType.Linear);
@@ -348,6 +650,18 @@ namespace Effekseer.Data
 			}
 		}
 
+#if MATERIAL_ENABLED
+		
+		public enum MaterialType : int
+		{
+			[Name(value = "標準", language = Language.Japanese)]
+			[Name(value = "Default", language = Language.English)]
+			Default = 0,
+			[Name(value = "ファイル", language = Language.Japanese)]
+			[Name(value = "File", language = Language.English)]
+			File = 128,
+		}
+#endif
 		public enum FadeType : int
 		{
 			[Name(value = "有り", language = Language.Japanese)]

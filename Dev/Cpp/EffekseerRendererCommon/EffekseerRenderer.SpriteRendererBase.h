@@ -53,8 +53,10 @@ public:
 		: m_renderer(renderer)
 		, m_spriteCount(0)
 		, m_ringBufferOffset(0)
-		, m_ringBufferData(NULL)
+		, m_ringBufferData(nullptr)
 	{
+		// reserve buffers
+		instances.reserve(m_renderer->GetSquareMaxCount());
 	}
 
 	virtual ~SpriteRendererBase()
@@ -76,22 +78,72 @@ protected:
 		state.Distortion = param.Distortion;
 		state.DistortionIntensity = param.DistortionIntensity;
 
-		if (param.ColorTextureIndex >= 0)
+		state.CopyMaterialFromParameterToState(param.EffectPointer, param.MaterialParameterPtr, param.ColorTextureIndex);
+		/*
+		if (param.MaterialParameterPtr != nullptr)
 		{
-			if (state.Distortion)
+			if (param.MaterialParameterPtr->MaterialIndex >= 0)
 			{
-				state.TexturePtr = param.EffectPointer->GetDistortionImage(param.ColorTextureIndex);
-			}
-			else
-			{
-				state.TexturePtr = param.EffectPointer->GetColorImage(param.ColorTextureIndex);
+				state.MaterialPtr = param.EffectPointer->GetMaterial(param.MaterialParameterPtr->MaterialIndex);
+
+				state.MaterialUniformCount =
+					Effekseer::Min(param.MaterialParameterPtr->MaterialUniforms.size(), state.MaterialUniforms.size());
+				for (size_t i = 0; i < state.MaterialUniformCount; i++)
+				{
+					state.MaterialUniforms[i] = param.MaterialParameterPtr->MaterialUniforms[i];
+				}
+
+				state.MaterialTextureCount =
+					Effekseer::Min(param.MaterialParameterPtr->MaterialTextures.size(), state.MaterialTextures.size());
+				for (size_t i = 0; i < state.MaterialTextureCount; i++)
+				{
+					if (param.MaterialParameterPtr->MaterialTextures[i].Type == 1)
+					{
+						if (param.MaterialParameterPtr->MaterialTextures[i].Index >= 0)
+						{
+							state.MaterialTextures[i] =
+								param.EffectPointer->GetNormalImage(param.MaterialParameterPtr->MaterialTextures[i].Index);
+						}
+						else
+						{
+							state.MaterialTextures[i] = nullptr;
+						}
+
+					}
+					else
+					{
+						if (param.MaterialParameterPtr->MaterialTextures[i].Index >= 0)
+						{
+							state.MaterialTextures[i] =
+								param.EffectPointer->GetColorImage(param.MaterialParameterPtr->MaterialTextures[i].Index);
+						}
+						else
+						{
+							state.MaterialTextures[i] = nullptr;
+						}
+					}
+				}
 			}
 		}
 		else
 		{
-			state.TexturePtr = nullptr;
+			if (param.ColorTextureIndex >= 0)
+			{
+				if (state.Distortion)
+				{
+					state.TexturePtr = param.EffectPointer->GetDistortionImage(param.ColorTextureIndex);
+				}
+				else
+				{
+					state.TexturePtr = param.EffectPointer->GetColorImage(param.ColorTextureIndex);
+				}
+			}
+			else
+			{
+				state.TexturePtr = nullptr;
+			}
 		}
-
+		*/
 		renderer->GetStandardRenderer()->UpdateStateAndRenderingIfRequired(state);
 
 		renderer->GetStandardRenderer()->BeginRenderingAndRenderingIfRequired(count * 4, m_ringBufferOffset, (void*&) m_ringBufferData);
@@ -256,7 +308,15 @@ protected:
 			mat_rot.Value[3][1] = t.Y;
 			mat_rot.Value[3][2] = t.Z;
 	
-			ApplyDepthOffset(mat_rot, m_renderer->GetCameraFrontDirection(), m_renderer->GetCameraPosition(), s, parameter.DepthOffset, parameter.IsDepthOffsetScaledWithCamera, parameter.IsDepthOffsetScaledWithParticleScale, parameter.IsRightHand);
+			ApplyDepthParameters(mat_rot,
+								 m_renderer->GetCameraFrontDirection(),
+								 m_renderer->GetCameraPosition(),
+								 s,
+								 parameter.DepthOffset,
+								 parameter.IsDepthOffsetScaledWithCamera,
+								 parameter.IsDepthOffsetScaledWithParticleScale,
+								 parameter.DepthParameterPtr,
+								 parameter.IsRightHand);
 
 			TransformVertexes( verteies, 4, mat_rot );
 		}
@@ -264,7 +324,14 @@ protected:
 		{
 			auto mat = instanceParameter.SRTMatrix43;
 
-			ApplyDepthOffset(mat, m_renderer->GetCameraFrontDirection(), m_renderer->GetCameraPosition(), parameter.DepthOffset, parameter.IsDepthOffsetScaledWithCamera, parameter.IsDepthOffsetScaledWithParticleScale, parameter.IsRightHand);
+			ApplyDepthParameters(mat,
+							 m_renderer->GetCameraFrontDirection(),
+							 m_renderer->GetCameraPosition(),
+							 parameter.DepthOffset,
+							 parameter.IsDepthOffsetScaledWithCamera,
+							 parameter.IsDepthOffsetScaledWithParticleScale,
+							 parameter.DepthParameterPtr,
+							 parameter.IsRightHand);
 
 			for( int i = 0; i < 4; i++ )
 			{

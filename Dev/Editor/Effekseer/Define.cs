@@ -2,11 +2,12 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Threading.Tasks;
 
 namespace Effekseer
 {
 	/// <summary>
-	/// 唯一名称を設定する属性
+	/// Attribute for unique name
 	/// </summary>
 	[AttributeUsage(
 	AttributeTargets.Class | AttributeTargets.Property | AttributeTargets.Field | AttributeTargets.Method,
@@ -26,7 +27,7 @@ namespace Effekseer
 		}
 
 		/// <summary>
-		/// 属性から唯一名称を取得する。
+		/// Get unique name from attribute
 		/// </summary>
 		/// <param name="attributes"></param>
 		/// <returns></returns>

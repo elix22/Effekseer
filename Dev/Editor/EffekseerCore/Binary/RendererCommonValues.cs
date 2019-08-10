@@ -9,22 +9,159 @@ namespace Effekseer.Binary
 {
 	class RendererCommonValues
 	{
+#if MATERIAL_ENABLED
+		public static byte[] GetBytes(Data.RendererCommonValues value, Dictionary<string, int> texture_and_index, Dictionary<string, int> normalTexture_and_index, Dictionary<string, int> distortionTexture_and_index, Dictionary<string, int> material_and_index)
+#else
 		public static byte[] GetBytes(Data.RendererCommonValues value, Dictionary<string, int> texture_and_index, Dictionary<string, int> distortionTexture_and_index)
+#endif
 		{
 			List<byte[]> data = new List<byte[]>();
 
 			var texInfo = new TextureInformation();
 			var hasTexture = true;
 
+#if MATERIAL_ENABLED
+			data.Add(((int)value.Material.Value).GetBytes());
+
+
+			if (value.Material.Value == Data.RendererCommonValues.MaterialType.Default)
+			{
+				// テクスチャ番号
+				if (value.Distortion.Value)
+				{
+					if (value.ColorTexture.RelativePath != string.Empty &&
+					distortionTexture_and_index.ContainsKey(value.ColorTexture.RelativePath) &&
+					texInfo.Load(value.ColorTexture.AbsolutePath))
+					{
+						data.Add(distortionTexture_and_index[value.ColorTexture.RelativePath].GetBytes());
+						hasTexture = true;
+					}
+					else
+					{
+						data.Add((-1).GetBytes());
+						hasTexture = false;
+					}
+				}
+				else
+				{
+					if (value.ColorTexture.RelativePath != string.Empty &&
+						texture_and_index.ContainsKey(value.ColorTexture.RelativePath) &&
+						texInfo.Load(value.ColorTexture.AbsolutePath))
+					{
+						data.Add(texture_and_index[value.ColorTexture.RelativePath].GetBytes());
+						hasTexture = true;
+					}
+					else
+					{
+						data.Add((-1).GetBytes());
+						hasTexture = false;
+					}
+				}
+			}
+			else
+			{
+				var materialInfo = new Utl.MaterialInformation();
+				materialInfo.Load(value.MaterialFile.Path.AbsolutePath);
+	
+				var textures = value.MaterialFile.GetTextures(materialInfo);
+				var uniforms = value.MaterialFile.GetUniforms(materialInfo);
+
+				if(material_and_index.ContainsKey(value.MaterialFile.Path.RelativePath))
+				{
+					data.Add(material_and_index[value.MaterialFile.Path.RelativePath].GetBytes());
+				}
+				else
+				{
+					data.Add((-1).GetBytes());
+
+				}
+
+				data.Add(textures.Count.GetBytes());
+
+				foreach (var texture in textures)
+				{
+					var texture_ = texture.Item1.Value as Data.Value.PathForImage;
+					if (texture.Item2)
+					{
+
+						if (texture_.RelativePath != string.Empty &&
+							normalTexture_and_index.ContainsKey(texture_.RelativePath) &&
+							texInfo.Load(texture_.AbsolutePath))
+						{
+							data.Add((1).GetBytes());
+							data.Add(normalTexture_and_index[texture_.RelativePath].GetBytes());
+							hasTexture = true;
+						}
+						else
+						{
+							data.Add((1).GetBytes());
+							data.Add((-1).GetBytes());
+							hasTexture = false;
+						}
+					}
+					else
+					{
+						if (texture_.RelativePath != string.Empty &&
+texture_and_index.ContainsKey(texture_.RelativePath) &&
+texInfo.Load(texture_.AbsolutePath))
+						{
+							data.Add((0).GetBytes());
+							data.Add(texture_and_index[texture_.RelativePath].GetBytes());
+							hasTexture = true;
+						}
+						else
+						{
+							data.Add((0).GetBytes());
+							data.Add((-1).GetBytes());
+							hasTexture = false;
+						}
+					}
+				}
+
+				data.Add(uniforms.Count.GetBytes());
+
+				foreach (var uniform in uniforms)
+				{
+					float[] floats = new float[4];
+					
+					if(uniform.Value is Data.Value.Float)
+					{
+						floats[0] = (uniform.Value as Data.Value.Float).Value;
+					}
+
+					if (uniform.Value is Data.Value.Vector4D)
+					{
+						floats[0] = (uniform.Value as Data.Value.Vector4D).X.Value;
+						floats[1] = (uniform.Value as Data.Value.Vector4D).Y.Value;
+						floats[2] = (uniform.Value as Data.Value.Vector4D).Z.Value;
+						floats[3] = (uniform.Value as Data.Value.Vector4D).W.Value;
+					}
+
+					data.Add(floats[0].GetBytes());
+					data.Add(floats[1].GetBytes());
+					data.Add(floats[2].GetBytes());
+					data.Add(floats[3].GetBytes());
+				}
+			}
+#else
+
 			// テクスチャ番号
 			if (value.Distortion.Value)
 			{
 				if (value.ColorTexture.RelativePath != string.Empty &&
-				distortionTexture_and_index.ContainsKey(value.ColorTexture.RelativePath) &&
-				texInfo.Load(value.ColorTexture.AbsolutePath))
+				distortionTexture_and_index.ContainsKey(value.ColorTexture.RelativePath))
 				{
-					data.Add(distortionTexture_and_index[value.ColorTexture.RelativePath].GetBytes());
-					hasTexture = true;
+					if(texInfo.Load(value.ColorTexture.AbsolutePath))
+					{
+						data.Add(distortionTexture_and_index[value.ColorTexture.RelativePath].GetBytes());
+						hasTexture = true;
+					}
+					else
+					{
+						Utils.LogFileNotFound(value.ColorTexture.AbsolutePath);
+						data.Add((-1).GetBytes());
+						hasTexture = false;
+					}
 				}
 				else
 				{
@@ -35,11 +172,19 @@ namespace Effekseer.Binary
 			else
 			{
 				if (value.ColorTexture.RelativePath != string.Empty &&
-					texture_and_index.ContainsKey(value.ColorTexture.RelativePath) &&
-					texInfo.Load(value.ColorTexture.AbsolutePath))
+					texture_and_index.ContainsKey(value.ColorTexture.RelativePath))
 				{
-					data.Add(texture_and_index[value.ColorTexture.RelativePath].GetBytes());
-					hasTexture = true;
+					if(texInfo.Load(value.ColorTexture.AbsolutePath))
+					{
+						data.Add(texture_and_index[value.ColorTexture.RelativePath].GetBytes());
+						hasTexture = true;
+					}
+					else
+					{
+						Utils.LogFileNotFound(value.ColorTexture.AbsolutePath);
+						data.Add((-1).GetBytes());
+						hasTexture = false;
+					}
 				}
 				else
 				{
@@ -47,7 +192,7 @@ namespace Effekseer.Binary
 					hasTexture = false;
 				}
 			}
-			
+#endif
 
 			data.Add(value.AlphaBlend);
 			data.Add(value.Filter);

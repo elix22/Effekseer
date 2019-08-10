@@ -37,7 +37,7 @@ namespace Effekseer.Utl
 			if (br.Read(buf, 0, 8) != 8)
 			{
 				fs.Dispose();
-				br.Dispose();
+				br.Close();
 				return false;
 			}
 
@@ -51,11 +51,12 @@ namespace Effekseer.Utl
 				buf[6] == 0x1A &&
 				buf[7] == 0x0A)
 			{
+				// PNG
 				if (br.Read(buf, 0, 25) != 25)
 				{
 					fs.Dispose();
-					br.Dispose();
-					return false;
+                    br.Close();
+                    return false;
 				}
 
 				var width = new byte[] { buf[11], buf[10], buf[9], buf[8] };
@@ -63,16 +64,29 @@ namespace Effekseer.Utl
 				Width = BitConverter.ToInt32(width, 0);
 				Height = BitConverter.ToInt32(height, 0);
 			}
+			else if (buf[0] == 0x44 && buf[1] == 0x44 && buf[2] == 0x53)
+			{
+				// DDS
+				if (br.Read(buf, 0, 25) != 25)
+				{
+					fs.Dispose();
+                    br.Close();
+                    return false;
+				}
+
+				Width = BitConverter.ToInt32(buf, 8);
+				Height = BitConverter.ToInt32(buf, 4);
+			}
 			else
 			{
 				fs.Dispose();
-				br.Dispose();
-				return false;
+                br.Close();
+                return false;
 			}
 
 			fs.Dispose();
-			br.Dispose();
-			return true;
+            br.Close();
+            return true;
 		}
 	}
 }

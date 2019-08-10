@@ -24,6 +24,8 @@
 #include <chrono>
 #include <thread>
 #include <mutex>
+#include <array>
+#include <cfloat>
 
 //----------------------------------------------------------------------------------
 //
@@ -79,8 +81,10 @@ class EffectLoader;
 class TextureLoader;
 class SoundLoader;
 class ModelLoader;
+class MaterialLoader;
 
 class Model;
+class InternalScript;
 
 //----------------------------------------------------------------------------------
 //

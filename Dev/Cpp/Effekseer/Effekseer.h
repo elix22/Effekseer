@@ -9,6 +9,9 @@
 #include <string.h>
 #include <atomic>
 #include <stdint.h>
+#include <climits>
+#include <vector>
+#include <cfloat>
 
 //----------------------------------------------------------------------------------
 //
@@ -72,6 +75,7 @@ class TrackRenderer;
 class Setting;
 class EffectLoader;
 class TextureLoader;
+class MaterialLoader;
 
 class SoundPlayer;
 class SoundLoader;
@@ -109,6 +113,8 @@ typedef	void ( EFK_STDCALL *EffectInstanceRemovingCallback ) ( Manager* manager,
 #define ES_SAFE_RELEASE(val)					if ( (val) != NULL ) { (val)->Release(); (val) = NULL; }
 #define ES_SAFE_DELETE(val)						if ( (val) != NULL ) { delete (val); (val) = NULL; }
 #define ES_SAFE_DELETE_ARRAY(val)				if ( (val) != NULL ) { delete [] (val); (val) = NULL; }
+
+#define EFK_ASSERT(x) assert(x)
 
 //----------------------------------------------------------------------------------
 //
@@ -500,6 +506,60 @@ struct TextureData
 	int64_t	UserID;
 };
 
+/**
+	@brief	\~english	Material data
+			\~japanese	マテリアルデータ
+*/
+struct MaterialData
+{
+	int32_t TextureCount = 0;
+	int32_t UniformCount = 0;
+	void* UserPtr = nullptr;
+
+	void* ModelUserPtr = nullptr;
+};
+
+/**
+	@brief	\~english	Textures used by material
+			\~japanese	マテリアルに使用されるテクスチャ
+*/
+struct MaterialTextureParameter
+{
+	//! 0 - color, 1 - value
+	int32_t Type = 0;
+	int32_t Index = 0;
+};
+
+/**
+	@brief	\~english	Material parameter for shaders
+			\~japanese	シェーダー向けマテリアルパラメーター
+*/
+struct MaterialParameter
+{
+	//! material index in MaterialType::File
+	int32_t MaterialIndex = -1;
+
+	//! used textures in MaterialType::File
+	std::vector<MaterialTextureParameter> MaterialTextures;
+
+	//! used uniforms in MaterialType::File
+	std::vector<std::array<float, 4>> MaterialUniforms;
+};
+
+/**
+	@brief	\~english	Parameters about a depth which is passed into a renderer
+			\~japanese	レンダラーに渡されるデプスに関するパラメーター
+*/
+struct NodeRendererDepthParameter
+{
+	float DepthOffset = 0.0f;
+	bool IsDepthOffsetScaledWithCamera = false;
+	bool IsDepthOffsetScaledWithParticleScale = false;
+	ZSortType ZSort = ZSortType::None;
+	float SuppressionOfScalingByDepth = 1.0f;
+	float DepthClipping = FLT_MAX;
+};
+
 //----------------------------------------------------------------------------------
 //
 //----------------------------------------------------------------------------------
@@ -508,6 +568,67 @@ struct TextureData
 //
 //----------------------------------------------------------------------------------
 #endif	// __EFFEKSEER_BASE_PRE_H__
+#ifndef __EFFEKSEER_CUSTOM_ALLOCATOR_H__
+#define __EFFEKSEER_CUSTOM_ALLOCATOR_H__
+
+#include <list>
+#include <map>
+#include <new>
+#include <set>
+#include <vector>
+
+namespace Effekseer
+{
+/**
+	@brief
+	\~English get an allocator
+	\~Japanese メモリ確保関数を取得する。
+*/
+MallocFunc GetMallocFunc();
+
+/**
+	\~English specify an allocator
+	\~Japanese メモリ確保関数を設定する。
+*/
+void SetMallocFunc(MallocFunc func);
+
+/**
+	@brief
+	\~English get a deallocator
+	\~Japanese メモリ破棄関数を取得する。
+*/
+FreeFunc GetFreeFunc();
+
+/**
+	\~English specify a deallocator
+	\~Japanese メモリ破棄関数を設定する。
+*/
+void SetFreeFunc(FreeFunc func);
+
+template <class T> struct CustomAllocator
+{
+	using value_type = T;
+
+	CustomAllocator() {}
+
+	template <class U> CustomAllocator(const CustomAllocator<U>&) {}
+
+	T* allocate(std::size_t n) { return reinterpret_cast<T*>(GetMallocFunc()(sizeof(T) * n)); }
+	void deallocate(T* p, std::size_t n) { GetFreeFunc()(p, sizeof(T) * n); }
+};
+
+template <class T, class U> bool operator==(const CustomAllocator<T>&, const CustomAllocator<U>&) { return true; }
+
+template <class T, class U> bool operator!=(const CustomAllocator<T>&, const CustomAllocator<U>&) { return false; }
+
+template <class T> using CustomVector = std::vector<T, CustomAllocator<T>>;
+template <class T> using CustomList = std::list<T, CustomAllocator<T>>;
+template <class T> using CustomSet = std::set<T, std::less<T>, CustomAllocator<T>>;
+template <class T, class U> using CustomMap = std::map<T, U, std::less<T>, CustomAllocator<std::pair<const T, U>>>;
+
+} // namespace Effekseer
+
+#endif // __EFFEKSEER_BASE_PRE_H__
 #ifndef	__EFFEKSEER_VECTOR2D_H__
 #define	__EFFEKSEER_VECTOR2D_H__
 
@@ -670,6 +791,8 @@ public:
 	static Vector3D& Transform( Vector3D& o, const Vector3D& in, const Matrix43& mat );
 
 	static Vector3D& Transform( Vector3D& o, const Vector3D& in, const Matrix44& mat );
+
+	static Vector3D& TransformWithW(Vector3D& o, const Vector3D& in, const Matrix44& mat);
 };
 
 //----------------------------------------------------------------------------------
@@ -1298,9 +1421,198 @@ namespace Effekseer
 //----------------------------------------------------------------------------------
 
 /**
-	@brief	エフェクトパラメータークラス
-	@note
-	エフェクトに設定されたパラメーター。
+@brief
+\~English	Terms where an effect exists
+\~Japanese	エフェクトが存在する期間
+*/
+struct EffectTerm
+{
+	/**
+@brief
+\~English	Minimum end time that the effect may exist
+\~Japanese	エフェクトが存在する可能性のある最小の終了時間
+*/
+	int32_t TermMin;
+
+	/**
+	@brief
+	\~English	Maximum end time that the effect may exist
+	\~Japanese	エフェクトが存在する可能性のある最大の終了時間
+	*/
+	int32_t TermMax;
+};
+
+	/**
+@brief
+\~English	Terms where instances exists
+\~Japanese	インスタンスが存在する期間
+*/
+struct EffectInstanceTerm
+{
+	/**
+	@brief
+	\~English	Minimum start time that the first instance may exist
+	\~Japanese	最初のインスタンスが存在する可能性のある最小の開始時間
+	*/
+	int32_t FirstInstanceStartMin = 0;
+
+	/**
+	@brief
+	\~English	Maximum start time that the first instance may exist
+	\~Japanese	最初のインスタンスが存在する可能性のある最大の開始時間
+	*/
+	int32_t FirstInstanceStartMax = 0;
+
+	/**
+	@brief
+	\~English	Minimum end time that the first instance may exist
+	\~Japanese	最初のインスタンスが存在する可能性のある最小の終了時間
+	*/
+	int32_t FirstInstanceEndMin = INT_MAX;
+
+	/**
+	@brief
+	\~English	Maximum end time that the first instance may exist
+	\~Japanese	最初のインスタンスが存在する可能性のある最大の終了時間
+	*/
+	int32_t FirstInstanceEndMax = INT_MAX;
+
+	/**
+	@brief
+	\~English	Minimum start time that the last instance may exist
+	\~Japanese	最後のインスタンスが存在する可能性のある最小の開始時間
+	*/
+	int32_t LastInstanceStartMin = 0;
+
+	/**
+	@brief
+	\~English	Maximum start time that the last instance may exist
+	\~Japanese	最後のインスタンスが存在する可能性のある最大の開始時間
+	*/
+	int32_t LastInstanceStartMax = 0;
+
+	/**
+	@brief
+	\~English	Minimum end time that the last instance may exist
+	\~Japanese	最後のインスタンスが存在する可能性のある最小の終了時間
+	*/
+	int32_t LastInstanceEndMin = INT_MAX;
+
+	/**
+	@brief
+	\~English	Maximum end time that the last instance may exist
+	\~Japanese	最後のインスタンスが存在する可能性のある最大の終了時間
+	*/
+	int32_t LastInstanceEndMax = INT_MAX;
+};
+
+/**
+	@brief
+	\~English A class to edit an instance of EffectParameter for supporting original format when a binary is loaded.
+	\~Japanese	独自フォーマットをサポートするための、バイナリが読み込まれた時にEffectParameterのインスタンスを編集するクラス
+*/
+class EffectFactory : public ReferenceObject
+{
+public:
+	EffectFactory();
+
+	virtual ~EffectFactory();
+
+	/**
+	@brief
+	\~English load body data(parameters of effect) from a binary
+	\~Japanese	バイナリから本体(エフェクトのパラメーター)を読み込む。
+	*/
+	bool LoadBody(Effect* effect, const void* data, int32_t size, float magnification, const EFK_CHAR* materialPath);
+
+	/**
+	@brief
+	\~English set texture data into specified index
+	\~Japanese	指定されたインデックスにテクスチャを設定する。
+	*/
+	void SetTexture(Effect* effect, int32_t index, TextureType type, TextureData* data);
+
+	/**
+	@brief
+	\~English set sound data into specified index
+	\~Japanese	指定されたインデックスに音を設定する。
+	*/
+
+	void SetSound(Effect* effect, int32_t index, void* data);
+
+	/**
+	@brief
+	\~English set model data into specified index
+	\~Japanese	指定されたインデックスにモデルを設定する。
+	*/
+	void SetModel(Effect* effect, int32_t index, void* data);
+
+	/**
+	@brief
+	\~English set material data into specified index
+	\~Japanese	指定されたインデックスにマテリアルを設定する。
+	*/
+	void SetMaterial(Effect* effect, int32_t index, MaterialData* data);
+
+	/**
+	@brief
+	\~English set loading data
+	\~Japanese	ロード用データを設定する。
+	*/
+	void SetLoadingParameter(Effect* effect, ReferenceObject* obj);
+
+	/**
+		@brief
+		\~English this method is called to check whether loaded binary are supported. 
+		\~Japanese	バイナリがサポートされているか確認するためにこのメソッドが呼ばれる。
+	*/
+	virtual bool OnCheckIsBinarySupported(const void* data, int32_t size);
+
+	/**
+		@brief
+		\~English this method is called to check whether reloading are supported.
+		\~Japanese	リロードがサポートされているか確認するためにこのメソッドが呼ばれる。
+	*/
+	virtual bool OnCheckIsReloadSupported();
+
+	/**
+		@brief
+		\~English this method is called when load a effect from binary
+		\~Japanese	バイナリからエフェクトを読み込む時に、このメソッドが呼ばれる。
+	*/
+	virtual bool OnLoading(Effect* effect, const void* data, int32_t size, float magnification, const EFK_CHAR* materialPath);
+
+	/**
+		@brief
+		\~English this method is called when load resources
+		\~Japanese	リソースを読み込む時に、このメソッドが呼ばれる。
+	*/
+	virtual void OnLoadingResource(Effect* effect, const void* data, int32_t size, const EFK_CHAR* materialPath);
+
+	/**
+	@brief
+	\~English this method is called when unload resources
+	\~Japanese	リソースを廃棄される時に、このメソッドが呼ばれる。
+	*/
+	virtual void OnUnloadingResource(Effect* effect);
+
+	/**
+	\~English get factory's name
+	\~Japanese	ファクトリーの名称を取得する。
+	*/
+	virtual const char* GetName() const;
+
+	/**
+	\~English get whether resources are loaded automatically when a binary is loaded
+	\~Japanese	バイナリを読み込んだときに自動的にリソースを読み込むか取得する。
+	*/
+	virtual bool GetIsResourcesLoadedAutomatically() const;
+};
+
+/**
+	@brief	
+	\~English	Effect parameters
+	\~Japanese	エフェクトパラメータークラス
 */
 class Effect
 	: public IReference
@@ -1389,6 +1701,13 @@ public:
 	virtual int GetVersion() const = 0;
 
 	/**
+		@brief
+		\~English	Get loading parameter supecfied by EffectFactory. This parameter is not used unless EffectFactory is used
+		\~Japanese	EffectFactoryによって指定されたロード用パラメーターを取得する。EffectFactoryを使用しない限り、子のパラメーターは使用しない。
+	*/
+	virtual ReferenceObject* GetLoadingParameter() const = 0;
+
+	/**
 		@brief	格納されている色画像のポインタを取得する。
 		@param	n	[in]	画像のインデックス
 		@return	画像のポインタ
@@ -1399,6 +1718,12 @@ public:
 	@brief	格納されている画像のポインタの個数を取得する。
 	*/
 	virtual int32_t GetColorImageCount() const = 0;
+
+	/**
+	@brief	\~English	Get a color image's path
+	\~Japanese	色画像のパスを取得する。
+	*/
+	virtual const EFK_CHAR* GetColorImagePath(int n) const = 0;
 
 	/**
 	@brief	格納されている法線画像のポインタを取得する。
@@ -1413,6 +1738,12 @@ public:
 	virtual int32_t GetNormalImageCount() const = 0;
 
 	/**
+	@brief	\~English	Get a normal image's path
+	\~Japanese	法線画像のパスを取得する。
+	*/
+	virtual const EFK_CHAR* GetNormalImagePath(int n) const = 0;
+	
+	/**
 	@brief	格納されている歪み画像のポインタを取得する。
 	@param	n	[in]	画像のインデックス
 	@return	画像のポインタ
@@ -1425,6 +1756,12 @@ public:
 	virtual int32_t GetDistortionImageCount() const = 0;
 
 	/**
+	@brief	\~English	Get a distortion image's path
+	\~Japanese	歪み画像のパスを取得する。
+	*/
+	virtual const EFK_CHAR* GetDistortionImagePath(int n) const = 0;
+	
+	/**
 		@brief	格納されている音波形のポインタを取得する。
 	*/
 	virtual void* GetWave( int n ) const = 0;
@@ -1435,6 +1772,12 @@ public:
 	virtual int32_t GetWaveCount() const = 0;
 
 	/**
+	@brief	\~English	Get a wave's path
+	\~Japanese	音波形のパスを取得する。
+	*/
+	virtual const EFK_CHAR* GetWavePath(int n) const = 0;
+	
+	/**
 		@brief	格納されているモデルのポインタを取得する。
 	*/
 	virtual void* GetModel( int n ) const = 0;
@@ -1443,6 +1786,30 @@ public:
 	@brief	格納されているモデルのポインタの個数を取得する。
 	*/
 	virtual int32_t GetModelCount() const = 0;
+
+	/**
+	@brief	\~English	Get a model's path
+	\~Japanese	モデルのパスを取得する。
+	*/
+	virtual const EFK_CHAR* GetModelPath(int n) const = 0;
+	
+	/**
+	@brief	\~English	Get a material's pointer
+	\~Japanese	格納されているマテリアルのポインタを取得する。
+	*/
+	virtual MaterialData* GetMaterial(int n) const = 0;
+
+	/**
+	@brief	\~English	Get the number of stored material pointer 
+	\~Japanese	格納されているマテリアルのポインタの個数を取得する。
+	*/
+	virtual int32_t GetMaterialCount() const = 0;
+
+	/**
+	@brief	\~English	Get a material's path
+	\~Japanese	マテリアルのパスを取得する。
+	*/
+	virtual const EFK_CHAR* GetMaterialPath(int n) const = 0;
 
 	/**
 		@brief
@@ -1565,7 +1932,7 @@ public:
 	/**
 		@brief	画像等リソースの再読み込みを行う。
 	*/
-	virtual void ReloadResources( const EFK_CHAR* materialPath = nullptr ) = 0;
+	virtual void ReloadResources( const void* data = nullptr, int32_t size = 0, const EFK_CHAR* materialPath = nullptr ) = 0;
 
 	/**
 		@brief	画像等リソースの破棄を行う。
@@ -1576,6 +1943,13 @@ public:
 	@brief	Rootを取得する。
 	*/
 	virtual EffectNode* GetRoot() const = 0;
+
+	/**
+		@brief
+	\~English	Calculate a term of instances where the effect exists
+	\~Japanese	エフェクトが存在する期間を計算する。
+	*/
+	virtual EffectTerm CalculateTerm() const = 0;
 };
 
 /**
@@ -1651,6 +2025,13 @@ public:
 	\~Japanese	モデルパラメーターを取得する。
 	*/
 	virtual EffectModelParameter GetEffectModelParameter() = 0;
+
+	/**
+	@brief
+	\~English	Calculate a term of instances where instances exists
+	\~Japanese	インスタンスが存在する期間を計算する。
+	*/
+	virtual EffectInstanceTerm CalculateInstanceTerm(EffectInstanceTerm& parentTerm) const = 0;
 };
 
 //----------------------------------------------------------------------------------
@@ -1684,6 +2065,31 @@ namespace Effekseer
 class Manager
 	: public IReference
 {
+public:
+	/**
+	@brief
+		@brief
+		\~English Parameters for Manager::Draw and Manager::DrawHandle
+		\~Japanese Manager::Draw and Manager::DrawHandleに使用するパラメーター
+	*/
+	struct DrawParameter
+	{
+		Vector3D CameraPosition;
+		Vector3D CameraDirection;
+
+		/**
+			@brief
+			\~English A bitmask to show effects
+			\~Japanese エフェクトを表示するためのビットマスク
+			@note
+			\~English For example, if effect's layer is 1 and CameraCullingMask's first bit is 1, this effect is shown.
+			\~Japanese 例えば、エフェクトのレイヤーが0でカリングマスクの最初のビットが1のときエフェクトは表示される。
+		*/
+		int32_t CameraCullingMask;
+
+		DrawParameter();
+	};
+
 protected:
 	Manager() {}
     virtual ~Manager() {}
@@ -1705,24 +2111,30 @@ public:
 	virtual void Destroy() = 0;
 
 	/**
-		@brief	メモリ確保関数を取得する。
+		@brief
+		\~English get an allocator
+		\~Japanese メモリ確保関数を取得する。
 	*/
 	virtual MallocFunc GetMallocFunc() const = 0;
 
 	/**
-		@brief	メモリ確保関数を設定する。
+		\~English specify an allocator
+		\~Japanese メモリ確保関数を設定する。
 	*/
-	virtual void SetMallocFunc( MallocFunc func ) = 0;
+	virtual void SetMallocFunc(MallocFunc func) = 0;
 
 	/**
-		@brief	メモリ破棄関数を取得する。
+		@brief
+		\~English get a deallocator
+		\~Japanese メモリ破棄関数を取得する。
 	*/
 	virtual FreeFunc GetFreeFunc() const = 0;
 
 	/**
-		@brief	メモリ破棄関数を設定する。
+		\~English specify a deallocator
+		\~Japanese メモリ破棄関数を設定する。
 	*/
-	virtual void SetFreeFunc( FreeFunc func ) = 0;
+	virtual void SetFreeFunc(FreeFunc func) = 0;
 
 	/**
 		@brief	ランダム関数を取得する。
@@ -1871,6 +2283,26 @@ public:
 	virtual void SetModelLoader( ModelLoader* modelLoader ) = 0;
 
 	/**
+		@brief
+		\~English get a material loader
+		\~Japanese マテリアルローダーを取得する。
+		@return
+		\~English	loader
+		\~Japanese ローダー
+	*/
+	virtual MaterialLoader* GetMaterialLoader() = 0;
+
+	/**
+		@brief
+		\~English specfiy a material loader
+		\~Japanese マテリアルローダーを設定する。
+		@param	loader
+		\~English	loader
+		\~Japanese ローダー
+	*/
+	virtual void SetMaterialLoader(MaterialLoader* loader) = 0;
+
+	/**
 		@brief	エフェクトを停止する。
 		@param	handle	[in]	インスタンスのハンドル
 	*/
@@ -1996,6 +2428,20 @@ public:
 	virtual void SetTargetLocation( Handle handle, const Vector3D& location ) = 0;
 
 	/**
+		@brief
+		\~English get a dynamic parameter, which changes effect parameters dynamically while playing
+		\~Japanese 再生中にエフェクトのパラメーターを変更する動的パラメーターを取得する。
+	*/
+	virtual float GetDynamicInput(Handle handle, int32_t index) = 0;
+
+	/**
+		@brief
+		\~English specfiy a dynamic parameter, which changes effect parameters dynamically while playing
+		\~Japanese 再生中にエフェクトのパラメーターを変更する動的パラメーターを設定する。
+	*/
+	virtual void SetDynamicInput(Handle handle, int32_t index, float value) = 0;
+
+	/**
 		@brief	エフェクトのベース行列を取得する。
 		@param	handle	[in]	インスタンスのハンドル
 		@return	ベース行列
@@ -2061,6 +2507,23 @@ public:
 	virtual void SetPausedToAllEffects(bool paused) = 0;
 
 	/**
+		@brief
+		\~English	Get a layer index
+		\~Japanese	レイヤーのインデックスを取得する
+		@note
+		\~English For example, if effect's layer is 1 and CameraCullingMask's first bit is 1, this effect is shown.
+		\~Japanese 例えば、エフェクトのレイヤーが0でカリングマスクの最初のビットが1のときエフェクトは表示される。
+	*/
+	virtual int GetLayer(Handle handle) = 0;
+
+	/**
+		@brief
+		\~English	Set a layer index
+		\~Japanese	レイヤーのインデックスを設定する
+	*/
+	virtual void SetLayer(Handle handle, int32_t layer) = 0;
+
+	/**
 	@brief
 	\~English	Get a playing speed of particle of effect.
 	\~Japanese	エフェクトのパーティクルの再生スピードを取得する。
@@ -2093,30 +2556,49 @@ public:
 	virtual void Flip() = 0;
 
 	/**
-		@brief	更新処理を行う。
-		@param	deltaFrame	[in]	更新するフレーム数(60fps基準)	
+		@brief
+		\~English	Update all effects.
+		\~Japanese	全てのエフェクトの更新処理を行う。
+		@param	deltaFrame
+		\~English	passed time (1 is 1/60 seconds)
+		\~Japanese	更新するフレーム数(60fps基準)
 	*/
 	virtual void Update( float deltaFrame = 1.0f ) = 0;
 
 	/**
-		@brief	更新処理を開始する。
+		@brief
+		\~English	Start to update effects.
+		\~Japanese	更新処理を開始する。
 		@note
-		Updateを実行する際は、実行する必要はない。
+		\~English	It is not required if Update is called.
+		\~Japanese	Updateを実行する際は、実行する必要はない。
 	*/
 	virtual void BeginUpdate() = 0;
 
 	/**
-		@brief	更新処理を終了する。
+		@brief
+		\~English	Stop to update effects.
+		\~Japanese	更新処理を終了する。
 		@note
-		Updateを実行する際は、実行する必要はない。
+		\~English	It is not required if Update is called.
+		\~Japanese	Updateを実行する際は、実行する必要はない。
 	*/
 	virtual void EndUpdate() = 0;
 
 	/**
-		@brief	ハンドル単位の更新を行う。
-		@param	handle		[in]	ハンドル
-		@param	deltaFrame	[in]	更新するフレーム数(60fps基準)
+		@brief	
+		\~English	Update an effect by a handle.
+		\~Japanese	ハンドル単位の更新を行う。
+		@param	handle
+		\~English	a handle.
+		\~Japanese	ハンドル
+		@param	deltaFrame
+		\~English	passed time (1 is 1/60 seconds)
+		\~Japanese	更新するフレーム数(60fps基準)
 		@note
+		\~English
+		You need to call BeginUpdate before starting update and EndUpdate after stopping update.
+		\~Japanese	
 		更新する前にBeginUpdate、更新し終わった後にEndUpdateを実行する必要がある。
 	*/
 	virtual void UpdateHandle( Handle handle, float deltaFrame = 1.0f ) = 0;
@@ -2126,42 +2608,42 @@ public:
 	\~English	Draw particles.
 	\~Japanese	描画処理を行う。
 	*/
-	virtual void Draw() = 0;
+	virtual void Draw(const Manager::DrawParameter& drawParameter = Manager::DrawParameter()) = 0;
 	
 	/**
 	@brief
 	\~English	Draw particles in the back of priority 0.
 	\~Japanese	背面の描画処理を行う。
 	*/
-	virtual void DrawBack() = 0;
+	virtual void DrawBack(const Manager::DrawParameter& drawParameter = Manager::DrawParameter()) = 0;
 
 	/**
 	@brief
 	\~English	Draw particles in the front of priority 0.
 	\~Japanese	前面の描画処理を行う。
 	*/
-	virtual void DrawFront() = 0;
+	virtual void DrawFront(const Manager::DrawParameter& drawParameter = Manager::DrawParameter()) = 0;
 
 	/**
 	@brief
 	\~English	Draw particles with a handle.
 	\~Japanese	ハンドル単位の描画処理を行う。
 	*/
-	virtual void DrawHandle( Handle handle ) = 0;
+	virtual void DrawHandle(Handle handle, const Manager::DrawParameter& drawParameter = Manager::DrawParameter()) = 0;
 
 	/**
 	@brief
 	\~English	Draw particles in the back of priority 0.
 	\~Japanese	背面のハンドル単位の描画処理を行う。
 	*/
-	virtual void DrawHandleBack(Handle handle) = 0;
+	virtual void DrawHandleBack(Handle handle, const Manager::DrawParameter& drawParameter = Manager::DrawParameter()) = 0;
 	
 	/**
 	@brief
 	\~English	Draw particles in the front of priority 0.
 	\~Japanese	前面のハンドル単位の描画処理を行う。
 	*/
-	virtual void DrawHandleFront(Handle handle) = 0;
+	virtual void DrawHandleFront(Handle handle, const Manager::DrawParameter& drawParameter = Manager::DrawParameter()) = 0;
 
 	/**
 		@brief	再生する。
@@ -2188,6 +2670,13 @@ public:
 		\~Japanese	途中から再生するための時間
 	*/
 	virtual Handle Play(Effect* effect, const Vector3D& position, int32_t startFrame = 0) = 0;
+
+	/**
+		@brief
+		\~English	Get a camera's culling mask to show all effects
+		\~Japanese	全てのエフェクトを表示するためのカメラのカリングマスクを取得する。
+	*/
+	virtual int GetCameraCullingMaskToShowAllEffects() = 0;
 
 	/**
 		@brief	Update処理時間を取得。
@@ -2274,6 +2763,9 @@ public:
 		bool				IsDepthOffsetScaledWithParticleScale;
 
 		ZSortType			ZSort;
+
+		NodeRendererDepthParameter* DepthParameterPtr = nullptr;
+		MaterialParameter* MaterialParameterPtr = nullptr;
 	};
 
 	struct InstanceParameter
@@ -2345,6 +2837,7 @@ namespace Effekseer
 			float				DistortionIntensity;
 
 			int32_t				SplineDivision;
+			NodeRendererDepthParameter* DepthParameterPtr = nullptr;
 		};
 
 		struct InstanceParameter
@@ -2421,6 +2914,8 @@ public:
 
 		bool				Distortion;
 		float				DistortionIntensity;
+
+		NodeRendererDepthParameter* DepthParameterPtr = nullptr;
 
 		float				DepthOffset;
 		bool				IsDepthOffsetScaledWithCamera;
@@ -2503,6 +2998,9 @@ public:
 		bool				Distortion;
 		float				DistortionIntensity;
 
+		NodeRendererDepthParameter* DepthParameterPtr = nullptr;
+		MaterialParameter* MaterialParameterPtr = nullptr;
+
 		float				DepthOffset;
 		bool				IsDepthOffsetScaledWithCamera;
 		bool				IsDepthOffsetScaledWithParticleScale;
@@ -2571,6 +3069,8 @@ namespace Effekseer
 			float				DistortionIntensity;
 
 			int32_t				SplineDivision;
+
+			NodeRendererDepthParameter* DepthParameterPtr = nullptr;
 		};
 
 		struct InstanceGroupParameter
@@ -2727,6 +3227,25 @@ public:
 	virtual TextureData* Load( const EFK_CHAR* path, TextureType textureType ) { return nullptr; }
 
 	/**
+		@brief
+		\~English	a function called when texture is loaded
+		\~Japanese	テクスチャが読み込まれるときに呼ばれる関数
+		@param	data
+		\~English	data pointer
+		\~Japanese	データのポインタ
+		@param	size
+		\~English	the size of data
+		\~Japanese	データの大きさ
+		@param	textureType
+		\~English	a kind of texture
+		\~Japanese	テクスチャの種類
+		@return
+		\~English	a pointer of loaded texture
+		\~Japanese	読み込まれたテクスチャのポインタ
+	*/
+	virtual TextureData* Load(const void* data, int32_t size, TextureType textureType) { return nullptr; }
+
+	/**
 		@brief	テクスチャを破棄する。
 		@param	data	[in]	テクスチャ
 		@note
@@ -2786,6 +3305,22 @@ public:
 	virtual void* Load( const EFK_CHAR* path ) { return NULL; }
 
 	/**
+		@brief
+		\~English	a function called when model is loaded
+		\~Japanese	モデルが読み込まれるときに呼ばれる関数
+		@param	data
+		\~English	data pointer
+		\~Japanese	データのポインタ
+		@param	size
+		\~English	the size of data
+		\~Japanese	データの大きさ
+		@return
+		\~English	a pointer of loaded texture
+		\~Japanese	読み込まれたモデルのポインタ
+	*/
+	virtual void* Load(const void* data, int32_t size) { return nullptr; }
+
+	/**
 		@brief	モデルを破棄する。
 		@param	data	[in]	モデル
 		@note
@@ -2803,6 +3338,79 @@ public:
 //
 //----------------------------------------------------------------------------------
 #endif	// __EFFEKSEER_MODELLOADER_H__
+
+#ifndef __EFFEKSEER_MATERIALLOADER_H__
+#define __EFFEKSEER_MATERIALLOADER_H__
+
+
+namespace Effekseer
+{
+
+/**
+	@brief	
+	\~English	Material loader
+	\~Japanese	マテリアル読み込み破棄関数指定クラス
+*/
+class MaterialLoader
+{
+public:
+	/**
+	@brief	
+	\~English	Constructor
+	\~Japanese	コンストラクタ
+	*/
+	MaterialLoader() = default;
+
+	/**
+	@brief
+	\~English	Destructor
+	\~Japanese	デストラクタ
+	*/
+	virtual ~MaterialLoader() = default;
+
+	/**
+		@brief
+		\~English	load a material
+		\~Japanese	マテリアルを読み込む。
+		@param	path	
+		\~English	a file path
+		\~Japanese	読み込み元パス
+		@return
+		\~English	a pointer of loaded a material
+		\~Japanese	読み込まれたマテリアルのポインタ
+	*/
+	virtual MaterialData* Load(const EFK_CHAR* path) { return nullptr; }
+
+	/**
+		@brief
+		\~English	a function called when a material is loaded
+		\~Japanese	マテリアルが読み込まれるときに呼ばれる関数
+		@param	data
+		\~English	data pointer
+		\~Japanese	データのポインタ
+		@param	size
+		\~English	the size of data
+		\~Japanese	データの大きさ
+		@return
+		\~English	a pointer of loaded a material
+		\~Japanese	読み込まれたマテリアルのポインタ
+	*/
+	virtual MaterialData* Load(const void* data, int32_t size) { return nullptr; }
+
+	/**
+		@brief
+		\~English	dispose a material
+		\~Japanese	マテリアルを破棄する。
+		@param	data
+		\~English	a pointer of loaded a material
+		\~Japanese	読み込まれたマテリアルのポインタ
+	*/
+	virtual void Unload(MaterialData* data) {}
+};
+
+} // namespace Effekseer
+
+#endif // __EFFEKSEER_TEXTURELOADER_H__
 
 #ifndef	__EFFEKSEER_MODEL_H__
 #define	__EFFEKSEER_MODEL_H__
@@ -3254,6 +3862,22 @@ public:
 	virtual void* Load( const EFK_CHAR* path ) { return NULL; }
 
 	/**
+		@brief
+		\~English	a function called when sound is loaded
+		\~Japanese	サウンドが読み込まれるときに呼ばれる関数
+		@param	data
+		\~English	data pointer
+		\~Japanese	データのポインタ
+		@param	size
+		\~English	the size of data
+		\~Japanese	データの大きさ
+		@return
+		\~English	a pointer of loaded texture
+		\~Japanese	読み込まれたサウンドのポインタ
+	*/
+	virtual void* Load(const void* data, int32_t size) { return nullptr; }
+
+	/**
 		@brief	サウンドを破棄する。
 		@param	data	[in]	サウンド
 		@note
@@ -3286,6 +3910,9 @@ namespace Effekseer {
 //----------------------------------------------------------------------------------
 //
 //----------------------------------------------------------------------------------
+
+class EffectFactory;
+
 /**
 	@brief	設定クラス
 	@note
@@ -3296,13 +3923,16 @@ namespace Effekseer {
 		: public ReferenceObject
 	{
 	private:
-		/* 座標系 */
+		//! coordinate system
 		CoordinateSystem		m_coordinateSystem;
 
 		EffectLoader*	m_effectLoader;
 		TextureLoader*	m_textureLoader;
 		SoundLoader*	m_soundLoader;
 		ModelLoader*	m_modelLoader;
+		MaterialLoader* m_materialLoader = nullptr;
+
+		std::vector<EffectFactory*> effectFactories;
 
 	protected:
 		/**
@@ -3383,6 +4013,54 @@ namespace Effekseer {
 			@param	loader	[in]		ローダー
 			*/
 		void SetSoundLoader(SoundLoader* loader);
+
+		/**
+			@brief
+			\~English get a material loader
+			\~Japanese マテリアルローダーを取得する。
+			@return
+			\~English	loader
+			\~Japanese ローダー
+		*/
+		MaterialLoader* GetMaterialLoader();
+
+		/**
+			@brief
+			\~English specfiy a material loader
+			\~Japanese マテリアルローダーを設定する。
+			@param	loader
+			\~English	loader
+			\~Japanese ローダー
+			*/
+		void SetMaterialLoader(MaterialLoader* loader);
+
+		/**
+			@brief
+			\~English	Add effect factory
+			\~Japanese Effect factoryを追加する。
+		*/
+		void AddEffectFactory(EffectFactory* effectFactory);
+
+		/**
+			@brief
+			\~English	Get effect factory
+			\~Japanese Effect Factoryを取得する。
+		*/
+		EffectFactory* GetEffectFactory(int32_t ind) const;
+
+		/**
+			@brief
+			\~English	clear effect factories
+			\~Japanese 全てのEffect Factoryを削除する。
+		*/
+		void ClearEffectFactory();
+
+		/**
+			@brief
+			\~English	Get the number of effect factory
+			\~Japanese Effect Factoryの数を取得する。
+		*/
+		int32_t GetEffectFactoryCount() const;
 	};
 
 //----------------------------------------------------------------------------------

@@ -1,49 +1,46 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.ComponentModel;
-using System.Drawing;
-using System.Data;
 using System.Linq;
 using System.Text;
-using System.Windows.Forms;
+using System.Threading.Tasks;
 
 namespace Effekseer.GUI.Component
 {
-	public partial class FCurveButton : Button
+	class FCurveButton : Control, IParameterControl
 	{
-		public FCurveButton()
+		string id = "";
+
+		public string Label { get; set; } = string.Empty;
+
+		public string Description { get; set; } = string.Empty;
+		
+		public bool EnableUndo { get; set; } = true;
+
+		public FCurveButton(string label = null)
 		{
-			InitializeComponent();
+			if (label != null)
+			{
+				Label = label;
+			}
 
-            Text = Properties.Resources.FCurves;
-
-			Click += new EventHandler(FCurveButton_Click);
+			id = "###" + Manager.GetUniqueID().ToString();
 		}
 
-		object boundObject = null;
-
-		public bool EnableUndo { get; set; }
+		public void FixValue()
+		{
+		}
 
 		public void SetBinding(object o)
 		{
-			boundObject = o;
 		}
 
-		void FCurveButton_Click(object sender, EventArgs e)
+		public override void Update()
 		{
-			if (boundObject == null) return;
-
-			var opened = GUIManager.DockFCurves != null && GUIManager.DockFCurves.Created;
 			
-			GUIManager.SelectOrShowWindow(typeof(DockFCurves));
-
-			if (!opened)
+			if(Manager.NativeManager.Button(Resources.GetString("FCurves") + id))
 			{
-				// うまく行かない
-				GUIManager.DockFCurves.Size = new System.Drawing.Size(600, 400);
-			}
-
-			GUIManager.DockFCurves.ScrollPosition(boundObject);
+				Manager.SelectOrShowWindow(typeof(Dock.FCurves));
+			}	
 		}
 	}
 }

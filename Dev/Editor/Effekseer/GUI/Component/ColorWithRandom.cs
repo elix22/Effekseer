@@ -1,40 +1,41 @@
-﻿using System;
+﻿#define RAW_HSV
+
+using System;
 using System.Collections.Generic;
-using System.ComponentModel;
-using System.Drawing;
-using System.Data;
 using System.Linq;
 using System.Text;
-using System.Windows.Forms;
+using System.Threading.Tasks;
 
 namespace Effekseer.GUI.Component
 {
-	public partial class ColorWithRandom : UserControl
+	class ColorWithRandom : Control, IParameterControl
 	{
-		public ColorWithRandom()
-		{
-			InitializeComponent();
-			
-			EnableUndo = true;
+		string id1 = "";
+		string id2 = "";
+		string id_c = "";
+		string id_r1 = "";
+		string id_r2 = "";
 
-			this.SuspendLayout();
-			Anchor = AnchorStyles.Left | AnchorStyles.Right;
-			this.ResumeLayout(false);
-			colorDialog.FullOpen = true;
+		bool isPopupShown = false;
 
-			Reading = false;
-			Writing = false;
+		public string Label { get; set; } = string.Empty;
 
-			Reading = true;
-			Read();
-			Reading = false;
-
-			HandleDestroyed += new EventHandler(_HandleDestroyed);
-		}
+		public string Description { get; set; } = string.Empty;
 
 		Data.Value.ColorWithRandom binding = null;
 
-		public bool EnableUndo { get; set; }
+		ValueChangingProperty valueChangingProp = new ValueChangingProperty();
+
+		bool isActive = false;
+		bool isWriting = false;
+
+		float[] internalValueMax = new float[] { 1.0f, 1.0f, 1.0f, 1.0f };
+		float[] internalValueMin = new float[] { 1.0f, 1.0f, 1.0f, 1.0f };
+
+		/// <summary>
+		/// This parameter is unused.
+		/// </summary>
+		public bool EnableUndo { get; set; } = true;
 
 		public Data.Value.ColorWithRandom Binding
 		{
@@ -46,302 +47,65 @@ namespace Effekseer.GUI.Component
 			{
 				if (binding == value) return;
 
-				if (binding != null)
+				if(binding != null)
 				{
-					binding.R.OnChanged -= OnChanged;
-					binding.G.OnChanged -= OnChanged;
-					binding.B.OnChanged -= OnChanged;
-					binding.A.OnChanged -= OnChanged;
-					binding.OnChangedColorSpace -= OnChangedColorSpace;
-					tb_r_v1.ReadMethod = null;
-					tb_r_v1.WriteMethod = null;
-					tb_r_v2.ReadMethod = null;
-					tb_r_v2.WriteMethod = null;
-					tb_g_v1.ReadMethod = null;
-					tb_g_v1.WriteMethod = null;
-					tb_g_v2.ReadMethod = null;
-					tb_g_v2.WriteMethod = null;
-					tb_b_v1.ReadMethod = null;
-					tb_b_v1.WriteMethod = null;
-					tb_b_v2.ReadMethod = null;
-					tb_b_v2.WriteMethod = null;
-					tb_a_v1.ReadMethod = null;
-					tb_a_v1.WriteMethod = null;
-					tb_a_v2.ReadMethod = null;
-					tb_a_v2.WriteMethod = null;
+					binding.OnChangedColorSpace -= Binding_OnChangedColorSpace;
+					binding.R.OnChanged -= Binding_OnChanged;
+					binding.G.OnChanged -= Binding_OnChanged;
+					binding.B.OnChanged -= Binding_OnChanged;
+					binding.A.OnChanged -= Binding_OnChanged;
 				}
 
 				binding = value;
 
 				if (binding != null)
 				{
-					binding.R.OnChanged += OnChanged;
-					binding.G.OnChanged += OnChanged;
-					binding.B.OnChanged += OnChanged;
-					binding.A.OnChanged += OnChanged;
-					binding.OnChangedColorSpace += OnChangedColorSpace;
+					// Force to minmax
+					binding.R.DrawnAs = Data.DrawnAs.MaxAndMin;
+					binding.G.DrawnAs = Data.DrawnAs.MaxAndMin;
+					binding.B.DrawnAs = Data.DrawnAs.MaxAndMin;
+					binding.A.DrawnAs = Data.DrawnAs.MaxAndMin;
 
-					tb_r_v1.ReadMethod += () =>
-					{
-						if (binding.DrawnAs == Data.DrawnAs.MaxAndMin)
-						{
-							return binding.R.Max;
-						}
-						else if (binding.DrawnAs == Data.DrawnAs.CenterAndAmplitude)
-						{
-							return binding.R.Center;
-						}
-						else
-						{
-							throw new Exception();
-						}
-					};
+					internalValueMax[0] = binding.R.Max / 255.0f;
+					internalValueMax[1] = binding.G.Max / 255.0f;
+					internalValueMax[2] = binding.B.Max / 255.0f;
+					internalValueMax[3] = binding.A.Max / 255.0f;
 
-					tb_r_v1.WriteMethod += (f, wheel) =>
-					{
-						if (binding.DrawnAs == Data.DrawnAs.MaxAndMin)
-						{
-							binding.R.SetMax(f, wheel);
-						}
-						else if (binding.DrawnAs == Data.DrawnAs.CenterAndAmplitude)
-						{
-							binding.R.SetCenter(f, wheel);
-						}
-						else
-						{
-							throw new Exception();
-						}
-					};
+					internalValueMin[0] = binding.R.Min / 255.0f;
+					internalValueMin[1] = binding.G.Min / 255.0f;
+					internalValueMin[2] = binding.B.Min / 255.0f;
+					internalValueMin[3] = binding.A.Min / 255.0f;
 
-					tb_r_v2.ReadMethod += () =>
-					{
-						if (binding.DrawnAs == Data.DrawnAs.MaxAndMin)
-						{
-							return binding.R.Min;
-						}
-						else if (binding.DrawnAs == Data.DrawnAs.CenterAndAmplitude)
-						{
-							return binding.R.Amplitude;
-						}
-						else
-						{
-							throw new Exception();
-						}
-					};
+					binding.OnChangedColorSpace += Binding_OnChangedColorSpace;
+					binding.R.OnChanged += Binding_OnChanged;
+					binding.G.OnChanged += Binding_OnChanged;
+					binding.B.OnChanged += Binding_OnChanged;
+					binding.A.OnChanged += Binding_OnChanged;
 
-					tb_r_v2.WriteMethod += (f, wheel) =>
+#if !RAW_HSV
+					if(binding.ColorSpace == Data.ColorSpace.HSVA)
 					{
-						if (binding.DrawnAs == Data.DrawnAs.MaxAndMin)
-						{
-							binding.R.SetMin(f,wheel);
-						}
-						else if (binding.DrawnAs == Data.DrawnAs.CenterAndAmplitude)
-						{
-							binding.R.SetAmplitude(f, wheel);
-						}
-						else
-						{
-							throw new Exception();
-						}
-					};
-
-					tb_g_v1.ReadMethod += () =>
-					{
-						if (binding.DrawnAs == Data.DrawnAs.MaxAndMin)
-						{
-							return binding.G.Max;
-						}
-						else if (binding.DrawnAs == Data.DrawnAs.CenterAndAmplitude)
-						{
-							return binding.G.Center;
-						}
-						else
-						{
-							throw new Exception();
-						}
-					};
-
-					tb_g_v1.WriteMethod += (f, wheel) =>
-					{
-						if (binding.DrawnAs == Data.DrawnAs.MaxAndMin)
-						{
-							binding.G.SetMax(f, wheel);
-						}
-						else if (binding.DrawnAs == Data.DrawnAs.CenterAndAmplitude)
-						{
-							binding.G.SetCenter(f, wheel);
-						}
-						else
-						{
-							throw new Exception();
-						}
-					};
-
-					tb_g_v2.ReadMethod += () =>
-					{
-						if (binding.DrawnAs == Data.DrawnAs.MaxAndMin)
-						{
-							return binding.G.Min;
-						}
-						else if (binding.DrawnAs == Data.DrawnAs.CenterAndAmplitude)
-						{
-							return binding.G.Amplitude;
-						}
-						else
-						{
-							throw new Exception();
-						}
-					};
-
-					tb_g_v2.WriteMethod += (f, wheel) =>
-					{
-						if (binding.DrawnAs == Data.DrawnAs.MaxAndMin)
-						{
-							binding.G.SetMin(f, wheel);
-						}
-						else if (binding.DrawnAs == Data.DrawnAs.CenterAndAmplitude)
-						{
-							binding.G.SetAmplitude(f, wheel);
-						}
-						else
-						{
-							throw new Exception();
-						}
-					};
-
-					tb_b_v1.ReadMethod += () =>
-					{
-						if (binding.DrawnAs == Data.DrawnAs.MaxAndMin)
-						{
-							return binding.B.Max;
-						}
-						else if (binding.DrawnAs == Data.DrawnAs.CenterAndAmplitude)
-						{
-							return binding.B.Center;
-						}
-						else
-						{
-							throw new Exception();
-						}
-					};
-
-					tb_b_v1.WriteMethod += (f, wheel) =>
-					{
-						if (binding.DrawnAs == Data.DrawnAs.MaxAndMin)
-						{
-							binding.B.SetMax(f, wheel);
-						}
-						else if (binding.DrawnAs == Data.DrawnAs.CenterAndAmplitude)
-						{
-							binding.B.SetCenter(f, wheel);
-						}
-						else
-						{
-							throw new Exception();
-						}
-					};
-
-					tb_b_v2.ReadMethod += () =>
-					{
-						if (binding.DrawnAs == Data.DrawnAs.MaxAndMin)
-						{
-							return binding.B.Min;
-						}
-						else if (binding.DrawnAs == Data.DrawnAs.CenterAndAmplitude)
-						{
-							return binding.B.Amplitude;
-						}
-						else
-						{
-							throw new Exception();
-						}
-					};
-
-					tb_b_v2.WriteMethod += (f, wheel) =>
-					{
-						if (binding.DrawnAs == Data.DrawnAs.MaxAndMin)
-						{
-							binding.B.SetMin(f, wheel);
-						}
-						else if (binding.DrawnAs == Data.DrawnAs.CenterAndAmplitude)
-						{
-							binding.B.SetAmplitude(f, wheel);
-						}
-						else
-						{
-							throw new Exception();
-						}
-					};
-
-					tb_a_v1.ReadMethod += () =>
-					{
-						if (binding.DrawnAs == Data.DrawnAs.MaxAndMin)
-						{
-							return binding.A.Max;
-						}
-						else if (binding.DrawnAs == Data.DrawnAs.CenterAndAmplitude)
-						{
-							return binding.A.Center;
-						}
-						else
-						{
-							throw new Exception();
-						}
-					};
-
-					tb_a_v1.WriteMethod += (f, wheel) =>
-					{
-						if (binding.DrawnAs == Data.DrawnAs.MaxAndMin)
-						{
-							binding.A.SetMax(f, wheel);
-						}
-						else if (binding.DrawnAs == Data.DrawnAs.CenterAndAmplitude)
-						{
-							binding.A.SetCenter(f, wheel);
-						}
-						else
-						{
-							throw new Exception();
-						}
-					};
-
-					tb_a_v2.ReadMethod += () =>
-					{
-						if (binding.DrawnAs == Data.DrawnAs.MaxAndMin)
-						{
-							return binding.A.Min;
-						}
-						else if (binding.DrawnAs == Data.DrawnAs.CenterAndAmplitude)
-						{
-							return binding.A.Amplitude;
-						}
-						else
-						{
-							throw new Exception();
-						}
-					};
-
-					tb_a_v2.WriteMethod += (f, wheel) =>
-					{
-						if (binding.DrawnAs == Data.DrawnAs.MaxAndMin)
-						{
-							binding.A.SetMin(f, wheel);
-						}
-						else if (binding.DrawnAs == Data.DrawnAs.CenterAndAmplitude)
-						{
-							binding.A.SetAmplitude(f, wheel);
-						}
-						else
-						{
-							throw new Exception();
-						}
-					};
+						convertHSV2RGB(internalValueMin);
+						convertHSV2RGB(internalValueMax);
+					}
+#endif
 				}
-
-				Reading = true;
-				Read();
-				Reading = false;
 			}
+		}
+
+
+		public ColorWithRandom(string label = null)
+		{
+			if (label != null)
+			{
+				Label = label;
+			}
+
+			id1 = "###" + Manager.GetUniqueID().ToString();
+			id2 = "###" + Manager.GetUniqueID().ToString();
+			id_c = "###" + Manager.GetUniqueID().ToString();
+			id_r1 = "###" + Manager.GetUniqueID().ToString();
+			id_r2 = "###" + Manager.GetUniqueID().ToString();
 		}
 
 		public void SetBinding(object o)
@@ -350,348 +114,322 @@ namespace Effekseer.GUI.Component
 			Binding = o_;
 		}
 
-		/// <summary>
-		/// 他のクラスからデータ読み込み中
-		/// </summary>
-		public bool Reading
+		public void FixValue()
 		{
-			get;
-			private set;
-		}
+#if RAW_HSV
+							binding.SetMin(
+				(int)Math.Round(internalValueMin[0] * 255, MidpointRounding.AwayFromZero),
+				(int)Math.Round(internalValueMin[1] * 255, MidpointRounding.AwayFromZero),
+				(int)Math.Round(internalValueMin[2] * 255, MidpointRounding.AwayFromZero),
+				(int)Math.Round(internalValueMin[3] * 255, MidpointRounding.AwayFromZero),
+				isActive);
 
-		/// <summary>
-		/// 他のクラスにデータ書き込み中
-		/// </summary>
-		public bool Writing
-		{
-			get;
-			private set;
-		}
-
-		void Read()
-		{
-			if (!Reading) throw new Exception();
-
-			if (binding != null)
+				binding.SetMax(
+				(int)Math.Round(internalValueMax[0] * 255, MidpointRounding.AwayFromZero),
+				(int)Math.Round(internalValueMax[1] * 255, MidpointRounding.AwayFromZero),
+				(int)Math.Round(internalValueMax[2] * 255, MidpointRounding.AwayFromZero),
+				(int)Math.Round(internalValueMax[3] * 255, MidpointRounding.AwayFromZero),
+				isActive);
+#else
+			if (binding.ColorSpace == Data.ColorSpace.HSVA)
 			{
-				drawnas_1.Enabled = true;
-				drawnas_2.Enabled = true;
-				drawnas_1.Checked = binding.DrawnAs == Data.DrawnAs.MaxAndMin;
-				drawnas_2.Checked = binding.DrawnAs == Data.DrawnAs.CenterAndAmplitude;
-				colorSpace_1.Enabled = true;
-				colorSpace_2.Enabled = true;
-				colorSpace_1.Checked = binding.ColorSpace == Data.ColorSpace.RGBA;
-				colorSpace_2.Checked = binding.ColorSpace == Data.ColorSpace.HSVA;
+				var ivmin = (float[])internalValueMin.Clone();
+				var ivmax = (float[])internalValueMax.Clone();
+				convertRGB2HSV(ivmin);
+				convertRGB2HSV(ivmax);
 
-				if (drawnas_1.Checked)
-				{
-                    lb_v1.Text = Properties.Resources.Max;
-                    lb_v2.Text = Properties.Resources.Min;
-				}
+				binding.SetMin(
+				(int)Math.Round(ivmin[0] * 255, MidpointRounding.AwayFromZero),
+				(int)Math.Round(ivmin[1] * 255, MidpointRounding.AwayFromZero),
+				(int)Math.Round(ivmin[2] * 255, MidpointRounding.AwayFromZero),
+				(int)Math.Round(ivmin[3] * 255, MidpointRounding.AwayFromZero),
+				isActive);
 
-				if (drawnas_2.Checked)
-				{
-                    lb_v1.Text = Properties.Resources.Mean;
-                    lb_v2.Text = Properties.Resources.Deviation;
-				}
-				
-				if (colorSpace_1.Checked)
-				{
-					lb_r.Text = "R";
-					lb_g.Text = "G";
-					lb_b.Text = "B";
-					lb_a.Text = "A";
-				}
-				
-				if (colorSpace_2.Checked)
-				{
-					lb_r.Text = "H";
-					lb_g.Text = "S";
-					lb_b.Text = "V";
-					lb_a.Text = "A";
-				}
-
-				btn_color_min.Enabled = true;
-				btn_color_max.Enabled = true;
-				if (binding.ColorSpace == Data.ColorSpace.RGBA)
-				{
-					btn_color_min.BackColor = Color.FromArgb(binding.R.Min, binding.G.Min, binding.B.Min);
-					btn_color_max.BackColor = Color.FromArgb(binding.R.Max, binding.G.Max, binding.B.Max);
-				}
-				else
-				{
-					btn_color_min.BackColor = HSVToRGB(Color.FromArgb(binding.R.Min, binding.G.Min, binding.B.Min));
-					btn_color_max.BackColor = HSVToRGB(Color.FromArgb(binding.R.Max, binding.G.Max, binding.B.Max));
-				}
+				binding.SetMax(
+				(int)Math.Round(ivmax[0] * 255, MidpointRounding.AwayFromZero),
+				(int)Math.Round(ivmax[1] * 255, MidpointRounding.AwayFromZero),
+				(int)Math.Round(ivmax[2] * 255, MidpointRounding.AwayFromZero),
+				(int)Math.Round(ivmax[3] * 255, MidpointRounding.AwayFromZero),
+				isActive);
 			}
 			else
 			{
-				drawnas_1.Enabled = false;
-				drawnas_2.Enabled = false;
-				drawnas_1.Checked = false;
-				drawnas_2.Checked = false;
-				colorSpace_1.Enabled = false;
-				colorSpace_2.Enabled = false;
-				colorSpace_1.Checked = false;
-				colorSpace_2.Checked = false;
+				binding.SetMin(
+				(int)Math.Round(internalValueMin[0] * 255, MidpointRounding.AwayFromZero),
+				(int)Math.Round(internalValueMin[1] * 255, MidpointRounding.AwayFromZero),
+				(int)Math.Round(internalValueMin[2] * 255, MidpointRounding.AwayFromZero),
+				(int)Math.Round(internalValueMin[3] * 255, MidpointRounding.AwayFromZero),
+				isActive);
 
-				lb_v1.Text = string.Empty;
-				lb_v2.Text = string.Empty;
-
-				btn_color_min.Enabled = false;
-				btn_color_max.Enabled = false;
-				btn_color_min.BackColor = Color.FromArgb(255, 255, 255);
-				btn_color_max.BackColor = Color.FromArgb(255, 255, 255);
+				binding.SetMax(
+				(int)Math.Round(internalValueMax[0] * 255, MidpointRounding.AwayFromZero),
+				(int)Math.Round(internalValueMax[1] * 255, MidpointRounding.AwayFromZero),
+				(int)Math.Round(internalValueMax[2] * 255, MidpointRounding.AwayFromZero),
+				(int)Math.Round(internalValueMax[3] * 255, MidpointRounding.AwayFromZero),
+				isActive);
 			}
-
-			tb_r_v1.Reload();
-			tb_r_v2.Reload();
-			tb_g_v1.Reload();
-			tb_g_v2.Reload();
-			tb_b_v1.Reload();
-			tb_b_v2.Reload();
-			tb_a_v1.Reload();
-			tb_a_v2.Reload();
+#endif
 		}
 
-		void Write()
+		public override void Update()
 		{
-			if (!Writing) throw new Exception();
+			if (binding == null) return;
 
-			if (drawnas_1.Checked)
+			valueChangingProp.Enable(binding);
+
+			isPopupShown = false;
+
+			var colorSpace = binding.ColorSpace == Data.ColorSpace.RGBA ? swig.ColorEditFlags.RGB : swig.ColorEditFlags.HSV;
+			
+			Manager.NativeManager.PushItemWidth(Manager.NativeManager.GetColumnWidth() - 60);
+
+			if (Manager.NativeManager.ColorEdit4(id1, internalValueMin, swig.ColorEditFlags.NoOptions | colorSpace))
 			{
-				binding.DrawnAs = Data.DrawnAs.MaxAndMin;
+				isWriting = true;
+
+				FixValue();
+
+				isWriting = false;
 			}
-			if (drawnas_2.Checked)
+
+
+			var isActive_Current = Manager.NativeManager.IsItemActive();
+
+			Popup();
+
+			Manager.NativeManager.SameLine();
+			Manager.NativeManager.Text(Resources.GetString("Min"));
+
+			if (Manager.NativeManager.ColorEdit4(id2, internalValueMax, swig.ColorEditFlags.NoOptions | colorSpace))
 			{
-				binding.DrawnAs = Data.DrawnAs.CenterAndAmplitude;
+				isWriting = true;
+
+				FixValue();
+
+				isWriting = false;
 			}
-			if (colorSpace_1.Checked)
+
+
+			isActive_Current = isActive_Current || Manager.NativeManager.IsItemActive();
+
+			if (isActive && !isActive_Current)
 			{
-				if (binding.ColorSpace != Data.ColorSpace.RGBA)
+				FixValue();
+			}
+
+			isActive = isActive_Current;
+
+			Popup();
+
+			Manager.NativeManager.SameLine();
+			Manager.NativeManager.Text(Resources.GetString("Max"));
+
+			Manager.NativeManager.PopItemWidth();
+
+			valueChangingProp.Disable();
+		}
+
+		void Popup()
+		{
+			if (isPopupShown) return;
+
+			if (Manager.NativeManager.BeginPopupContextItem(id_c))
+			{
+				var txt_r_r1 = "RGBA";
+				var txt_r_r2 = "HSVA";
+
+				if (Manager.NativeManager.RadioButton(txt_r_r1 + id_r1, binding.ColorSpace == Data.ColorSpace.RGBA))
 				{
 					binding.ChangeColorSpace(Data.ColorSpace.RGBA, true);
 				}
-			}
-			if (colorSpace_2.Checked)
-			{
-				if (binding.ColorSpace != Data.ColorSpace.HSVA)
+
+				Manager.NativeManager.SameLine();
+
+				if (Manager.NativeManager.RadioButton(txt_r_r2 + id_r2, binding.ColorSpace == Data.ColorSpace.HSVA))
 				{
 					binding.ChangeColorSpace(Data.ColorSpace.HSVA, true);
 				}
-			}
-		}
 
-		void OnChanged(object sender, ChangedValueEventArgs e)
-		{
-			if (Writing) return;
-
-			Reading = true;
-			Read();
-			Reading = false;
-		}
-		
-		void OnChangedColorSpace(object sender, ChangedValueEventArgs e)
-		{
-			bool changeColor = (bool)e.Value;
-
-			if (changeColor)
-			{
-				if (binding.ColorSpace == Data.ColorSpace.RGBA)
-				{
-					Color max = HSVToRGB(Color.FromArgb(Binding.R.Max, Binding.G.Max, Binding.B.Max));
-					Color min = HSVToRGB(Color.FromArgb(Binding.R.Min, Binding.G.Min, Binding.B.Min));
-					Binding.SetMax(max.R, max.G, max.B);
-					Binding.SetMin(min.R, min.G, min.B);
-				}
-				else
-				{
-					Color max = RGBToHSV(Color.FromArgb(Binding.R.Max, Binding.G.Max, Binding.B.Max));
-					Color min = RGBToHSV(Color.FromArgb(Binding.R.Min, Binding.G.Min, Binding.B.Min));
-					Binding.SetMax(max.R, max.G, max.B);
-					Binding.SetMin(min.R, min.G, min.B);
-				}
+				Manager.NativeManager.EndPopup();
+				isPopupShown = true;
 			}
 
-			if (Writing) return;
-
-			Reading = true;
-			Read();
-			Reading = false;
 		}
 
-		private void btn_color_min_Click(object sender, EventArgs e)
+		private void Binding_OnChangedColorSpace(object sender, ChangedValueEventArgs e)
 		{
 			if (binding != null)
 			{
-				colorDialog.Color = Color.FromArgb(binding.R.Min, binding.G.Min, binding.B.Min);
-				if (Binding.ColorSpace == Data.ColorSpace.HSVA)
-				{
-					colorDialog.Color = HSVToRGB(colorDialog.Color);
-					colorDialog.ShowDialog();
-					colorDialog.Color = RGBToHSV(colorDialog.Color);
-				}
-				else
-				{
-					colorDialog.ShowDialog();
-				}
-				binding.SetMin(colorDialog.Color.R, colorDialog.Color.G, colorDialog.Color.B);
-			}
-			else
-			{
+				internalValueMax[0] = binding.R.Max / 255.0f;
+				internalValueMax[1] = binding.G.Max / 255.0f;
+				internalValueMax[2] = binding.B.Max / 255.0f;
+				internalValueMax[3] = binding.A.Max / 255.0f;
 
+				internalValueMin[0] = binding.R.Min / 255.0f;
+				internalValueMin[1] = binding.G.Min / 255.0f;
+				internalValueMin[2] = binding.B.Min / 255.0f;
+				internalValueMin[3] = binding.A.Min / 255.0f;
+
+#if !RAW_HSV
+				if (binding.ColorSpace == Data.ColorSpace.HSVA)
+				{
+					convertHSV2RGB(internalValueMin);
+					convertHSV2RGB(internalValueMax);
+				}
+#endif
 			}
 		}
 
-		private void btn_color_max_Click(object sender, EventArgs e)
+		private void Binding_OnChanged(object sender, ChangedValueEventArgs e)
 		{
+			if (isWriting) return;
 			if (binding != null)
 			{
-				colorDialog.Color = Color.FromArgb(binding.R.Max, binding.G.Max, binding.B.Max);
-				if (Binding.ColorSpace == Data.ColorSpace.HSVA)
+				internalValueMax[0] = binding.R.Max / 255.0f;
+				internalValueMax[1] = binding.G.Max / 255.0f;
+				internalValueMax[2] = binding.B.Max / 255.0f;
+				internalValueMax[3] = binding.A.Max / 255.0f;
+
+				internalValueMin[0] = binding.R.Min / 255.0f;
+				internalValueMin[1] = binding.G.Min / 255.0f;
+				internalValueMin[2] = binding.B.Min / 255.0f;
+				internalValueMin[3] = binding.A.Min / 255.0f;
+
+#if !RAW_HSV
+				if (binding.ColorSpace == Data.ColorSpace.HSVA)
 				{
-					colorDialog.Color = HSVToRGB(colorDialog.Color);
-					colorDialog.ShowDialog();
-					colorDialog.Color = RGBToHSV(colorDialog.Color);
+					convertHSV2RGB(internalValueMin);
+					convertHSV2RGB(internalValueMax);
 				}
-				else
-				{
-					colorDialog.ShowDialog();
-				}
-				binding.SetMax(colorDialog.Color.R, colorDialog.Color.G, colorDialog.Color.B);
+#endif
 			}
-			else
+		}
+
+		void convertRGB2HSV(float[] values)
+		{
+			color c = new color();
+			c.R = (int)Math.Round(values[0] * 255, MidpointRounding.AwayFromZero);
+			c.G = (int)Math.Round(values[1] * 255, MidpointRounding.AwayFromZero);
+			c.B = (int)Math.Round(values[2] * 255, MidpointRounding.AwayFromZero);
+			c = RGBToHSV(c);
+			values[0] = c.R / 255.0f;
+			values[1] = c.G / 255.0f;
+			values[2] = c.B / 255.0f;
+		}
+
+		void convertHSV2RGB(float[] values)
+		{
+			color c = new color();
+			c.R = (int)Math.Round(values[0] * 255, MidpointRounding.AwayFromZero);
+			c.G = (int)Math.Round(values[1] * 255, MidpointRounding.AwayFromZero);
+			c.B = (int)Math.Round(values[2] * 255, MidpointRounding.AwayFromZero);
+			c = HSVToRGB(c);
+			values[0] = c.R / 255.0f;
+			values[1] = c.G / 255.0f;
+			values[2] = c.B / 255.0f;
+		}
+
+		struct color
+		{
+			public int R;
+			public int G;
+			public int B;
+		}
+
+		static color RGBToHSV(color rgb)
+		{
+			double max;
+			double min;
+			double R, G, B, H, S, V;
+
+			R = (double)rgb.R / 255.0;
+			G = (double)rgb.G / 255.0;
+			B = (double)rgb.B / 255.0;
+
+			if (R >= G && R >= B)
 			{
-
-			}
-		}
-
-		private void Update()
-		{
-			if (Reading) return;
-			if (Writing) return;
-
-			Writing = true;
-			Write();
-			Writing = false;
-
-			Reading = true;
-			Read();
-			Reading = false;
-		}
-
-		private void drawnas_1_CheckedChanged(object sender, EventArgs e)
-		{
-			Update();
-		}
-
-		private void drawnas_2_CheckedChanged(object sender, EventArgs e)
-		{
-			Update();
-		}
-
-		private void colorSpace_1_CheckedChanged(object sender, EventArgs e)
-		{
-			Update();
-		}
-
-		private void colorSpace_2_CheckedChanged(object sender, EventArgs e)
-		{
-			Update();
-		}
-
-		void _HandleDestroyed(object sender, EventArgs e)
-		{
-			tb_r_v1.ReadMethod = null;
-			tb_r_v1.WriteMethod = null;
-			tb_r_v2.ReadMethod = null;
-			tb_r_v2.WriteMethod = null;
-
-			tb_g_v1.ReadMethod = null;
-			tb_g_v1.WriteMethod = null;
-			tb_g_v2.ReadMethod = null;
-			tb_g_v2.WriteMethod = null;
-
-			tb_b_v1.ReadMethod = null;
-			tb_b_v1.WriteMethod = null;
-			tb_b_v2.ReadMethod = null;
-			tb_b_v2.WriteMethod = null;
-
-			tb_a_v1.ReadMethod = null;
-			tb_a_v1.WriteMethod = null;
-			tb_a_v2.ReadMethod = null;
-			tb_a_v2.WriteMethod = null;
-
-			Binding = null;
-		}
-
-		static Color RGBToHSV(Color rgb)
-		{
-			float max;
-			float min;
-			float R, G, B, H, S, V;
-
-			R = (float)rgb.R / 255;
-			G = (float)rgb.G / 255;
-			B = (float)rgb.B / 255;
-
-			if (R >= G && R >= B) {
 				max = R;
 				min = (G < B) ? G : B;
-			} else if (G >= R && G >= B) {
+			}
+			else if (G >= R && G >= B)
+			{
 				max = G;
 				min = (R < B) ? R : B;
-			} else {
+			}
+			else
+			{
 				max = B;
 				min = (R < G) ? R : G;
 			}
-			if (R == G && G == B) {
+			if (R == G && G == B)
+			{
 				H = 0.0f;
-			} else if (max == R) {
+			}
+			else if (max == R)
+			{
 				H = 60 * (G - B) / (max - min);
-			} else if (max == G){
+			}
+			else if (max == G)
+			{
 				H = 60 * (B - R) / (max - min) + 120;
-			} else {
+			}
+			else
+			{
 				H = 60 * (R - G) / (max - min) + 240;
 			}
-			if (H < 0.0f) {
+			if (H < 0.0f)
+			{
 				H += 360.0f;
 			}
-			if (max == 0.0f) {
+			if (max == 0.0f)
+			{
 				S = 0.0f;
-			} else {
+			}
+			else
+			{
 				S = (max - min) / max;
 			}
 			V = max;
-			return Color.FromArgb((int)(H / 360 * 252), (int)(S * 255), (int)(V * 255));
+
+			color ret = new color();
+			ret.R = (int)Math.Round(H / 360 * 252, MidpointRounding.AwayFromZero);
+			ret.G = (int)Math.Round(S * 255, MidpointRounding.AwayFromZero);
+			ret.B = (int)Math.Round(V * 255, MidpointRounding.AwayFromZero);
+			return ret;
 		}
 
-		static Color HSVToRGB(Color hsv)
+		static color HSVToRGB(color hsv)
 		{
 			int H = hsv.R, S = hsv.G, V = hsv.B;
 			int i, R = 0, G = 0, B = 0, f, p, q, t;
-	
+
 			i = H / 42 % 6;
 			f = H % 42 * 6;
-			p = (V * (256 -   S                   )) >> 8;
-			q = (V * (256 - ((S * f        ) >> 8))) >> 8;
+			p = (V * (256 - S)) >> 8;
+			q = (V * (256 - ((S * f) >> 8))) >> 8;
 			t = (V * (256 - ((S * (252 - f)) >> 8))) >> 8;
-			if (p < 0)   p = 0;
+			if (p < 0) p = 0;
 			if (p > 255) p = 255;
-			if (q < 0)   q = 0;
+			if (q < 0) q = 0;
 			if (q > 255) q = 255;
-			if (t < 0)   t = 0;
+			if (t < 0) t = 0;
 			if (t > 255) t = 255;
 
-			switch (i) {
-			case 0: R = V; G = t; B = p; break;
-			case 1: R = q; G = V; B = p; break;
-			case 2: R = p; G = V; B = t; break;
-			case 3: R = p; G = q; B = V; break;
-			case 4: R = t; G = p; B = V; break;
-			case 5: R = V; G = p; B = q; break;
+			switch (i)
+			{
+				case 0: R = V; G = t; B = p; break;
+				case 1: R = q; G = V; B = p; break;
+				case 2: R = p; G = V; B = t; break;
+				case 3: R = p; G = q; B = V; break;
+				case 4: R = t; G = p; B = V; break;
+				case 5: R = V; G = p; B = q; break;
 			}
-			return Color.FromArgb(hsv.A, R, G, B);
+
+			color ret = new color();
+			ret.R = R;
+			ret.G = G;
+			ret.B = B;
+			return ret;
 		}
 	}
 }

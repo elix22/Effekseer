@@ -17,12 +17,13 @@
 //#include "EffekseerRendererDX11.TrackRenderer.h"
 #include "EffekseerRendererDX11.TextureLoader.h"
 #include "EffekseerRendererDX11.ModelLoader.h"
+#include "EffekseerRendererDX11.MaterialLoader.h"
 
 #include "../../EffekseerRendererCommon/EffekseerRenderer.SpriteRendererBase.h"
 #include "../../EffekseerRendererCommon/EffekseerRenderer.RibbonRendererBase.h"
 #include "../../EffekseerRendererCommon/EffekseerRenderer.RingRendererBase.h"
 #include "../../EffekseerRendererCommon/EffekseerRenderer.TrackRendererBase.h"
-
+#include "../../EffekseerRendererCommon/EffekseerRenderer.Renderer_Impl.h"
 #ifdef __EFFEKSEER_RENDERER_INTERNAL_LOADER__
 #include "../../EffekseerRendererCommon/EffekseerRenderer.PngTextureLoader.h"
 #endif
@@ -786,6 +787,15 @@ void RendererImplemented::SetCameraParameter(const ::Effekseer::Vector3D& front,
 #endif
 }
 
+::Effekseer::MaterialLoader* RendererImplemented::CreateMaterialLoader(::Effekseer::FileInterface* fileInterface) { 
+#ifdef __EFFEKSEER_RENDERER_INTERNAL_LOADER__
+	return new MaterialLoader(this, fileInterface);
+#else
+	return nullptr;
+#endif
+}
+
+
 Effekseer::TextureData* RendererImplemented::GetBackground()
 {
 	if (m_background.UserPtr == nullptr) return nullptr;
@@ -872,8 +882,8 @@ void RendererImplemented::SetLayout( Shader* shader )
 //----------------------------------------------------------------------------------
 void RendererImplemented::DrawSprites( int32_t spriteCount, int32_t vertexOffset )
 {
-	drawcallCount++;
-	drawvertexCount += spriteCount * 4;
+	impl->drawcallCount++;
+	impl->drawvertexCount += spriteCount * 4;
 
 	if (m_renderMode == Effekseer::RenderMode::Normal)
 	{
@@ -896,8 +906,8 @@ void RendererImplemented::DrawSprites( int32_t spriteCount, int32_t vertexOffset
 //----------------------------------------------------------------------------------
 void RendererImplemented::DrawPolygon( int32_t vertexCount, int32_t indexCount)
 {
-	drawcallCount++;
-	drawvertexCount += vertexCount;
+	impl->drawcallCount++;
+	impl->drawvertexCount += vertexCount;
 
 	GetContext()->DrawIndexed(
 		indexCount,
@@ -946,14 +956,18 @@ void RendererImplemented::EndShader(Shader* shader)
 	currentShader = nullptr;
 }
 
-void RendererImplemented::SetVertexBufferToShader(const void* data, int32_t size)
+void RendererImplemented::SetVertexBufferToShader(const void* data, int32_t size, int32_t dstOffset)
 {
-	memcpy(currentShader->GetVertexConstantBuffer(), data, size);
+	assert(currentShader != nullptr);
+	auto p = static_cast<uint8_t*>(currentShader->GetVertexConstantBuffer()) + dstOffset;
+	memcpy(p, data, size);
 }
 
-void RendererImplemented::SetPixelBufferToShader(const void* data, int32_t size)
+void RendererImplemented::SetPixelBufferToShader(const void* data, int32_t size, int32_t dstOffset)
 {
-	memcpy(currentShader->GetPixelConstantBuffer(), data, size);
+	assert(currentShader != nullptr);
+	auto p = static_cast<uint8_t*>(currentShader->GetPixelConstantBuffer()) + dstOffset;
+	memcpy(p, data, size);
 }
 
 //----------------------------------------------------------------------------------
@@ -961,7 +975,7 @@ void RendererImplemented::SetPixelBufferToShader(const void* data, int32_t size)
 //----------------------------------------------------------------------------------
 void RendererImplemented::SetTextures(Shader* shader, Effekseer::TextureData** textures, int32_t count)
 {
-	ID3D11ShaderResourceView* srv[3];
+	ID3D11ShaderResourceView* srv[4];
 	for (int32_t i = 0; i < count; i++)
 	{
 		if (textures[i] == nullptr)
@@ -980,26 +994,6 @@ void RendererImplemented::ResetRenderState()
 {
 	m_renderState->GetActiveState().Reset();
 	m_renderState->Update( true );
-}
-
-int32_t RendererImplemented::GetDrawCallCount() const
-{
-	return drawcallCount;
-}
-
-int32_t RendererImplemented::GetDrawVertexCount() const
-{
-	return drawvertexCount;
-}
-
-void RendererImplemented::ResetDrawCallCount()
-{
-	drawcallCount = 0;
-}
-
-void RendererImplemented::ResetDrawVertexCount()
-{
-	drawvertexCount = 0;
 }
 
 //----------------------------------------------------------------------------------

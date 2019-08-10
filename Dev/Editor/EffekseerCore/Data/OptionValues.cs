@@ -177,8 +177,10 @@ namespace Effekseer.Data
 		}
 
 
-        // コンストラクタで初期化時、使用言語がまだ決められないので遅延初期化にする
-        Lazy<Value.PathForImage> LasyBackgroundImage;
+        /// <summary>
+        /// this value is initialized lazily because it cannot decide using language in the constructor
+        /// </summary>
+        Value.PathForImage LasyBackgroundImage;
 
 		[Name(language = Language.Japanese, value = "背景画像")]
 		[Description(language = Language.Japanese, value = "背景画像")]
@@ -189,7 +191,11 @@ namespace Effekseer.Data
 		{
             get
             {
-                return LasyBackgroundImage.Value;
+                if(LasyBackgroundImage == null)
+                {
+                    LasyBackgroundImage = new Value.PathForImage(Resources.GetString("ImageFilter"), false, "");
+                }
+                return LasyBackgroundImage;
             }
 		}
 
@@ -270,12 +276,11 @@ namespace Effekseer.Data
             get;
             private set;
         }
-        
+
         public OptionValues()
 		{
 			RenderingMode = new Value.Enum<RenderMode>(RenderMode.Normal);
 			BackgroundColor = new Value.Color(0, 0, 0, 255);
-            LasyBackgroundImage = new Lazy<Value.PathForImage>(() => { return new Value.PathForImage(Resources.GetString("ImageFilter"), false, ""); });
 			GridColor = new Value.Color(255, 255, 255, 255);
 			
 			IsGridShown = new Value.Boolean(true);
@@ -301,16 +306,8 @@ namespace Effekseer.Data
 
 			DistortionType = new Value.Enum<DistortionMethodType>(DistortionMethodType.Current);
 
-            // Switch the language according to the OS settings
-            var culture = System.Globalization.CultureInfo.CurrentCulture;
-            if (culture.Name == "ja-JP")
-            {
-                GuiLanguage = new Value.Enum<Language>(Language.Japanese);
-            }
-            else
-            {
-                GuiLanguage = new Value.Enum<Language>(Language.English);
-            }
+			// Switch the language according to the OS settings
+			GuiLanguage = new Value.Enum<Language>(LanguageGetter.GetLanguage());
 		}
 		
 		public enum RenderMode : int

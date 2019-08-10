@@ -5,7 +5,27 @@ using System.Text;
 
 namespace Effekseer.Data
 {
-	public enum ParentEffectType : int
+    public enum RecordingExporterType : int
+    {
+        Sprite,
+        SpriteSheet,
+        Gif,
+        Avi,
+    }
+
+    public enum RecordingTransparentMethodType : int
+    {
+        None,
+        Original,
+        GenerateAlpha,
+    }
+
+	public enum RecordingStorageTargetTyoe : int
+	{
+		Global,
+		Local,
+	}
+    public enum ParentEffectType : int
 	{
 		[Name(value = "なし", language = Language.Japanese)]
 		[Name(value = "Never", language = Language.English)]
@@ -522,5 +542,74 @@ namespace Effekseer.Data
 			ID = -1;
 			Value = -1;
 		}
+	}
+
+	/// <summary>
+	/// A class to show editable value in parameter list
+	/// </summary>
+	public class EditableValue
+	{
+		public object Value;
+		public string Title = string.Empty;
+		public string Description = string.Empty;
+		public bool IsUndoEnabled;
+		public bool IsShown = true;
+		public int SelectorID = -1;
+		public int SelectedID = -1;
+		public int SelectedValue = -1;
+
+		public static EditableValue Create(object o, System.Reflection.PropertyInfo info)
+		{
+			var ret = new EditableValue();
+			ret.Value = o;
+
+			var p = info;
+			var attributes = p.GetCustomAttributes(false);
+
+			ret.Title = NameAttribute.GetName(attributes);
+			ret.Description = DescriptionAttribute.GetDescription(attributes);
+
+			var undo = attributes.Where(_ => _.GetType() == typeof(UndoAttribute)).FirstOrDefault() as UndoAttribute;
+			if (undo != null && !undo.Undo)
+			{
+				ret.IsUndoEnabled = false;
+			}
+			else
+			{
+				ret.IsUndoEnabled = true;
+			}
+
+			var shown = attributes.Where(_ => _.GetType() == typeof(ShownAttribute)).FirstOrDefault() as ShownAttribute;
+
+			if (shown != null && !shown.Shown)
+			{
+				ret.IsShown = false;
+			}
+
+			var selector_attribute = (from a in attributes where a is Data.SelectorAttribute select a).FirstOrDefault() as Data.SelectorAttribute;
+			if (selector_attribute != null)
+			{
+				ret.SelectorID = selector_attribute.ID;
+			}
+
+			var selected_attribute = (from a in attributes where a is Data.SelectedAttribute select a).FirstOrDefault() as Data.SelectedAttribute;
+			if (selected_attribute != null)
+			{
+				ret.SelectedID = selected_attribute.ID;
+				ret.SelectedValue = selected_attribute.Value;
+			}
+
+			return ret;
+		}
+	}
+
+	/// <summary>
+	/// An interface to special editable parameters
+	/// </summary>
+	public interface IEditableValueCollection
+	{
+		EditableValue[] GetValues();
+
+		event ChangedValueEventHandler OnChanged;
 	}
 }

@@ -1,39 +1,35 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.ComponentModel;
-using System.Drawing;
-using System.Data;
 using System.Linq;
 using System.Text;
-using System.Windows.Forms;
+using System.Threading.Tasks;
 
 namespace Effekseer.GUI.Component
 {
-	public partial class IntWithRandom : UserControl
+	class IntWithRandom : Control, IParameterControl
 	{
-		public IntWithRandom()
-		{
-			InitializeComponent();
+		string id = "";
+		string id_r1 = "";
+		string id_r2 = "";
+		string id_c = "";
+		string id_d1 = "";
+		string id_d2 = "";
 
-			EnableUndo = true;
-			
-			this.SuspendLayout();
-			Anchor = AnchorStyles.Left | AnchorStyles.Right;
-			this.ResumeLayout(false);
+		public string Label { get; set; } = string.Empty;
 
-			Reading = false;
-			Writing = false;
-
-			Reading = true;
-			Read();
-			Reading = false;
-
-			HandleDestroyed += new EventHandler(IntWithRandom_HandleDestroyed);
-		}
+		public string Description { get; set; } = string.Empty;
 
 		Data.Value.IntWithRandom binding = null;
 
-		public bool EnableUndo { get; set; }
+		ValueChangingProperty valueChangingProp = new ValueChangingProperty();
+
+		bool isActive = false;
+
+		bool isPopupShown = false;
+
+		int[] internalValue = new int[] { 0, 0 };
+
+		public bool EnableUndo { get; set; } = true;
 
 		public Data.Value.IntWithRandom Binding
 		{
@@ -45,92 +41,29 @@ namespace Effekseer.GUI.Component
 			{
 				if (binding == value) return;
 
-				if (binding != null)
-				{
-					binding.OnChanged -= OnChanged;
-					tb_v1.ReadMethod = null;
-					tb_v1.WriteMethod = null;
-					tb_v2.ReadMethod = null;
-					tb_v2.WriteMethod = null;
-				}
-
 				binding = value;
 
 				if (binding != null)
 				{
-					binding.OnChanged += OnChanged;
-					tb_v1.WheelStep = binding.Step;
-					tb_v2.WheelStep = binding.Step;
-
-					tb_v1.ReadMethod += () =>
-						{
-							if (binding.DrawnAs == Data.DrawnAs.MaxAndMin)
-							{
-								return binding.Max;
-							}
-							else if (binding.DrawnAs == Data.DrawnAs.CenterAndAmplitude)
-							{
-								return binding.Center;
-							}
-							else
-							{
-								throw new Exception();
-							}
-						};
-
-					tb_v1.WriteMethod += (n, wheel) =>
-						{
-							if (binding.DrawnAs == Data.DrawnAs.MaxAndMin)
-							{
-								binding.SetMax(n, wheel);
-							}
-							else if (binding.DrawnAs == Data.DrawnAs.CenterAndAmplitude)
-							{
-								binding.SetCenter(n, wheel);
-							}
-							else
-							{
-								throw new Exception();
-							}
-						};
-
-					tb_v2.ReadMethod += () =>
-					{
-						if (binding.DrawnAs == Data.DrawnAs.MaxAndMin)
-						{
-							return binding.Min;
-						}
-						else if (binding.DrawnAs == Data.DrawnAs.CenterAndAmplitude)
-						{
-							return binding.Amplitude;
-						}
-						else
-						{
-							throw new Exception();
-						}
-					};
-
-					tb_v2.WriteMethod += (n, wheel) =>
-					{
-						if (binding.DrawnAs == Data.DrawnAs.MaxAndMin)
-						{
-							binding.SetMin(n, wheel);
-						}
-						else if (binding.DrawnAs == Data.DrawnAs.CenterAndAmplitude)
-						{
-							binding.SetAmplitude(n, wheel);
-						}
-						else
-						{
-							throw new Exception();
-						}
-					};
+					internalValue[0] = binding.GetMin();
+					internalValue[1] = binding.GetMax();
 				}
-
-				Reading = true;
-				Read();
-				Reading = false;
 			}
+		}
+
+		public IntWithRandom(string label = null)
+		{
+			if (label != null)
+			{
+				Label = label;
+			}
+
+			id = "###" + Manager.GetUniqueID().ToString();
+			id_r1 = "###" + Manager.GetUniqueID().ToString();
+			id_r2 = "###" + Manager.GetUniqueID().ToString();
+			id_c = "###" + Manager.GetUniqueID().ToString();
+			id_d1 = "###" + Manager.GetUniqueID().ToString();
+			id_d2 = "###" + Manager.GetUniqueID().ToString();
 		}
 
 		public void SetBinding(object o)
@@ -139,121 +72,176 @@ namespace Effekseer.GUI.Component
 			Binding = o_;
 		}
 
-		/// <summary>
-		/// 他のクラスからデータ読み込み中
-		/// </summary>
-		public bool Reading
+		public void FixValue()
 		{
-			get;
-			private set;
+			FixValueInternal(isActive);
 		}
 
-		/// <summary>
-		/// 他のクラスにデータ書き込み中
-		/// </summary>
-		public bool Writing
+		void FixValueInternal(bool combined)
 		{
-			get;
-			private set;
-		}
+			if (binding == null) return;
 
-		void Read()
-		{
-			if (!Reading) throw new Exception();
-
-			if (binding != null)
+			if (EnableUndo)
 			{
-				drawnas_1.Enabled = true;
-				drawnas_2.Enabled = true;
-				drawnas_1.Checked = binding.DrawnAs == Data.DrawnAs.MaxAndMin;
-				drawnas_2.Checked = binding.DrawnAs == Data.DrawnAs.CenterAndAmplitude;
-
-				if (drawnas_1.Checked)
+				if (binding.DrawnAs == Data.DrawnAs.CenterAndAmplitude)
 				{
-					lb_v1.Text = Properties.Resources.Max;
-					lb_v2.Text = Properties.Resources.Min;
+					binding.SetCenter(internalValue[0], combined);
+					binding.SetAmplitude(internalValue[1], combined);
 				}
-
-				if (drawnas_2.Checked)
+				else
 				{
-					lb_v1.Text = Properties.Resources.Mean;
-					lb_v2.Text = Properties.Resources.Deviation;
+					binding.SetMin(internalValue[0], combined);
+					binding.SetMax(internalValue[1], combined);
 				}
 			}
 			else
 			{
-				drawnas_1.Enabled = false;
-				drawnas_2.Enabled = false;
-				drawnas_1.Checked = false;
-				drawnas_2.Checked = false;
-
-				lb_v1.Text = string.Empty;
-				lb_v2.Text = string.Empty;
+				throw new Exception("Not Implemented.");
 			}
-
-			tb_v1.Reload();
-			tb_v2.Reload();
 		}
 
-		void Write()
+		public override void OnDisposed()
 		{
-			if (!Writing) throw new Exception();
+			FixValueInternal(false);
+		}
 
-			if (drawnas_1.Checked)
+		public override void Update()
+		{
+			isPopupShown = false;
+			if (binding == null) return;
+
+			if (binding != null)
 			{
-				binding.DrawnAs = Data.DrawnAs.MaxAndMin;
+				if (binding.DrawnAs == Data.DrawnAs.CenterAndAmplitude)
+				{
+					internalValue[0] = binding.GetCenter();
+					internalValue[1] = binding.GetAmplitude();
+				}
+				else
+				{
+					internalValue[0] = binding.GetMin();
+					internalValue[1] = binding.GetMax();
+				}
 			}
-			if (drawnas_2.Checked)
+
+			valueChangingProp.Enable(binding);
+
+			var txt_r1 = string.Empty;
+			var txt_r2 = string.Empty;
+
+			var range_1_min = int.MinValue;
+			var range_1_max = int.MaxValue;
+			var range_2_min = int.MinValue;
+			var range_2_max = int.MaxValue;
+
+			if (binding.DrawnAs == Data.DrawnAs.CenterAndAmplitude)
 			{
-				binding.DrawnAs = Data.DrawnAs.CenterAndAmplitude;
+				txt_r1 = Resources.GetString("Mean");
+				txt_r2 = Resources.GetString("Deviation");
+
+				range_1_min = binding.ValueMin;
+				range_1_max = binding.ValueMax;
 			}
+			else
+			{
+				txt_r1 = Resources.GetString("Max");
+				txt_r2 = Resources.GetString("Min");
+
+				range_1_min = binding.ValueMin;
+				range_1_max = binding.ValueMax;
+				range_2_min = binding.ValueMin;
+				range_2_max = binding.ValueMax;
+			}
+
+			if (Manager.NativeManager.DragInt2EfkEx(id, internalValue, binding.Step,
+				range_1_min, range_1_max,
+				range_2_min, range_2_max,
+				txt_r1 + ":" + "%.0f", txt_r2 + ":" + "%.0f"))
+			{
+				if (EnableUndo)
+				{
+					if (binding.DrawnAs == Data.DrawnAs.CenterAndAmplitude)
+					{
+						binding.SetCenter(internalValue[0], isActive);
+						binding.SetAmplitude(internalValue[1], isActive);
+					}
+					else
+					{
+						binding.SetMin(internalValue[0], isActive);
+						binding.SetMax(internalValue[1], isActive);
+					}
+				}
+				else
+				{
+					throw new Exception("Not Implemented.");
+				}
+			}
+
+			Popup();
+
+
+			if (binding.IsDynamicEquationEnabled)
+			{
+				DynamicSelector.SelectMaxInComponent(id_d1, binding.DynamicEquationMax);
+				Popup();
+			}
+
+			if (binding.IsDynamicEquationEnabled)
+			{
+				DynamicSelector.SelectMinInComponent(id_d2, binding.DynamicEquationMin);
+				Popup();
+			}
+
+
+			var isActive_Current = Manager.NativeManager.IsItemActive();
+
+			if (isActive && !isActive_Current)
+			{
+				FixValue();
+			}
+
+			isActive = isActive_Current;
+
+			Popup();
+
+			valueChangingProp.Disable();
 		}
 
-		void OnChanged(object sender, ChangedValueEventArgs e)
+		void Popup()
 		{
-			if (Writing) return;
+			if (isPopupShown) return;
 
-			Reading = true;
-			Read();
-			Reading = false;
-		}
+			if (Manager.NativeManager.BeginPopupContextItem(id_c))
+			{
+				DynamicSelector.Popup(id_c, binding.DynamicEquationMax, binding.DynamicEquationMin, binding.IsDynamicEquationEnabled);
 
-		private void drawnas_1_CheckedChanged(object sender, EventArgs e)
-		{
-			if (Reading) return;
-			if (Writing) return;
+				if (binding.IsDynamicEquationEnabled)
+				{
+					// None
+				}
+				else
+				{
 
-			Writing = true;
-			Write();
-			Writing = false;
+					var txt_r_r1 = Resources.GetString("Gauss");
+					var txt_r_r2 = Resources.GetString("Range");
 
-			Reading = true;
-			Read();
-			Reading = false;
-		}
+					if (Manager.NativeManager.RadioButton(txt_r_r1 + id_r1, binding.DrawnAs == Data.DrawnAs.CenterAndAmplitude))
+					{
+						binding.DrawnAs = Data.DrawnAs.CenterAndAmplitude;
+					}
 
-		private void drawnas_2_CheckedChanged(object sender, EventArgs e)
-		{
-			if (Reading) return;
-			if (Writing) return;
+					Manager.NativeManager.SameLine();
 
-			Writing = true;
-			Write();
-			Writing = false;
+					if (Manager.NativeManager.RadioButton(txt_r_r2 + id_r2, binding.DrawnAs == Data.DrawnAs.MaxAndMin))
+					{
+						binding.DrawnAs = Data.DrawnAs.MaxAndMin;
+					}
+				}
 
-			Reading = true;
-			Read();
-			Reading = false;
-		}
+				Manager.NativeManager.EndPopup();
 
-		void IntWithRandom_HandleDestroyed(object sender, EventArgs e)
-		{
-			tb_v1.ReadMethod = null;
-			tb_v1.WriteMethod = null;
-			tb_v2.ReadMethod = null;
-			tb_v2.WriteMethod = null;
-
-			Binding = null;
+				isPopupShown = true;
+			}
 		}
 	}
 }

@@ -158,11 +158,22 @@ void EffectNodeSprite::BeginRendering(int32_t count, Manager* manager)
 		nodeParameter.Distortion = RendererCommon.Distortion;
 		nodeParameter.DistortionIntensity = RendererCommon.DistortionIntensity;
 
+		nodeParameter.DepthParameterPtr = &DepthValues.DepthParameter;
+
 		nodeParameter.DepthOffset = DepthValues.DepthOffset;
 		nodeParameter.IsDepthOffsetScaledWithCamera = DepthValues.IsDepthOffsetScaledWithCamera;
 		nodeParameter.IsDepthOffsetScaledWithParticleScale = DepthValues.IsDepthOffsetScaledWithParticleScale;
 
 		nodeParameter.ZSort = DepthValues.ZSort;
+
+		if (RendererCommon.MaterialType == ParameterRendererCommon::RendererMaterialType::Default)
+		{
+			nodeParameter.MaterialParameterPtr = nullptr;
+		}
+		else
+		{
+			nodeParameter.MaterialParameterPtr = &(RendererCommon.Material);
+		}
 
 		renderer->BeginRendering( nodeParameter, count, m_userData );
 	}
@@ -192,11 +203,22 @@ void EffectNodeSprite::Rendering(const Instance& instance, const Instance* next_
 		nodeParameter.Distortion = RendererCommon.Distortion;
 		nodeParameter.DistortionIntensity = RendererCommon.DistortionIntensity;
 
+		nodeParameter.DepthParameterPtr = &DepthValues.DepthParameter;
+
 		nodeParameter.DepthOffset = DepthValues.DepthOffset;
 		nodeParameter.IsDepthOffsetScaledWithCamera = DepthValues.IsDepthOffsetScaledWithCamera;
 		nodeParameter.IsDepthOffsetScaledWithParticleScale = DepthValues.IsDepthOffsetScaledWithParticleScale;
 
 		nodeParameter.ZSort = DepthValues.ZSort;
+
+		if (RendererCommon.MaterialType == ParameterRendererCommon::RendererMaterialType::Default)
+		{
+			nodeParameter.MaterialParameterPtr = nullptr;
+		}
+		else
+		{
+			nodeParameter.MaterialParameterPtr = &(RendererCommon.Material);
+		}
 
 		SpriteRenderer::InstanceParameter instanceParameter;
 		instanceParameter.AllColor = instValues._color;
@@ -296,6 +318,17 @@ void EffectNodeSprite::EndRendering(Manager* manager)
 		nodeParameter.IsDepthOffsetScaledWithParticleScale = DepthValues.IsDepthOffsetScaledWithParticleScale;
 
 		nodeParameter.ZSort = DepthValues.ZSort;
+
+		nodeParameter.DepthParameterPtr = &DepthValues.DepthParameter;
+
+		if (RendererCommon.MaterialType == ParameterRendererCommon::RendererMaterialType::Default)
+		{
+			nodeParameter.MaterialParameterPtr = nullptr;
+		}
+		else
+		{
+			nodeParameter.MaterialParameterPtr = &(RendererCommon.Material);
+		}
 
 		renderer->EndRendering( nodeParameter, m_userData );
 	}

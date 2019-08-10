@@ -24,7 +24,17 @@ namespace Effekseer.Data.Value
 
 		public event ChangedValueEventHandler OnChanged;
 
-		internal string DefaultValue { get; private set; }
+		public string DefaultValue { get; private set; }
+
+		public bool IsValueChangedFromDefault
+		{
+			get { return Value != DefaultValue; }
+		}
+
+		/// <summary>
+		/// Is multiline on GUI
+		/// </summary>
+		public bool IsMultiLine = false;
 
 		internal String(string value = "")
 		{

@@ -95,6 +95,31 @@ namespace Effekseer.Data.Value
 
 		public event ChangedValueEventHandler OnChanged;
 
+		public bool CanSelectDynamicEquation = false;
+
+		public Boolean IsDynamicEquationEnabled
+		{
+			get;
+			private set;
+		}
+
+		public DynamicEquationReference DynamicEquationMin
+		{
+			get;
+			private set;
+		}
+
+		public DynamicEquationReference DynamicEquationMax
+		{
+			get;
+			private set;
+		}
+
+		public bool IsValueChangedFromDefault
+		{
+			get { return Center != DefaultValueCenter || Min != DefaultValueMin || Max != DefaultValueMax || DrawnAs != DefaultDrawnAs; }
+		}
+
 		internal IntWithRandom(int value = 0, int max = int.MaxValue, int min = int.MinValue, DrawnAs drawnas = Data.DrawnAs.CenterAndAmplitude, int step = 1)
 		{
 			_value_center = value;
@@ -104,6 +129,10 @@ namespace Effekseer.Data.Value
 			_min = min;
 			DrawnAs = drawnas;
 			Step = step;
+
+			IsDynamicEquationEnabled = new Boolean();
+			DynamicEquationMin = new DynamicEquationReference();
+			DynamicEquationMax = new DynamicEquationReference();
 
 			DefaultValueCenter = _value_center;
 			DefaultValueMax = _value_max;

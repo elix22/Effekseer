@@ -99,9 +99,19 @@ void EffectNodeModel::BeginRendering(int32_t count, Manager* manager)
 		nodeParameter.Distortion = RendererCommon.Distortion;
 		nodeParameter.DistortionIntensity = RendererCommon.DistortionIntensity;
 
+		nodeParameter.DepthParameterPtr = &DepthValues.DepthParameter;
 		nodeParameter.DepthOffset = DepthValues.DepthOffset;
 		nodeParameter.IsDepthOffsetScaledWithCamera = DepthValues.IsDepthOffsetScaledWithCamera;
 		nodeParameter.IsDepthOffsetScaledWithParticleScale = DepthValues.IsDepthOffsetScaledWithParticleScale;
+
+		if (RendererCommon.MaterialType == ParameterRendererCommon::RendererMaterialType::Default)
+		{
+			nodeParameter.MaterialParameterPtr = nullptr;
+		}
+		else
+		{
+			nodeParameter.MaterialParameterPtr = &(RendererCommon.Material);
+		}
 
 		renderer->BeginRendering(nodeParameter, count, m_userData);
 	}
@@ -136,9 +146,19 @@ void EffectNodeModel::Rendering(const Instance& instance, const Instance* next_i
 		nodeParameter.Distortion = RendererCommon.Distortion;
 		nodeParameter.DistortionIntensity = RendererCommon.DistortionIntensity;
 
+		nodeParameter.DepthParameterPtr = &DepthValues.DepthParameter;
 		nodeParameter.DepthOffset = DepthValues.DepthOffset;
 		nodeParameter.IsDepthOffsetScaledWithCamera = DepthValues.IsDepthOffsetScaledWithCamera;
 		nodeParameter.IsDepthOffsetScaledWithParticleScale = DepthValues.IsDepthOffsetScaledWithParticleScale;
+
+		if (RendererCommon.MaterialType == ParameterRendererCommon::RendererMaterialType::Default)
+		{
+			nodeParameter.MaterialParameterPtr = nullptr;
+		}
+		else
+		{
+			nodeParameter.MaterialParameterPtr = &(RendererCommon.Material);
+		}
 
 		ModelRenderer::InstanceParameter instanceParameter;
 		instanceParameter.SRTMatrix43 = instance.GetGlobalMatrix43();
@@ -194,9 +214,19 @@ void EffectNodeModel::EndRendering(Manager* manager)
 		nodeParameter.Distortion = RendererCommon.Distortion;
 		nodeParameter.DistortionIntensity = RendererCommon.DistortionIntensity;
 
+		nodeParameter.DepthParameterPtr = &DepthValues.DepthParameter;
 		nodeParameter.DepthOffset = DepthValues.DepthOffset;
 		nodeParameter.IsDepthOffsetScaledWithCamera = DepthValues.IsDepthOffsetScaledWithCamera;
 		nodeParameter.IsDepthOffsetScaledWithParticleScale = DepthValues.IsDepthOffsetScaledWithParticleScale;
+
+		if (RendererCommon.MaterialType == ParameterRendererCommon::RendererMaterialType::Default)
+		{
+			nodeParameter.MaterialParameterPtr = nullptr;
+		}
+		else
+		{
+			nodeParameter.MaterialParameterPtr = &(RendererCommon.Material);
+		}
 
 		renderer->EndRendering( nodeParameter, m_userData );
 	}

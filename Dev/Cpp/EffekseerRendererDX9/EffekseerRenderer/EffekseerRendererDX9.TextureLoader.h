@@ -27,7 +27,8 @@ class TextureLoader
 	: public ::Effekseer::TextureLoader
 {
 private:
-	LPDIRECT3DDEVICE9		device;
+	RendererImplemented* renderer_ = nullptr;
+	LPDIRECT3DDEVICE9		device_ = nullptr;
 	::Effekseer::FileInterface* m_fileInterface;
 	::Effekseer::DefaultFileInterface m_defaultFileInterface;
 
@@ -37,11 +38,14 @@ private:
 #endif
 
 public:
+	TextureLoader(RendererImplemented* renderer, ::Effekseer::FileInterface* fileInterface = NULL);
 	TextureLoader(LPDIRECT3DDEVICE9 device, ::Effekseer::FileInterface* fileInterface = NULL);
 	virtual ~TextureLoader();
 
 public:
 	Effekseer::TextureData* Load(const EFK_CHAR* path, ::Effekseer::TextureType textureType) override;
+
+	Effekseer::TextureData* Load(const void* data, int32_t size, Effekseer::TextureType textureType) override;
 
 	void Unload(Effekseer::TextureData* data) override;
 };

@@ -19,6 +19,8 @@ namespace Effekseer.GUI
 		string target;
 		int port;
 		swig.Native native = null;
+		const string ConfigNetworkFileName = "config.network.xml";
+		string configNetworkPath = string.Empty;
 
 		public Action Loaded;
 
@@ -32,6 +34,8 @@ namespace Effekseer.GUI
 			SendOnSave = true;
 
 			this.native = native;
+
+			configNetworkPath = System.IO.Path.Combine(Manager.GetEntryDirectory(), ConfigNetworkFileName);
 		}
 
 		public void Connect()
@@ -64,7 +68,7 @@ namespace Effekseer.GUI
 
 		public void Update()
 		{
-			if (AutoConnect && time % 60 * 15 == 0)
+			if (AutoConnect && time % (60 * 15) == 0)
 			{
 				native.StartNetwork(Target, (ushort)Port);
 			}
@@ -76,11 +80,22 @@ namespace Effekseer.GUI
 		{
 			if (!native.IsConnectingNetwork()) return;
 
-			var data = Binary.Exporter.Export(Core.Option.Magnification);
+			var binaryExporter = new Binary.Exporter();
+			var data = binaryExporter.Export(1.0f);
 			fixed (byte* p = &data[0])
 			{
 				native.SendDataByNetwork(System.IO.Path.GetFileNameWithoutExtension(Core.FullPath), new IntPtr(p), data.Length, Core.FullPath);
 			}
+		}
+
+		public void Save()
+		{
+			Save(configNetworkPath);
+		}
+
+		public void Load()
+		{
+			Load(configNetworkPath);
 		}
 
 		public void Load(string path)
@@ -103,7 +118,7 @@ namespace Effekseer.GUI
 				target = Target;
 				port = Port;
 
-				if(Loaded != null)
+				if (Loaded != null)
 				{
 					Loaded();
 				}

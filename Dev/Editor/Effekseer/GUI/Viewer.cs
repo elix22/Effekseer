@@ -76,7 +76,7 @@ namespace Effekseer.GUI
 
 		public bool StepEffect(int frame)
 		{
-			return native.StepEffect( frame );
+			return native.StepEffect(frame);
 		}
 
 		public bool Rotate(float x, float y)
@@ -113,29 +113,53 @@ namespace Effekseer.GUI
 			return true;
 		}
 
-		public bool Record(string path, int count, int offsetFrame, int freq, swig.TransparenceType transparenceType)
+		public bool RecordSprite(string path, swig.RecordingParameter recordingParameter)
 		{
 			var dir = System.IO.Path.GetDirectoryName(path);
 			var fileWExt = System.IO.Path.GetFileNameWithoutExtension(path);
 			var ext = System.IO.Path.GetExtension(path);
 
-			return native.Record(dir + "/" + fileWExt, ext, count, offsetFrame, freq, transparenceType);
+            recordingParameter.SetPath(dir + "/" + fileWExt);
+            recordingParameter.SetExt(ext);
+            recordingParameter.RecordingMode = swig.RecordingModeType.Sprite;
+            return native.Record(recordingParameter);
 		}
 
-		public bool Record(string path, int count, int xCount, int offsetFrame, int freq, swig.TransparenceType transparenceType)
+		public bool RecordSpriteSheet(string path, swig.RecordingParameter recordingParameter)
 		{
-			return native.Record(path, count, xCount, offsetFrame, freq, transparenceType);
+			var dir = System.IO.Path.GetDirectoryName(path);
+			var fileWExt = System.IO.Path.GetFileNameWithoutExtension(path);
+			var ext = System.IO.Path.GetExtension(path);
+
+			recordingParameter.SetPath(dir + "/" + fileWExt);
+			recordingParameter.SetExt(ext);
+			recordingParameter.RecordingMode = swig.RecordingModeType.SpriteSheet;
+            return native.Record(recordingParameter);
 		}
 
-		public bool RecordAsGifAnimation(string path, int count, int offsetFrame, int freq, swig.TransparenceType transparenceType)
-		{
-			return native.RecordAsGifAnimation(path, count, offsetFrame, freq, transparenceType);
-		}
+		public bool RecordAsGifAnimation(string path, swig.RecordingParameter recordingParameter)
+        {
+			var dir = System.IO.Path.GetDirectoryName(path);
+			var fileWExt = System.IO.Path.GetFileNameWithoutExtension(path);
+			var ext = System.IO.Path.GetExtension(path);
 
-		public bool RecordAsAVI(string path, int count, int offsetFrame, int freq, swig.TransparenceType transparenceType)
-		{
-			return native.RecordAsAVI(path, count, offsetFrame, freq, transparenceType);
-		}
+			recordingParameter.SetPath(dir + "/" + fileWExt);
+			recordingParameter.SetExt(ext);
+			recordingParameter.RecordingMode = swig.RecordingModeType.Gif;
+            return native.Record(recordingParameter);
+        }
+
+		public bool RecordAsAVI(string path, swig.RecordingParameter recordingParameter)
+        {
+			var dir = System.IO.Path.GetDirectoryName(path);
+			var fileWExt = System.IO.Path.GetFileNameWithoutExtension(path);
+			var ext = System.IO.Path.GetExtension(path);
+
+			recordingParameter.SetPath(dir + "/" + fileWExt);
+			recordingParameter.SetExt(ext);
+			recordingParameter.RecordingMode = swig.RecordingModeType.Avi;
+            return native.Record(recordingParameter);
+        }
 
 
 		public swig.ViewerParamater GetViewerParamater()
@@ -148,20 +172,20 @@ namespace Effekseer.GUI
 			native.SetViewerParamater(paramater);
 		}
 
-        public void SetSoundMute(bool mute)
-        {
-            native.SetSoundMute(mute);
-        }
+		public void SetSoundMute(bool mute)
+		{
+			native.SetSoundMute(mute);
+		}
 
-        public void SetSoundVolume(float volume)
-        {
-            native.SetSoundVolume(volume);
-        }
+		public void SetSoundVolume(float volume)
+		{
+			native.SetSoundVolume(volume);
+		}
 
-        public void InvalidateTextureCache()
-        {
-            native.InvalidateTextureCache();
-        }
+		public void InvalidateTextureCache()
+		{
+			native.InvalidateTextureCache();
+		}
 
 		public void SetLotation(float x, float y, float z)
 		{
@@ -216,7 +240,7 @@ namespace Effekseer.GUI
 			behavior.ScaleVelocityZ = z;
 			native.SetViewerEffectBehavior(behavior);
 		}
-		
+
 		public void SetTargetLocation(float x, float y, float z)
 		{
 			var behavior = native.GetEffectBehavior();
@@ -347,36 +371,73 @@ namespace Effekseer.GUI
 			native.SetMouseInverseFlag(rotX, rotY, slideX, slideY);
 		}
 
+		public void SetDynamicInput(float v1, float v2, float v3, float v4)
+		{
+			var behavior = native.GetEffectBehavior();
+			behavior.DynamicInput1 = v1;
+			behavior.DynamicInput2 = v2;
+			behavior.DynamicInput3 = v3;
+			behavior.DynamicInput4 = v4;
+			native.SetViewerEffectBehavior(behavior);
+		}
+
 		public bool ShowViewer(IntPtr handle, int width, int height, swig.DeviceType deviceType)
 		{
 			if (isViewerShown) return false;
 
-			if(native == null)
+			if (native == null)
 			{
 				throw new Exception("native is null.");
 			}
 
 			if (native.CreateWindow_Effekseer(
-				handle, width <= 0 ? 1 : width, 
+				handle, 
+				width <= 0 ? 1 : width,
 				height <= 0 ? 1 : height,
 				Core.Option.ColorSpace.Value == Data.OptionValues.ColorSpaceType.LinearSpace,
 				deviceType))
 			{
 				isViewerShown = true;
-				return true;
 			}
 			else
 			{
-				Core.OnOutputMessage("描画画面の生成に失敗しました。DirectXのバージョンの問題、メモリの不足等が考えられます。");
+				if(Core.Language == Language.Japanese)
+				{
+					Core.OnOutputMessage("描画画面の生成に失敗しました。DirectXのバージョンの問題、メモリの不足等が考えられます。");
+				}
+				else
+				{
+					Core.OnOutputMessage("Failed to generate drawing screen. DirectX version problems, memory shortage, and so on.");
+				}
+				return false;
 			}
 
-			return false;
+			Bloom_OnChanged(null, null);
+			Core.PostEffect.BloomSwitch.OnChanged += Bloom_OnChanged;
+			Core.PostEffect.Bloom.Intensity.OnChanged += Bloom_OnChanged;
+			Core.PostEffect.Bloom.Threshold.OnChanged += Bloom_OnChanged;
+			Core.PostEffect.Bloom.SoftKnee.OnChanged += Bloom_OnChanged;
+			
+			Tonemap_OnChanged(null, null);
+			Core.PostEffect.TonemapSelector.OnChanged += Tonemap_OnChanged;
+			Core.PostEffect.TonemapReinhard.Exposure.OnChanged += Tonemap_OnChanged;
+			
+			return true;
 		}
 
 		public void HideViewer()
 		{
 			if (!isViewerShown) return;
 			isViewerShown = false;
+			
+			Core.PostEffect.BloomSwitch.OnChanged -= Bloom_OnChanged;
+			Core.PostEffect.Bloom.Intensity.OnChanged -= Bloom_OnChanged;
+			Core.PostEffect.Bloom.Threshold.OnChanged -= Bloom_OnChanged;
+			Core.PostEffect.Bloom.SoftKnee.OnChanged -= Bloom_OnChanged;
+			
+			Core.PostEffect.TonemapSelector.OnChanged -= Tonemap_OnChanged;
+			Core.PostEffect.TonemapReinhard.Exposure.OnChanged -= Tonemap_OnChanged;
+			
 			native.DestroyWindow();
 		}
 
@@ -455,15 +516,6 @@ namespace Effekseer.GUI
 			}
 		}
 
-		public void UpdateWindow()
-		{
-			if(isViewerShown)
-			{
-				native.UpdateWindow();
-				native.RenderWindow();
-			}
-		}
-
 		public void PresentWindow()
 		{
 			if (isViewerShown)
@@ -520,6 +572,12 @@ namespace Effekseer.GUI
 
 		unsafe void Export()
 		{
+			Manager.Viewer.SetDynamicInput(
+				Core.Dynamic.Inputs.Values[0].Input.Value,
+				Core.Dynamic.Inputs.Values[1].Input.Value,
+				Core.Dynamic.Inputs.Values[2].Input.Value,
+				Core.Dynamic.Inputs.Values[3].Input.Value);
+
 			SetLotationVelocity(
 				Core.EffectBehavior.LocationVelocity.X,
 				Core.EffectBehavior.LocationVelocity.Y,
@@ -592,7 +650,7 @@ namespace Effekseer.GUI
 
 			SetDistortionType((int)Core.Option.DistortionType.Value);
 			SetRenderMode((int)Core.Option.RenderingMode.Value);
-			
+
 			if (Core.Culling.Type.Value == Data.EffectCullingValues.ParamaterType.Sphere)
 			{
 				SetCullingParameter(Core.Culling.IsShown, Core.Culling.Sphere.Radius.Value, Core.Culling.Sphere.Location.X, Core.Culling.Sphere.Location.Y, Core.Culling.Sphere.Location.Z);
@@ -602,7 +660,8 @@ namespace Effekseer.GUI
 				SetCullingParameter(false, 0.0f, 0.0f, 0.0f, 0.0f);
 			}
 
-			var data = Binary.Exporter.Export(Core.Option.Magnification);
+			var binaryExporter = new Binary.Exporter();
+			var data = binaryExporter.Export(Core.Option.Magnification);
 			fixed (byte* p = &data[0])
 			{
 				LoadEffect(new IntPtr(p), data.Length, Core.FullPath);
@@ -642,7 +701,7 @@ namespace Effekseer.GUI
 		/// </summary>
 		public unsafe void Reload(bool isResourceReloaded)
 		{
-			if(isResourceReloaded)
+			if (isResourceReloaded)
 			{
 				native.InvalidateTextureCache();
 			}
@@ -716,6 +775,25 @@ namespace Effekseer.GUI
 				}
 
 			}
+		}
+
+		
+		private void Bloom_OnChanged(object sender, ChangedValueEventArgs e)
+		{
+			bool enabled = Core.PostEffect.BloomSwitch.Value == Data.PostEffectValues.EffectSwitch.On;
+
+			native.SetBloomParameters(enabled, 
+				Core.PostEffect.Bloom.Intensity.Value,
+				Core.PostEffect.Bloom.Threshold.Value,
+				Core.PostEffect.Bloom.SoftKnee.Value);
+		}
+		
+		private void Tonemap_OnChanged(object sender, ChangedValueEventArgs e)
+		{
+			int algorithm = (int)Core.PostEffect.TonemapSelector.Value;
+
+			native.SetTonemapParameters(algorithm, 
+				Core.PostEffect.TonemapReinhard.Exposure.Value);
 		}
 	}
 }

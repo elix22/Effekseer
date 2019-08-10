@@ -850,6 +850,50 @@ SWIGEXPORT float SWIGSTDCALL CSharp_Effekseerfswig_ViewerParamater_Distance_get_
 }
 
 
+SWIGEXPORT void SWIGSTDCALL CSharp_Effekseerfswig_ViewerParamater_ClippingStart_set___(void * jarg1, float jarg2) {
+  ViewerParamater *arg1 = (ViewerParamater *) 0 ;
+  float arg2 ;
+  
+  arg1 = (ViewerParamater *)jarg1; 
+  arg2 = (float)jarg2; 
+  if (arg1) (arg1)->ClippingStart = arg2;
+}
+
+
+SWIGEXPORT float SWIGSTDCALL CSharp_Effekseerfswig_ViewerParamater_ClippingStart_get___(void * jarg1) {
+  float jresult ;
+  ViewerParamater *arg1 = (ViewerParamater *) 0 ;
+  float result;
+  
+  arg1 = (ViewerParamater *)jarg1; 
+  result = (float) ((arg1)->ClippingStart);
+  jresult = result; 
+  return jresult;
+}
+
+
+SWIGEXPORT void SWIGSTDCALL CSharp_Effekseerfswig_ViewerParamater_ClippingEnd_set___(void * jarg1, float jarg2) {
+  ViewerParamater *arg1 = (ViewerParamater *) 0 ;
+  float arg2 ;
+  
+  arg1 = (ViewerParamater *)jarg1; 
+  arg2 = (float)jarg2; 
+  if (arg1) (arg1)->ClippingEnd = arg2;
+}
+
+
+SWIGEXPORT float SWIGSTDCALL CSharp_Effekseerfswig_ViewerParamater_ClippingEnd_get___(void * jarg1) {
+  float jresult ;
+  ViewerParamater *arg1 = (ViewerParamater *) 0 ;
+  float result;
+  
+  arg1 = (ViewerParamater *)jarg1; 
+  result = (float) ((arg1)->ClippingEnd);
+  jresult = result; 
+  return jresult;
+}
+
+
 SWIGEXPORT void SWIGSTDCALL CSharp_Effekseerfswig_ViewerParamater_RendersGuide_set___(void * jarg1, unsigned int jarg2) {
   ViewerParamater *arg1 = (ViewerParamater *) 0 ;
   bool arg2 ;
@@ -1726,6 +1770,94 @@ SWIGEXPORT float SWIGSTDCALL CSharp_Effekseerfswig_ViewerEffectBehavior_TargetPo
 }
 
 
+SWIGEXPORT void SWIGSTDCALL CSharp_Effekseerfswig_ViewerEffectBehavior_DynamicInput1_set___(void * jarg1, float jarg2) {
+  ViewerEffectBehavior *arg1 = (ViewerEffectBehavior *) 0 ;
+  float arg2 ;
+  
+  arg1 = (ViewerEffectBehavior *)jarg1; 
+  arg2 = (float)jarg2; 
+  if (arg1) (arg1)->DynamicInput1 = arg2;
+}
+
+
+SWIGEXPORT float SWIGSTDCALL CSharp_Effekseerfswig_ViewerEffectBehavior_DynamicInput1_get___(void * jarg1) {
+  float jresult ;
+  ViewerEffectBehavior *arg1 = (ViewerEffectBehavior *) 0 ;
+  float result;
+  
+  arg1 = (ViewerEffectBehavior *)jarg1; 
+  result = (float) ((arg1)->DynamicInput1);
+  jresult = result; 
+  return jresult;
+}
+
+
+SWIGEXPORT void SWIGSTDCALL CSharp_Effekseerfswig_ViewerEffectBehavior_DynamicInput2_set___(void * jarg1, float jarg2) {
+  ViewerEffectBehavior *arg1 = (ViewerEffectBehavior *) 0 ;
+  float arg2 ;
+  
+  arg1 = (ViewerEffectBehavior *)jarg1; 
+  arg2 = (float)jarg2; 
+  if (arg1) (arg1)->DynamicInput2 = arg2;
+}
+
+
+SWIGEXPORT float SWIGSTDCALL CSharp_Effekseerfswig_ViewerEffectBehavior_DynamicInput2_get___(void * jarg1) {
+  float jresult ;
+  ViewerEffectBehavior *arg1 = (ViewerEffectBehavior *) 0 ;
+  float result;
+  
+  arg1 = (ViewerEffectBehavior *)jarg1; 
+  result = (float) ((arg1)->DynamicInput2);
+  jresult = result; 
+  return jresult;
+}
+
+
+SWIGEXPORT void SWIGSTDCALL CSharp_Effekseerfswig_ViewerEffectBehavior_DynamicInput3_set___(void * jarg1, float jarg2) {
+  ViewerEffectBehavior *arg1 = (ViewerEffectBehavior *) 0 ;
+  float arg2 ;
+  
+  arg1 = (ViewerEffectBehavior *)jarg1; 
+  arg2 = (float)jarg2; 
+  if (arg1) (arg1)->DynamicInput3 = arg2;
+}
+
+
+SWIGEXPORT float SWIGSTDCALL CSharp_Effekseerfswig_ViewerEffectBehavior_DynamicInput3_get___(void * jarg1) {
+  float jresult ;
+  ViewerEffectBehavior *arg1 = (ViewerEffectBehavior *) 0 ;
+  float result;
+  
+  arg1 = (ViewerEffectBehavior *)jarg1; 
+  result = (float) ((arg1)->DynamicInput3);
+  jresult = result; 
+  return jresult;
+}
+
+
+SWIGEXPORT void SWIGSTDCALL CSharp_Effekseerfswig_ViewerEffectBehavior_DynamicInput4_set___(void * jarg1, float jarg2) {
+  ViewerEffectBehavior *arg1 = (ViewerEffectBehavior *) 0 ;
+  float arg2 ;
+  
+  arg1 = (ViewerEffectBehavior *)jarg1; 
+  arg2 = (float)jarg2; 
+  if (arg1) (arg1)->DynamicInput4 = arg2;
+}
+
+
+SWIGEXPORT float SWIGSTDCALL CSharp_Effekseerfswig_ViewerEffectBehavior_DynamicInput4_get___(void * jarg1) {
+  float jresult ;
+  ViewerEffectBehavior *arg1 = (ViewerEffectBehavior *) 0 ;
+  float result;
+  
+  arg1 = (ViewerEffectBehavior *)jarg1; 
+  result = (float) ((arg1)->DynamicInput4);
+  jresult = result; 
+  return jresult;
+}
+
+
 SWIGEXPORT void * SWIGSTDCALL CSharp_Effekseerfswig_new_ViewerEffectBehavior___() {
   void * jresult ;
   ViewerEffectBehavior *result = 0 ;
@@ -1740,6 +1872,200 @@ SWIGEXPORT void SWIGSTDCALL CSharp_Effekseerfswig_delete_ViewerEffectBehavior___
   ViewerEffectBehavior *arg1 = (ViewerEffectBehavior *) 0 ;
   
   arg1 = (ViewerEffectBehavior *)jarg1; 
+  delete arg1;
+}
+
+
+SWIGEXPORT char16_t * SWIGSTDCALL CSharp_Effekseerfswig_RecordingParameter_GetPath___(void * jarg1) {
+  char16_t * jresult ;
+  RecordingParameter *arg1 = (RecordingParameter *) 0 ;
+  char16_t *result = 0 ;
+  
+  arg1 = (RecordingParameter *)jarg1; 
+  result = (char16_t *)((RecordingParameter const *)arg1)->GetPath();
+  jresult = (char16_t *)result; 
+  return jresult;
+}
+
+
+SWIGEXPORT char16_t * SWIGSTDCALL CSharp_Effekseerfswig_RecordingParameter_GetExt___(void * jarg1) {
+  char16_t * jresult ;
+  RecordingParameter *arg1 = (RecordingParameter *) 0 ;
+  char16_t *result = 0 ;
+  
+  arg1 = (RecordingParameter *)jarg1; 
+  result = (char16_t *)((RecordingParameter const *)arg1)->GetExt();
+  jresult = (char16_t *)result; 
+  return jresult;
+}
+
+
+SWIGEXPORT void SWIGSTDCALL CSharp_Effekseerfswig_RecordingParameter_SetPath___(void * jarg1, char16_t * jarg2) {
+  RecordingParameter *arg1 = (RecordingParameter *) 0 ;
+  char16_t *arg2 = (char16_t *) 0 ;
+  
+  arg1 = (RecordingParameter *)jarg1; 
+  arg2 = (char16_t *)jarg2; 
+  (arg1)->SetPath((char16_t const *)arg2);
+}
+
+
+SWIGEXPORT void SWIGSTDCALL CSharp_Effekseerfswig_RecordingParameter_SetExt___(void * jarg1, char16_t * jarg2) {
+  RecordingParameter *arg1 = (RecordingParameter *) 0 ;
+  char16_t *arg2 = (char16_t *) 0 ;
+  
+  arg1 = (RecordingParameter *)jarg1; 
+  arg2 = (char16_t *)jarg2; 
+  (arg1)->SetExt((char16_t const *)arg2);
+}
+
+
+SWIGEXPORT void SWIGSTDCALL CSharp_Effekseerfswig_RecordingParameter_RecordingMode_set___(void * jarg1, int jarg2) {
+  RecordingParameter *arg1 = (RecordingParameter *) 0 ;
+  RecordingModeType arg2 ;
+  
+  arg1 = (RecordingParameter *)jarg1; 
+  arg2 = (RecordingModeType)jarg2; 
+  if (arg1) (arg1)->RecordingMode = arg2;
+}
+
+
+SWIGEXPORT int SWIGSTDCALL CSharp_Effekseerfswig_RecordingParameter_RecordingMode_get___(void * jarg1) {
+  int jresult ;
+  RecordingParameter *arg1 = (RecordingParameter *) 0 ;
+  RecordingModeType result;
+  
+  arg1 = (RecordingParameter *)jarg1; 
+  result = (RecordingModeType) ((arg1)->RecordingMode);
+  jresult = (int)result; 
+  return jresult;
+}
+
+
+SWIGEXPORT void SWIGSTDCALL CSharp_Effekseerfswig_RecordingParameter_Count_set___(void * jarg1, int jarg2) {
+  RecordingParameter *arg1 = (RecordingParameter *) 0 ;
+  int32_t arg2 ;
+  
+  arg1 = (RecordingParameter *)jarg1; 
+  arg2 = (int32_t)jarg2; 
+  if (arg1) (arg1)->Count = arg2;
+}
+
+
+SWIGEXPORT int SWIGSTDCALL CSharp_Effekseerfswig_RecordingParameter_Count_get___(void * jarg1) {
+  int jresult ;
+  RecordingParameter *arg1 = (RecordingParameter *) 0 ;
+  int32_t result;
+  
+  arg1 = (RecordingParameter *)jarg1; 
+  result = (int32_t) ((arg1)->Count);
+  jresult = result; 
+  return jresult;
+}
+
+
+SWIGEXPORT void SWIGSTDCALL CSharp_Effekseerfswig_RecordingParameter_HorizontalCount_set___(void * jarg1, int jarg2) {
+  RecordingParameter *arg1 = (RecordingParameter *) 0 ;
+  int32_t arg2 ;
+  
+  arg1 = (RecordingParameter *)jarg1; 
+  arg2 = (int32_t)jarg2; 
+  if (arg1) (arg1)->HorizontalCount = arg2;
+}
+
+
+SWIGEXPORT int SWIGSTDCALL CSharp_Effekseerfswig_RecordingParameter_HorizontalCount_get___(void * jarg1) {
+  int jresult ;
+  RecordingParameter *arg1 = (RecordingParameter *) 0 ;
+  int32_t result;
+  
+  arg1 = (RecordingParameter *)jarg1; 
+  result = (int32_t) ((arg1)->HorizontalCount);
+  jresult = result; 
+  return jresult;
+}
+
+
+SWIGEXPORT void SWIGSTDCALL CSharp_Effekseerfswig_RecordingParameter_OffsetFrame_set___(void * jarg1, int jarg2) {
+  RecordingParameter *arg1 = (RecordingParameter *) 0 ;
+  int32_t arg2 ;
+  
+  arg1 = (RecordingParameter *)jarg1; 
+  arg2 = (int32_t)jarg2; 
+  if (arg1) (arg1)->OffsetFrame = arg2;
+}
+
+
+SWIGEXPORT int SWIGSTDCALL CSharp_Effekseerfswig_RecordingParameter_OffsetFrame_get___(void * jarg1) {
+  int jresult ;
+  RecordingParameter *arg1 = (RecordingParameter *) 0 ;
+  int32_t result;
+  
+  arg1 = (RecordingParameter *)jarg1; 
+  result = (int32_t) ((arg1)->OffsetFrame);
+  jresult = result; 
+  return jresult;
+}
+
+
+SWIGEXPORT void SWIGSTDCALL CSharp_Effekseerfswig_RecordingParameter_Freq_set___(void * jarg1, int jarg2) {
+  RecordingParameter *arg1 = (RecordingParameter *) 0 ;
+  int32_t arg2 ;
+  
+  arg1 = (RecordingParameter *)jarg1; 
+  arg2 = (int32_t)jarg2; 
+  if (arg1) (arg1)->Freq = arg2;
+}
+
+
+SWIGEXPORT int SWIGSTDCALL CSharp_Effekseerfswig_RecordingParameter_Freq_get___(void * jarg1) {
+  int jresult ;
+  RecordingParameter *arg1 = (RecordingParameter *) 0 ;
+  int32_t result;
+  
+  arg1 = (RecordingParameter *)jarg1; 
+  result = (int32_t) ((arg1)->Freq);
+  jresult = result; 
+  return jresult;
+}
+
+
+SWIGEXPORT void SWIGSTDCALL CSharp_Effekseerfswig_RecordingParameter_Transparence_set___(void * jarg1, int jarg2) {
+  RecordingParameter *arg1 = (RecordingParameter *) 0 ;
+  TransparenceType arg2 ;
+  
+  arg1 = (RecordingParameter *)jarg1; 
+  arg2 = (TransparenceType)jarg2; 
+  if (arg1) (arg1)->Transparence = arg2;
+}
+
+
+SWIGEXPORT int SWIGSTDCALL CSharp_Effekseerfswig_RecordingParameter_Transparence_get___(void * jarg1) {
+  int jresult ;
+  RecordingParameter *arg1 = (RecordingParameter *) 0 ;
+  TransparenceType result;
+  
+  arg1 = (RecordingParameter *)jarg1; 
+  result = (TransparenceType) ((arg1)->Transparence);
+  jresult = (int)result; 
+  return jresult;
+}
+
+
+SWIGEXPORT void * SWIGSTDCALL CSharp_Effekseerfswig_new_RecordingParameter___() {
+  void * jresult ;
+  RecordingParameter *result = 0 ;
+  
+  result = (RecordingParameter *)new RecordingParameter();
+  jresult = (void *)result; 
+  return jresult;
+}
+
+
+SWIGEXPORT void SWIGSTDCALL CSharp_Effekseerfswig_delete_RecordingParameter___(void * jarg1) {
+  RecordingParameter *arg1 = (RecordingParameter *) 0 ;
+  
+  arg1 = (RecordingParameter *)jarg1; 
   delete arg1;
 }
 
@@ -2018,93 +2344,19 @@ SWIGEXPORT void * SWIGSTDCALL CSharp_Effekseerfswig_Native_RenderView___(void * 
 }
 
 
-SWIGEXPORT unsigned int SWIGSTDCALL CSharp_Effekseerfswig_Native_Record__SWIG_0___(void * jarg1, char16_t * jarg2, char16_t * jarg3, int jarg4, int jarg5, int jarg6, int jarg7) {
+SWIGEXPORT unsigned int SWIGSTDCALL CSharp_Effekseerfswig_Native_Record___(void * jarg1, void * jarg2) {
   unsigned int jresult ;
   Native *arg1 = (Native *) 0 ;
-  char16_t *arg2 = (char16_t *) 0 ;
-  char16_t *arg3 = (char16_t *) 0 ;
-  int32_t arg4 ;
-  int32_t arg5 ;
-  int32_t arg6 ;
-  TransparenceType arg7 ;
+  RecordingParameter *arg2 = 0 ;
   bool result;
   
   arg1 = (Native *)jarg1; 
-  arg2 = (char16_t *)jarg2; 
-  arg3 = (char16_t *)jarg3; 
-  arg4 = (int32_t)jarg4; 
-  arg5 = (int32_t)jarg5; 
-  arg6 = (int32_t)jarg6; 
-  arg7 = (TransparenceType)jarg7; 
-  result = (bool)(arg1)->Record((char16_t const *)arg2,(char16_t const *)arg3,arg4,arg5,arg6,arg7);
-  jresult = result; 
-  return jresult;
-}
-
-
-SWIGEXPORT unsigned int SWIGSTDCALL CSharp_Effekseerfswig_Native_Record__SWIG_1___(void * jarg1, char16_t * jarg2, int jarg3, int jarg4, int jarg5, int jarg6, int jarg7) {
-  unsigned int jresult ;
-  Native *arg1 = (Native *) 0 ;
-  char16_t *arg2 = (char16_t *) 0 ;
-  int32_t arg3 ;
-  int32_t arg4 ;
-  int32_t arg5 ;
-  int32_t arg6 ;
-  TransparenceType arg7 ;
-  bool result;
-  
-  arg1 = (Native *)jarg1; 
-  arg2 = (char16_t *)jarg2; 
-  arg3 = (int32_t)jarg3; 
-  arg4 = (int32_t)jarg4; 
-  arg5 = (int32_t)jarg5; 
-  arg6 = (int32_t)jarg6; 
-  arg7 = (TransparenceType)jarg7; 
-  result = (bool)(arg1)->Record((char16_t const *)arg2,arg3,arg4,arg5,arg6,arg7);
-  jresult = result; 
-  return jresult;
-}
-
-
-SWIGEXPORT unsigned int SWIGSTDCALL CSharp_Effekseerfswig_Native_RecordAsGifAnimation___(void * jarg1, char16_t * jarg2, int jarg3, int jarg4, int jarg5, int jarg6) {
-  unsigned int jresult ;
-  Native *arg1 = (Native *) 0 ;
-  char16_t *arg2 = (char16_t *) 0 ;
-  int32_t arg3 ;
-  int32_t arg4 ;
-  int32_t arg5 ;
-  TransparenceType arg6 ;
-  bool result;
-  
-  arg1 = (Native *)jarg1; 
-  arg2 = (char16_t *)jarg2; 
-  arg3 = (int32_t)jarg3; 
-  arg4 = (int32_t)jarg4; 
-  arg5 = (int32_t)jarg5; 
-  arg6 = (TransparenceType)jarg6; 
-  result = (bool)(arg1)->RecordAsGifAnimation((char16_t const *)arg2,arg3,arg4,arg5,arg6);
-  jresult = result; 
-  return jresult;
-}
-
-
-SWIGEXPORT unsigned int SWIGSTDCALL CSharp_Effekseerfswig_Native_RecordAsAVI___(void * jarg1, char16_t * jarg2, int jarg3, int jarg4, int jarg5, int jarg6) {
-  unsigned int jresult ;
-  Native *arg1 = (Native *) 0 ;
-  char16_t *arg2 = (char16_t *) 0 ;
-  int32_t arg3 ;
-  int32_t arg4 ;
-  int32_t arg5 ;
-  TransparenceType arg6 ;
-  bool result;
-  
-  arg1 = (Native *)jarg1; 
-  arg2 = (char16_t *)jarg2; 
-  arg3 = (int32_t)jarg3; 
-  arg4 = (int32_t)jarg4; 
-  arg5 = (int32_t)jarg5; 
-  arg6 = (TransparenceType)jarg6; 
-  result = (bool)(arg1)->RecordAsAVI((char16_t const *)arg2,arg3,arg4,arg5,arg6);
+  arg2 = (RecordingParameter *)jarg2;
+  if (!arg2) {
+    SWIG_CSharpSetPendingExceptionArgument(SWIG_CSharpArgumentNullException, "RecordingParameter & type is null", 0);
+    return 0;
+  } 
+  result = (bool)(arg1)->Record(*arg2);
   jresult = result; 
   return jresult;
 }
@@ -2491,6 +2743,34 @@ SWIGEXPORT unsigned int SWIGSTDCALL CSharp_Effekseerfswig_Native_IsDebugMode___(
   result = (bool)Native::IsDebugMode();
   jresult = result; 
   return jresult;
+}
+
+
+SWIGEXPORT void SWIGSTDCALL CSharp_Effekseerfswig_Native_SetBloomParameters___(void * jarg1, unsigned int jarg2, float jarg3, float jarg4, float jarg5) {
+  Native *arg1 = (Native *) 0 ;
+  bool arg2 ;
+  float arg3 ;
+  float arg4 ;
+  float arg5 ;
+  
+  arg1 = (Native *)jarg1; 
+  arg2 = jarg2 ? true : false; 
+  arg3 = (float)jarg3; 
+  arg4 = (float)jarg4; 
+  arg5 = (float)jarg5; 
+  (arg1)->SetBloomParameters(arg2,arg3,arg4,arg5);
+}
+
+
+SWIGEXPORT void SWIGSTDCALL CSharp_Effekseerfswig_Native_SetTonemapParameters___(void * jarg1, int jarg2, float jarg3) {
+  Native *arg1 = (Native *) 0 ;
+  int32_t arg2 ;
+  float arg3 ;
+  
+  arg1 = (Native *)jarg1; 
+  arg2 = (int32_t)jarg2; 
+  arg3 = (float)jarg3; 
+  (arg1)->SetTonemapParameters(arg2,arg3);
 }
 
 
@@ -3030,6 +3310,82 @@ SWIGEXPORT void SWIGSTDCALL CSharp_Effekseerfswig_GUIManager_SetNextWindowSize__
   arg3 = (float)jarg3; 
   arg4 = (efk::Cond)jarg4; 
   (arg1)->SetNextWindowSize(arg2,arg3,arg4);
+}
+
+
+SWIGEXPORT void SWIGSTDCALL CSharp_Effekseerfswig_GUIManager_PushStyleColor___(void * jarg1, int jarg2, unsigned int jarg3) {
+  efk::GUIManager *arg1 = (efk::GUIManager *) 0 ;
+  efk::ImGuiColFlags arg2 ;
+  uint32_t arg3 ;
+  
+  arg1 = (efk::GUIManager *)jarg1; 
+  arg2 = (efk::ImGuiColFlags)jarg2; 
+  arg3 = (uint32_t)jarg3; 
+  (arg1)->PushStyleColor(arg2,arg3);
+}
+
+
+SWIGEXPORT void SWIGSTDCALL CSharp_Effekseerfswig_GUIManager_PopStyleColor__SWIG_0___(void * jarg1, int jarg2) {
+  efk::GUIManager *arg1 = (efk::GUIManager *) 0 ;
+  int arg2 ;
+  
+  arg1 = (efk::GUIManager *)jarg1; 
+  arg2 = (int)jarg2; 
+  (arg1)->PopStyleColor(arg2);
+}
+
+
+SWIGEXPORT void SWIGSTDCALL CSharp_Effekseerfswig_GUIManager_PopStyleColor__SWIG_1___(void * jarg1) {
+  efk::GUIManager *arg1 = (efk::GUIManager *) 0 ;
+  
+  arg1 = (efk::GUIManager *)jarg1; 
+  (arg1)->PopStyleColor();
+}
+
+
+SWIGEXPORT void SWIGSTDCALL CSharp_Effekseerfswig_GUIManager_PushStyleVar__SWIG_0___(void * jarg1, int jarg2, float jarg3) {
+  efk::GUIManager *arg1 = (efk::GUIManager *) 0 ;
+  efk::ImGuiStyleVarFlags arg2 ;
+  float arg3 ;
+  
+  arg1 = (efk::GUIManager *)jarg1; 
+  arg2 = (efk::ImGuiStyleVarFlags)jarg2; 
+  arg3 = (float)jarg3; 
+  (arg1)->PushStyleVar(arg2,arg3);
+}
+
+
+SWIGEXPORT void SWIGSTDCALL CSharp_Effekseerfswig_GUIManager_PushStyleVar__SWIG_1___(void * jarg1, int jarg2, void * jarg3) {
+  efk::GUIManager *arg1 = (efk::GUIManager *) 0 ;
+  efk::ImGuiStyleVarFlags arg2 ;
+  efk::Vec2 *arg3 = 0 ;
+  
+  arg1 = (efk::GUIManager *)jarg1; 
+  arg2 = (efk::ImGuiStyleVarFlags)jarg2; 
+  arg3 = (efk::Vec2 *)jarg3;
+  if (!arg3) {
+    SWIG_CSharpSetPendingExceptionArgument(SWIG_CSharpArgumentNullException, "efk::Vec2 const & type is null", 0);
+    return ;
+  } 
+  (arg1)->PushStyleVar(arg2,(efk::Vec2 const &)*arg3);
+}
+
+
+SWIGEXPORT void SWIGSTDCALL CSharp_Effekseerfswig_GUIManager_PopStyleVar__SWIG_0___(void * jarg1, int jarg2) {
+  efk::GUIManager *arg1 = (efk::GUIManager *) 0 ;
+  int arg2 ;
+  
+  arg1 = (efk::GUIManager *)jarg1; 
+  arg2 = (int)jarg2; 
+  (arg1)->PopStyleVar(arg2);
+}
+
+
+SWIGEXPORT void SWIGSTDCALL CSharp_Effekseerfswig_GUIManager_PopStyleVar__SWIG_1___(void * jarg1) {
+  efk::GUIManager *arg1 = (efk::GUIManager *) 0 ;
+  
+  arg1 = (efk::GUIManager *)jarg1; 
+  (arg1)->PopStyleVar();
 }
 
 
@@ -5888,6 +6244,22 @@ SWIGEXPORT unsigned int SWIGSTDCALL CSharp_Effekseerfswig_GUIManager_InputText__
   arg2 = (char16_t *)jarg2; 
   arg3 = (char16_t *)jarg3; 
   result = (bool)(arg1)->InputText((char16_t const *)arg2,(char16_t const *)arg3);
+  jresult = result; 
+  return jresult;
+}
+
+
+SWIGEXPORT unsigned int SWIGSTDCALL CSharp_Effekseerfswig_GUIManager_InputTextMultiline___(void * jarg1, char16_t * jarg2, char16_t * jarg3) {
+  unsigned int jresult ;
+  efk::GUIManager *arg1 = (efk::GUIManager *) 0 ;
+  char16_t *arg2 = (char16_t *) 0 ;
+  char16_t *arg3 = (char16_t *) 0 ;
+  bool result;
+  
+  arg1 = (efk::GUIManager *)jarg1; 
+  arg2 = (char16_t *)jarg2; 
+  arg3 = (char16_t *)jarg3; 
+  result = (bool)(arg1)->InputTextMultiline((char16_t const *)arg2,(char16_t const *)arg3);
   jresult = result; 
   return jresult;
 }

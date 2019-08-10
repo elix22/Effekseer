@@ -10,6 +10,7 @@
 #include "Effekseer.Matrix43.h"
 #include "Effekseer.Matrix44.h"
 #include "Culling/Culling3D.h"
+#include "Effekseer.CustomAllocator.h"
 
 //----------------------------------------------------------------------------------
 //
@@ -64,6 +65,8 @@ private:
 
 		bool				IsPreupdated = false;
 		int32_t				StartFrame = 0;
+
+		int32_t Layer = 0;
 
 		DrawSet( Effect* effect, InstanceContainer* pContainer, InstanceGlobal* pGlobal )
 			: ParameterPointer			( effect )
@@ -146,9 +149,11 @@ private:
 	// 破棄待ちオブジェクト
 	std::map<Handle,DrawSet>	m_RemovingDrawSets[2];
 
-	/* 描画中オブジェクト */
-	std::vector<DrawSet>		m_renderingDrawSets;
-	std::map<Handle,DrawSet>	m_renderingDrawSetMaps;
+	//! objects on rendering
+	CustomVector<DrawSet> m_renderingDrawSets;
+
+	//! objects on rendering
+	CustomMap<Handle,DrawSet> m_renderingDrawSetMaps;
 
 	// mutex for rendering
 	std::mutex					m_renderingMutex;
@@ -247,34 +252,16 @@ public:
 	*/
 	uint32_t GetSequenceNumber() const;
 
-	/**
-		@brief	メモリ確保関数取得
-	*/
 	MallocFunc GetMallocFunc() const override;
 
-	/**
-		@brief	メモリ確保関数設定
-	*/
 	void SetMallocFunc( MallocFunc func ) override;
 
-	/**
-		@brief	メモリ破棄関数取得
-	*/
 	FreeFunc GetFreeFunc() const override;
 
-	/**
-		@brief	メモリ破棄関数設定
-	*/
 	void SetFreeFunc( FreeFunc func ) override;
 
-	/**
-		@brief	ランダム関数取得
-	*/
 	RandFunc GetRandFunc() const override;
 
-	/**
-		@brief	ランダム関数設定
-	*/
 	void SetRandFunc( RandFunc func ) override;
 
 	/**
@@ -408,6 +395,10 @@ public:
 	*/
 	void SetModelLoader( ModelLoader* modelLoader ) override;
 	
+	MaterialLoader* GetMaterialLoader() override;
+
+	void SetMaterialLoader(MaterialLoader* loader) override;
+
 	/**
 		@brief	エフェクト停止
 	*/
@@ -484,6 +475,10 @@ public:
 	void SetTargetLocation( Handle handle, float x, float y, float z ) override;
 	void SetTargetLocation( Handle handle, const Vector3D& location ) override;
 
+	float GetDynamicInput(Handle handle, int32_t index) override;
+
+	void SetDynamicInput(Handle handle, int32_t index, float value) override;
+
 	Matrix43 GetBaseMatrix( Handle handle ) override;
 
 	void SetBaseMatrix( Handle handle, const Matrix43& mat ) override;
@@ -505,6 +500,10 @@ public:
 
 	void SetPausedToAllEffects(bool paused) override;
 
+	int GetLayer(Handle handle) override;
+
+	void SetLayer(Handle handle, int32_t layer) override;
+
 	float GetSpeed(Handle handle) const override;
 
 	void SetSpeed( Handle handle, float speed ) override;
@@ -513,59 +512,41 @@ public:
 	
 	void Flip() override;
 
-	/**
-		@brief	更新処理
-	*/
 	void Update( float deltaFrame ) override;
 
-	/**
-		@brief	更新処理を開始する。
-		@note
-		Updateを実行する際は、実行する必要はない。
-	*/
 	void BeginUpdate() override;
 
-	/**
-		@brief	更新処理を終了する。
-		@note
-		Updateを実行する際は、実行する必要はない。
-	*/
 	void EndUpdate() override;
 
-	/**
-		@brief	ハンドル単位の更新を行う。
-		@param	handle		[in]	ハンドル
-		@param	deltaFrame	[in]	更新するフレーム数(60fps基準)
-		@note
-		更新する前にBeginUpdate、更新し終わった後にEndUpdateを実行する必要がある。
-	*/
 	void UpdateHandle( Handle handle, float deltaFrame = 1.0f ) override;
 
 private:
 	void UpdateHandle( DrawSet& drawSet, float deltaFrame );
 
 	void Preupdate(DrawSet& drawSet);
-public:
 
-	/**
-		@brief	描画処理
-	*/
-	void Draw() override;
+	//! whether container is disabled while rendering because of a distance between the effect and a camera
+	bool IsClippedWithDepth(DrawSet& drawSet, InstanceContainer* container, const Manager::DrawParameter& drawParameter);
+ public:
+
+	void Draw(const Manager::DrawParameter& drawParameter) override;
 	
-	void DrawBack() override;
+	void DrawBack(const Manager::DrawParameter& drawParameter) override;
 
-	void DrawFront() override;
+	void DrawFront(const Manager::DrawParameter& drawParameter) override;
 
-	void DrawHandle( Handle handle ) override;
+	void DrawHandle(Handle handle, const Manager::DrawParameter& drawParameter) override;
 
-	void DrawHandleBack(Handle handle) override;
+	void DrawHandleBack(Handle handle, const Manager::DrawParameter& drawParameter) override;
 
-	void DrawHandleFront(Handle handle) override;
+	void DrawHandleFront(Handle handle, const Manager::DrawParameter& drawParameter) override;
 
 	Handle Play( Effect* effect, float x, float y, float z ) override;
 
 	Handle Play(Effect* effect, const Vector3D& position, int32_t startFrame) override;
 	
+	int GetCameraCullingMaskToShowAllEffects() override;
+
 	/**
 		@brief	Update処理時間を取得。
 	*/

@@ -1,4 +1,4 @@
-﻿
+
 //----------------------------------------------------------------------------------
 // Include
 //----------------------------------------------------------------------------------
@@ -152,6 +152,7 @@ static bool g_isInitialized = false;
 static bool g_isSupportedVertexArray = false;
 static bool g_isSurrpotedBufferRange = false;
 static bool g_isSurrpotedMapBuffer = false;
+static OpenGLDeviceType g_deviceType = OpenGLDeviceType::OpenGL2;
 
 #if _WIN32
 #define GET_PROC(name)	g_##name = (FP_##name)wglGetProcAddress( #name ); if(g_##name==NULL) return false;
@@ -159,10 +160,16 @@ static bool g_isSurrpotedMapBuffer = false;
 #define GET_PROC(name)	g_##name = (FP_##name)eglGetProcAddress( #name ); if(g_##name==NULL) return false;
 #endif
 
+OpenGLDeviceType GetDeviceType()
+{
+    return g_deviceType;
+}
+    
 bool Initialize(OpenGLDeviceType deviceType)
 {
 	if(g_isInitialized) return true;
-
+    g_deviceType = deviceType;
+    
 #if _WIN32
 	GET_PROC(glDeleteBuffers);
 	GET_PROC(glCreateShader);
@@ -248,11 +255,17 @@ bool Initialize(OpenGLDeviceType deviceType)
 	// Some smartphone causes segmentation fault.
 	//GET_PROC(glMapBufferRangeEXT);
 
+#ifdef EMSCRIPTEN
+	g_isSurrpotedBufferRange = false;
+	g_isSurrpotedMapBuffer = false;
+#else
 	GET_PROC(glMapBufferOES);
 	GET_PROC(glUnmapBufferOES);
 	g_isSurrpotedBufferRange = (g_glMapBufferRangeEXT && g_glUnmapBufferOES);
 	g_isSurrpotedMapBuffer = (g_glMapBufferOES && g_glUnmapBufferOES 
 		&& ((glExtensions && strstr(glExtensions, "GL_OES_mapbuffer")) ? true : false));
+#endif
+
 #endif
 
 #else

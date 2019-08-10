@@ -1,42 +1,32 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.ComponentModel;
-using System.Drawing;
-using System.Data;
 using System.Linq;
 using System.Text;
-using System.Windows.Forms;
+using System.Threading.Tasks;
 
 namespace Effekseer.GUI.Component
 {
-	partial class Float : System.Windows.Forms.TextBox
+	class Float : Control, IParameterControl
 	{
-		public Float()
-		{
-			InitializeComponent();
+		string id = "";
+		string id_c = "";
+		string id_d = "";
 
-			EnableUndo = true;
+		public string Label { get; set; } = string.Empty;
 
-			Reading = false;
-			Writing = false;
-	
-			Reading = true;
-			Read();
-			Reading = false;
-
-			HandleCreated += new EventHandler(Float_HandleCreated);
-			HandleDestroyed += new EventHandler(Float_HandleDestroyed);
-			TextChanged += new EventHandler(Float_TextChanged);
-			KeyDown += new KeyEventHandler(Float_KeyDown);
-			Enter += new EventHandler(Float_Enter);
-			Leave += new EventHandler(Float_Leave);
-		}
-
-		bool changed = false;
+		public string Description { get; set; } = string.Empty;
 
 		Data.Value.Float binding = null;
 
-		public bool EnableUndo { get; set; }
+		ValueChangingProperty valueChangingProp = new ValueChangingProperty();
+
+		float[] internalValue = new float[] { 0.0f };
+
+		bool isActive = false;
+
+		bool isPopupShown = false;
+
+		public bool EnableUndo { get; set; } = true;
 
 		public Data.Value.Float Binding
 		{
@@ -48,22 +38,25 @@ namespace Effekseer.GUI.Component
 			{
 				if (binding == value) return;
 
-				if (binding != null)
-				{
-					binding.OnChanged -= OnChanged;
-				}
-
 				binding = value;
 
 				if (binding != null)
 				{
-					binding.OnChanged += OnChanged;
+					internalValue[0] = binding.Value;
 				}
-
-				Reading = true;
-				Read();
-				Reading = false;
 			}
+		}
+
+		public Float(string label = null)
+		{
+			if (label != null)
+			{
+				Label = label;
+			}
+
+			id = "###" + Manager.GetUniqueID().ToString();
+			id_c = "###" + Manager.GetUniqueID().ToString();
+			id_d = "###" + Manager.GetUniqueID().ToString();
 		}
 
 		public void SetBinding(object o)
@@ -72,196 +65,80 @@ namespace Effekseer.GUI.Component
 			Binding = o_;
 		}
 
-		/// <summary>
-		/// 他のクラスからデータ読み込み中
-		/// </summary>
-		public bool Reading
+		public void FixValue()
 		{
-			get;
-			private set;
-		}
-
-		/// <summary>
-		/// 他のクラスにデータ書き込み中
-		/// </summary>
-		public bool Writing
-		{
-			get;
-			private set;
-		}
-
-		/// <summary>
-		/// 再読込
-		/// </summary>
-		public void Reload()
-		{
-			if (Writing) return;
-
-			Reading = true;
-			Read();
-			Reading = false;
-		}
-
-		/// <summary>
-		/// 外部からの有効指定
-		/// </summary>
-		public Func<bool> IsEnable
-		{
-			get;
-			set;
-		}
-
-		
-
-		void Read()
-		{
-			if (!Reading) throw new Exception();
-
-			changed = false;
-			BackColor = Colors.EditedFloat;
-
-			bool enable = binding != null;
-			if (IsEnable != null && enable)
-			{
-				enable = IsEnable();
-			}
-
-			if (enable)
-			{
-				Text = binding.Value.ToString();
-				Enabled = true;
-			}
-			else
-			{
-				Text = string.Empty;
-				Enabled = false;
-				BackColor = Colors.Disable;
-			}
-		}
-
-		void Write()
-		{
-			if (binding != null && changed)
-			{
-				float parsed = 0;
-				if (float.TryParse(Text, System.Globalization.NumberStyles.Float, Setting.NFI, out parsed))
-				{
-					Writing = true;
-
-					if (EnableUndo)
-					{
-						binding.SetValue(parsed);
-					}
-					else
-					{
-						binding.SetValueDirectly(parsed);
-					}
-
-					Writing = false;
-				}
-			}
-		}
-
-		void OnChanged(object sender, ChangedValueEventArgs e)
-		{
-			if (Writing) return;
-
-			Reading = true;
-			Read();
-			Reading = false;
-		}
-
-		void Float_HandleCreated(object sender, EventArgs e)
-		{
-
-		}
-
-		void Float_HandleDestroyed(object sender, EventArgs e)
-		{
-			Binding = null;
-		}
-
-		void Float_TextChanged(object sender, EventArgs e)
-		{
-			if (Reading) return;
-
-			changed = true;
-			BackColor = Colors.EditingFloat;
-		}
-
-		void Float_KeyDown(object sender, KeyEventArgs e)
-		{
-			if (e.KeyCode == Keys.Enter && changed)
-			{
-				// ビープ音防止
-				e.SuppressKeyPress = true;
-
-				Write();
-
-				Reading = true;
-				Read();
-				Reading = false;
-			}
-		}
-		
-		void Float_Enter(object sender, EventArgs e)
-		{
-			this.BeginInvoke(new MethodInvoker(() => this.SelectAll()));
-		}
-
-		void Float_Leave(object sender, EventArgs e)
-		{
-			Write();
-
-			Reading = true;
-			Read();
-			Reading = false;
-		}
-		
-		void _MouseWheel(int delta)
-		{
-			int wheel = (delta / 120);
+			if (binding == null) return;
 
 			if (EnableUndo)
 			{
-				Binding.SetValue(Binding.Value + wheel * Binding.Step, true);
+				binding.SetValue(internalValue[0]);
 			}
 			else
 			{
-				Binding.SetValueDirectly(Binding.Value + wheel * Binding.Step);
+				binding.SetValueDirectly(internalValue[0]);
 			}
-			Reload();
-			SelectAll();
-			changed = true;
 		}
 
-		protected override void WndProc(ref Message m)
+		public override void OnDisposed()
 		{
-			if (m.Msg == 0x020A)
+			FixValue();
+		}
+
+		public override void Update()
+		{
+			isPopupShown = false;
+
+			if (binding == null) return;
+
+			valueChangingProp.Enable(binding);
+
+			internalValue[0] = binding.Value;
+
+			if (Manager.NativeManager.DragFloat(id, internalValue, binding.Step / 10.0f, binding.RangeMin, binding.RangeMax))
 			{
-				var pos = this.PointToClient(Cursor.Position);
-				if (0 <= pos.X &&
-					pos.X <= Size.Width &&
-					0 <= pos.Y &&
-					pos.Y <= Size.Height)
+				if (EnableUndo)
 				{
-					if ((int)m.WParam > 0)
-					{
-						_MouseWheel(120);
-					}
-					else if ((int)m.WParam < 0)
-					{
-						_MouseWheel(-120);
-					}
+					binding.SetValue(internalValue[0], isActive);
 				}
 				else
 				{
-					base.WndProc(ref m);
+					binding.SetValueDirectly(internalValue[0]);
 				}
 			}
-			else
+
+			Popup();
+
+			var isActive_Current = Manager.NativeManager.IsItemActive();
+
+			if (isActive && !isActive_Current)
 			{
-				base.WndProc(ref m);
+				FixValue();
+			}
+
+			isActive = isActive_Current;
+
+			if (binding.IsDynamicEquationEnabled)
+			{
+				DynamicSelector.SelectInComponent(id_d, binding.DynamicEquation);
+				Popup();
+			}
+
+			valueChangingProp.Disable();
+		}
+
+		void Popup()
+		{
+			if (isPopupShown) return;
+
+			if (!binding.CanSelectDynamicEquation) return;
+
+			if (Manager.NativeManager.BeginPopupContextItem(id_c))
+			{
+				DynamicSelector.Popup(id_c, binding.DynamicEquation, binding.IsDynamicEquationEnabled);
+
+				Manager.NativeManager.EndPopup();
+
+				isPopupShown = true;
 			}
 		}
 	}

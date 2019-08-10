@@ -83,9 +83,6 @@ private:
 	IndexBuffer*		m_indexBuffer = nullptr;
 	IndexBuffer*		m_indexBufferForWireframe = nullptr;
 	int32_t				m_squareMaxCount;
-	
-	int32_t				drawcallCount = 0;
-	int32_t				drawvertexCount = 0;
 
 	Shader*							m_shader;
 	Shader*							m_shader_no_texture;
@@ -286,6 +283,8 @@ public:
 	*/
 	::Effekseer::ModelLoader* CreateModelLoader( ::Effekseer::FileInterface* fileInterface = NULL )override;
 
+	::Effekseer::MaterialLoader* CreateMaterialLoader(::Effekseer::FileInterface* fileInterface = nullptr) override;
+
 	/**
 	@brief	背景を取得する。
 	*/
@@ -332,25 +331,19 @@ public:
 	void BeginShader(Shader* shader);
 	void EndShader(Shader* shader);
 
-	void SetVertexBufferToShader(const void* data, int32_t size);
+	void SetVertexBufferToShader(const void* data, int32_t size, int32_t dstOffset);
 
-	void SetPixelBufferToShader(const void* data, int32_t size);
+	void SetPixelBufferToShader(const void* data, int32_t size, int32_t dstOffset);
 
 	void SetTextures(Shader* shader, Effekseer::TextureData** textures, int32_t count);
 
 	void ResetRenderState() override;
 
-	int32_t GetDrawCallCount() const override;
-
-	int32_t GetDrawVertexCount() const override;
-
-	void ResetDrawCallCount() override;
-
-	void ResetDrawVertexCount() override;
-
 	std::vector<GLuint>& GetCurrentTextures() { return m_currentTextures; }
 
-	OpenGLDeviceType GetDeviceType() { return m_deviceType; }
+	OpenGLDeviceType GetDeviceType() const override { return m_deviceType; }
+
+	bool IsVertexArrayObjectSupported() const override;
 
 	virtual int GetRef() override { return ::Effekseer::ReferenceObject::GetRef(); }
 	virtual int AddRef() override { return ::Effekseer::ReferenceObject::AddRef(); }

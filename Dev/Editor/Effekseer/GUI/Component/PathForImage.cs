@@ -1,41 +1,33 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.ComponentModel;
-using System.Drawing;
-using System.Data;
 using System.Linq;
 using System.Text;
-using System.Windows.Forms;
+using System.Threading.Tasks;
+using System.IO;
 using System.Text.RegularExpressions;
 
 namespace Effekseer.GUI.Component
 {
-	public partial class PathForImage : UserControl
+	class PathForImage : Control, IParameterControl
 	{
-		public PathForImage()
-		{
-			InitializeComponent();
+		string id1 = "";
+		string id2 = "";
 
-			EnableUndo = true;
+		public string Label { get; set; } = string.Empty;
 
-			this.SuspendLayout();
-			Anchor = AnchorStyles.Left | AnchorStyles.Right;
-			this.ResumeLayout(false);
+		public string Description { get; set; } = string.Empty;
 
-			Read();
+		Data.Value.PathForImage binding = null;
 
-			HandleDestroyed += new EventHandler(Path_HandleDestroyed);
-			Core.OnAfterNew += Core_OnAfterNew;
-			Core.OnAfterSave += Core_OnAfterSave;
-			Core.OnAfterLoad += Core_OnAfterLoad;
-			Core.OnReload += Core_OnReload;
-		}
+		string filePath = string.Empty;
+		string infoText = string.Empty;
+		bool isHovered = false;
 
-		Data.Value.Path binding = null;
+		swig.ImageResource image = null;
 
-		public bool EnableUndo { get; set; }
+		public bool EnableUndo { get; set; } = true;
 
-		public Data.Value.Path Binding
+		public Data.Value.PathForImage Binding
 		{
 			get
 			{
@@ -43,115 +35,167 @@ namespace Effekseer.GUI.Component
 			}
 			set
 			{
-				if (binding == value) return;
-
-				if (binding != null)
+				if (binding == value)
 				{
-					
+					return;
+				}
+
+				if(value == null)
+				{
+					binding.OnChanged -= Binding_OnChanged;
+					binding = null;
+					return;
 				}
 
 				binding = value;
-
-				if (binding != null)
-				{
-					
-				}
-
+				binding.OnChanged += Binding_OnChanged;
 				Read();
 			}
 		}
 
+		private void Binding_OnChanged(object sender, ChangedValueEventArgs e)
+		{
+			Read();
+		}
+
+		public PathForImage(string label = null)
+		{
+			if (label != null)
+			{
+				Label = label;
+			}
+
+			id1 = "###" + Manager.GetUniqueID().ToString();
+			id2 = "###" + Manager.GetUniqueID().ToString();
+		}
+
 		public void SetBinding(object o)
 		{
-			var o_ = o as Data.Value.Path;
+			var o_ = o as Data.Value.PathForImage;
 			Binding = o_;
 		}
 
-		void Read()
+		public void FixValue()
 		{
-			if (binding != null)
+		}
+
+		public override void OnDisposed()
+		{
+		}
+
+		public override void OnDropped(string path, ref bool handle)
+		{
+			if (isHovered)
 			{
-				btn_load.Enabled = true;
-				lbl_file.Text = binding.GetRelativePath();
-                tooltip_file.SetToolTip(lbl_file, lbl_file.Text);
-				if (lbl_file.Text.Length > 0)
+				if (CheckExtension(path))
 				{
-					UpdatePreview(binding.GetAbsolutePath());
+					binding.SetAbsolutePath(path);
+					Read();
 				}
-				else
-				{
-					//this.Height = 20;
-				}
-			}
-			else
-			{
-				btn_load.Enabled = false;
-				lbl_file.Text = string.Empty;
-				lbl_info.Text = string.Empty;
-				pic_preview.Image = null;
+
+				handle = true;
 			}
 		}
 
-		void UpdatePreview(string path)
-		{
-            if (!System.IO.File.Exists(path))
-            {
-                return;
-            }
-
-			try
+		public void Dropped(string path)
+		{	
+			if (CheckExtension(path))
 			{
-				Bitmap srcbmp = new Bitmap(binding.GetAbsolutePath());
-				lbl_info.Text = "" + srcbmp.Width + "x" + srcbmp.Height + " " + srcbmp.PixelFormat.ToString();
+				binding.SetAbsolutePath(path);
+				Read();
+			}
+		}
 
-				int height = (128 <= srcbmp.Height) ? 128 : srcbmp.Height;
-				int width = srcbmp.Width * height / srcbmp.Height;
-				Bitmap dstbmp = new Bitmap(width, height);
-				Graphics g = Graphics.FromImage(dstbmp);
-				// 市松模様を描画
-				for (int i = 0; i < height / 16; i++)
+		public override void Update()
+		{
+			isHovered = false;
+
+			if (binding == null) return;
+
+			string dd = null;
+
+			float buttonSizeX = Manager.NativeManager.GetTextLineHeightWithSpacing() * 2;
+
+			if (Manager.NativeManager.Button(Resources.GetString("Load") + id1, buttonSizeX))
+			{
+				btn_load_Click();
+			}
+
+			if (dd == null) dd = DragAndDrops.UpdateImageDst();
+
+			isHovered = isHovered || Manager.NativeManager.IsItemHovered();
+
+			Manager.NativeManager.SameLine();
+			
+			Manager.NativeManager.Text(filePath);
+
+			if (Manager.NativeManager.IsItemHovered())
+			{
+				Manager.NativeManager.SetTooltip(filePath);
+			}
+
+			if (dd == null) dd = DragAndDrops.UpdateImageDst();
+
+			isHovered = isHovered || Manager.NativeManager.IsItemHovered();
+			
+			if(image != null)
+			{
+				if (Manager.NativeManager.Button(Resources.GetString("Delete") + id2, buttonSizeX))
 				{
-					for (int j = 0; j < width / 16; j++)
+					btn_delete_Click();
+				}
+				
+				if (dd == null) dd = DragAndDrops.UpdateImageDst();
+
+				isHovered = isHovered || Manager.NativeManager.IsItemHovered();
+
+				Manager.NativeManager.SameLine();
+
+				Manager.NativeManager.Text(infoText);
+
+				if (dd == null) dd = DragAndDrops.UpdateImageDst();
+
+				isHovered = isHovered || Manager.NativeManager.IsItemHovered();
+				
+				if(image != null)
+				{
+					float imageSizeX = image.GetWidth();
+					float imageSizeY = image.GetHeight();
+					if (imageSizeX < imageSizeY)
 					{
-						g.FillRectangle(Brushes.White, j * 16, i * 16, 8, 8);
-						g.FillRectangle(Brushes.LightGray, j * 16, i * 16 + 8, 8, 8);
-						g.FillRectangle(Brushes.LightGray, j * 16 + 8, i * 16, 8, 8);
-						g.FillRectangle(Brushes.White, j * 16 + 8, i * 16 + 8, 8, 8);
+						Manager.NativeManager.Image(image, 128 * imageSizeX / imageSizeY, 128);
+					}
+					else if (imageSizeX > imageSizeY)
+					{
+						Manager.NativeManager.Image(image, 128, 128 * imageSizeY / imageSizeX);
+					}
+					else
+					{
+						Manager.NativeManager.Image(image, 128, 128);
 					}
 				}
-				// 画像を描画
-				g.DrawImage(srcbmp, 0, 0, width, height);
-				g.Dispose();
 
-				pic_preview.Width = width;
-				pic_preview.Height = height;
-				pic_preview.Image = dstbmp;
-				srcbmp.Dispose();
+				if (dd == null) dd = DragAndDrops.UpdateImageDst();
 
-				//this.Height = 40 + height;
+				isHovered = isHovered || Manager.NativeManager.IsItemHovered();
 			}
-			catch (Exception e)
+
+			if (dd != null)
 			{
-                if (path == null) path = string.Empty;
-				System.IO.File.WriteAllText("error_image.txt", path +  "\n" + e.ToString());
-				pic_preview.Image = null;
+				Dropped(dd);
 			}
 		}
 
-		private void btn_load_Click(object sender, EventArgs e)
+		private void btn_load_Click()
 		{
 			if (binding == null) return;
 
-			OpenFileDialog ofd = new OpenFileDialog();
+			var filter = Resources.GetString("ImageFilter");
+			var result = swig.FileDialog.OpenDialog(filter, System.IO.Directory.GetCurrentDirectory());
 
-			ofd.InitialDirectory = System.IO.Directory.GetCurrentDirectory();
-			ofd.Filter = binding.Filter;
-			ofd.FilterIndex = 2;
-			ofd.Multiselect = false;
-
-			if (ofd.ShowDialog() == DialogResult.OK)
+			if (!string.IsNullOrEmpty(result))
 			{
-				var filepath = ofd.FileName;
+				var filepath = result;
 				binding.SetAbsolutePath(filepath);
 
 				System.IO.Directory.SetCurrentDirectory(System.IO.Path.GetDirectoryName(filepath));
@@ -161,93 +205,76 @@ namespace Effekseer.GUI.Component
 				return;
 			}
 
-			Read();
+				/*
+				OpenFileDialog ofd = new OpenFileDialog();
+
+				ofd.InitialDirectory = System.IO.Directory.GetCurrentDirectory();
+				ofd.Filter = binding.Filter;
+				ofd.FilterIndex = 2;
+				ofd.Multiselect = false;
+
+				if (ofd.ShowDialog() == DialogResult.OK)
+				{
+					var filepath = ofd.FileName;
+					binding.SetAbsolutePath(filepath);
+
+					System.IO.Directory.SetCurrentDirectory(System.IO.Path.GetDirectoryName(filepath));
+				}
+				else
+				{
+					return;
+				}
+				*/
+
+				Read();
 		}
 
-		private void btn_delete_Click(object sender, EventArgs e)
+		private void btn_delete_Click()
 		{
 			binding.SetAbsolutePath("");
 			Read();
 		}
 
-		void Core_OnAfterLoad(object sender, EventArgs e)
+		void Read()
 		{
-			Read();
+			if (binding != null)
+			{
+				filePath = binding.GetRelativePath();
+				UpdateInfo();
+			}
+			else
+			{
+				filePath = string.Empty;
+				UpdateInfo();
+			}
 		}
 
-		void Core_OnAfterSave(object sender, EventArgs e)
+		void UpdateInfo()
 		{
-			Read();
+			string path = binding.GetAbsolutePath();
+
+			if(System.IO.File.Exists(path))
+			{
+				image = Images.Load(Manager.Native, path);
+				if (image == null)
+				{
+					infoText = "";
+					return;
+				}
+
+				infoText = "" + image.GetWidth() + "x" + image.GetHeight();
+			}
+			else
+			{
+				image = null;
+				infoText = "";
+			}
 		}
 
-		void Core_OnAfterNew(object sender, EventArgs e)
-		{
-			Read();
-		}
-
-		void Core_OnReload(object sender, EventArgs e)
-		{
-			Read();
-		}
-
-		void Path_HandleDestroyed(object sender, EventArgs e)
-		{
-			Binding = null;
-			Core.OnAfterNew -= Core_OnAfterNew;
-			Core.OnAfterSave -= Core_OnAfterSave;
-			Core.OnAfterLoad -= Core_OnAfterLoad;
-		}
-		
 		private bool CheckExtension(string path)
 		{
-			Match match = Regex.Match(binding.Filter, "\\*(\\.[a-zA-Z0-9]*)");
-			string extension = match.Value.Substring(1);
-			return System.IO.Path.GetExtension(path) == extension;
-		}
-
-		private string GetDragFile(DragEventArgs e)
-		{
-			{	// FileViewerからのDrag
-				var fileItem = e.Data.GetData(typeof(DockFileViewer.FileItem)) as DockFileViewer.FileItem;
-				if (fileItem != null) {
-					return fileItem.FilePath;
-				}
-			}
-
-			{	// ExplorerからのDrag
-				var dropFiles = (string[])e.Data.GetData(DataFormats.FileDrop);
-				if (dropFiles != null && dropFiles.Length == 1) {
-					return dropFiles[0];
-				}
-			}
-			return null;
-		}
-
-		private void PathForImage_DragEnter(object sender, DragEventArgs e)
-		{
-			string filePath = GetDragFile(e);
-
-			if (filePath != null) {
-				if (CheckExtension(filePath)) {
-					e.Effect = DragDropEffects.Link;
-				}
-			}
-		}
-
-		private void PathForImage_DragLeave(object sender, EventArgs e)
-		{
-		}
-
-		private void PathForImage_DragDrop(object sender, DragEventArgs e)
-		{
-			string filePath = GetDragFile(e);
-			
-			if (filePath != null) {
-				if (CheckExtension(filePath)) {
-					binding.SetAbsolutePath(filePath);
-					Read();
-				}
-			}
+			var filters = binding.Filter.Split(',');
+			return filters.Any(_ => "." + _ == System.IO.Path.GetExtension(path).ToLower());
 		}
 	}
 }

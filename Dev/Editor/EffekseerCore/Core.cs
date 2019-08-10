@@ -18,11 +18,17 @@ namespace Effekseer
 
 		static Data.OptionValues option;
 
+		static Data.PostEffectValues postEffect;
+
 		static Data.EffectBehaviorValues effectBehavior = new Data.EffectBehaviorValues();
 
 		static Data.EffectCullingValues culling = new Data.EffectCullingValues();
 
 		static Data.GlobalValues globalValues = new Data.GlobalValues();
+
+		static Data.RecordingValues recording = new Data.RecordingValues();
+
+		static Data.DynamicValues dynamic_ = new Data.DynamicValues();
 
 		static int start_frame = 0;
 
@@ -48,7 +54,7 @@ namespace Effekseer
 		{
 			get;
 			private set;
-		} = Language.English;
+		}
 
 		public static Data.NodeRoot Root
 		{
@@ -149,8 +155,8 @@ namespace Effekseer
 				}
 			}
 		}
-
-		public static Script.ScriptCollection<Script.CommandScript> CommandScripts
+#if SCRIPT_ENABLED
+        public static Script.ScriptCollection<Script.CommandScript> CommandScripts
 		{
 			get;
 			private set;
@@ -173,10 +179,20 @@ namespace Effekseer
 			get;
 			private set;
 		}
-
+#endif
 		public static Data.OptionValues Option
 		{
 			get { return option; }
+		}
+		
+		public static Data.RecordingValues Recording
+		{
+			get { return recording; }
+		}
+
+		public static Data.PostEffectValues PostEffect
+		{
+			get { return postEffect; }
 		}
 
 		public static Data.EffectBehaviorValues EffectBehavior
@@ -194,6 +210,10 @@ namespace Effekseer
 			get { return globalValues; }
 		}
 
+		public static Data.DynamicValues Dynamic
+		{
+			get { return dynamic_; }
+		}
 
 		/// <summary>
 		/// 選択中のノード
@@ -221,6 +241,11 @@ namespace Effekseer
 		/// Output message
 		/// </summary>
 		public static Action<string> OnOutputMessage;
+
+		/// <summary>
+		/// Output logs
+		/// </summary>
+		public static Action<LogLevel, string> OnOutputLog;
 
 		/// <summary>
 		/// 選択中のノード変更後イベント
@@ -274,11 +299,18 @@ namespace Effekseer
 
 		static Core()
 		{
+#if SCRIPT_ENABLED
 			CommandScripts = new Script.ScriptCollection<Script.CommandScript>();
 			SelectedScripts = new Script.ScriptCollection<Script.SelectedScript>();
 			ExportScripts = new Script.ScriptCollection<Script.ExportScript>();
 			ImportScripts = new Script.ScriptCollection<Script.ImportScript>();
-		}
+#endif
+            // change a separator
+            System.Globalization.CultureInfo customCulture = (System.Globalization.CultureInfo)System.Threading.Thread.CurrentThread.CurrentCulture.Clone();
+            customCulture.NumberFormat.NumberDecimalSeparator = ".";
+            System.Threading.Thread.CurrentThread.CurrentCulture = customCulture;
+            Language = Language.English;
+        }
 
 		public static void Initialize(Language? language = null)
 		{
@@ -295,10 +327,10 @@ namespace Effekseer
 			// Switch the culture according to the set language
 			switch (Language)
 			{
-				case Effekseer.Language.English:
+				case Language.English:
 					Thread.CurrentThread.CurrentUICulture = new CultureInfo("en-US");
 					break;
-				case Effekseer.Language.Japanese:
+				case Language.Japanese:
 					Thread.CurrentThread.CurrentUICulture = new CultureInfo("ja-JP");
 					break;
 			}
@@ -313,6 +345,7 @@ namespace Effekseer
 
 		static void InitializeScripts(string entryDirectory)
 		{
+#if SCRIPT_ENABLED
 			// Load scripts
 			System.IO.Directory.CreateDirectory(entryDirectory + "scripts");
 			System.IO.Directory.CreateDirectory(entryDirectory + "scripts/import");
@@ -425,13 +458,15 @@ namespace Effekseer
 					}
 				}
 			}
+#endif
 		}
 
 		public static void Dispose()
 		{
-			Script.Compiler.Dispose();
-
-			SaveOption();
+#if SCRIPT_ENABLED
+            Script.Compiler.Dispose();
+#endif
+            SaveOption();
 		}
 
 		/// <summary>
@@ -534,8 +569,15 @@ namespace Effekseer
 			culling = new Data.EffectCullingValues();
 			globalValues = new Data.GlobalValues();
 
-            // Add a root node
-            Root.AddChild();
+			if(recording.RecordingStorageTarget.Value == Data.RecordingStorageTargetTyoe.Local)
+			{
+				recording = new Data.RecordingValues();
+			}
+
+			dynamic_ = new Data.DynamicValues();
+
+			// Add a root node
+			Root.AddChild();
 			Command.CommandManager.Clear();
 			FullPath = string.Empty;
 			IsChanged = false;
@@ -562,6 +604,7 @@ namespace Effekseer
 			var behaviorElement = Data.IO.SaveObjectToElement(doc, "Behavior", EffectBehavior, false);
 			var cullingElement = Data.IO.SaveObjectToElement(doc, "Culling", Culling, false);
 			var globalElement = Data.IO.SaveObjectToElement(doc, "Global", Global, false);
+			var dynamicElement = Data.IO.SaveObjectToElement(doc, "Dynamic", Dynamic, false);
 
 			System.Xml.XmlElement project_root = doc.CreateElement("EffekseerProject");
 
@@ -570,6 +613,14 @@ namespace Effekseer
 			if(behaviorElement != null) project_root.AppendChild(behaviorElement);
 			if (cullingElement != null) project_root.AppendChild(cullingElement);
 			if (globalElement != null) project_root.AppendChild(globalElement);
+			if (dynamicElement != null) project_root.AppendChild(dynamicElement);
+
+			// recording option (this option is stored in local or global)
+			if (recording.RecordingStorageTarget.Value == Data.RecordingStorageTargetTyoe.Local)
+			{
+				var recordingElement = Data.IO.SaveObjectToElement(doc, "Recording", Recording, false);
+				if (recordingElement != null) project_root.AppendChild(recordingElement);
+			}
 
 			project_root.AppendChild(doc.CreateTextElement("ToolVersion", Core.Version));
 			project_root.AppendChild(doc.CreateTextElement("Version", 3));
@@ -623,10 +674,10 @@ namespace Effekseer
 				{
                     switch (Language)
                     {
-                        case Effekseer.Language.English:
+                        case Language.English:
                             throw new Exception("Version Error : \nThe file is created with a newer version of the tool.\nPlease use the latest version of the tool.");
                             break;
-                        case Effekseer.Language.Japanese:
+                        case Language.Japanese:
                             throw new Exception("Version Error : \nファイルがより新しいバージョンのツールで作成されています。\n最新バージョンのツールを使用してください。");
                             break;
                     }
@@ -715,6 +766,20 @@ namespace Effekseer
 				Data.IO.LoadObjectFromElement(globalElement as System.Xml.XmlElement, ref o, false);
 			}
 
+			var dynamicElement = doc["EffekseerProject"]["Dynamic"];
+			if (dynamicElement != null)
+			{
+				var o = dynamic_ as object;
+				Data.IO.LoadObjectFromElement(dynamicElement as System.Xml.XmlElement, ref o, false);
+			}
+
+			// recording option (this option is stored in local or global)
+			if (doc["EffekseerProject"]["Recording"] != null)
+			{
+				var o = recording as object;
+				Data.IO.LoadObjectFromElement(doc["EffekseerProject"]["Recording"] as System.Xml.XmlElement, ref o, false);
+			}
+
 			StartFrame = 0;
 			EndFrame = doc["EffekseerProject"]["EndFrame"].GetTextAsInt();
 			StartFrame = doc["EffekseerProject"]["StartFrame"].GetTextAsInt();
@@ -787,6 +852,7 @@ namespace Effekseer
 		static public Data.OptionValues LoadOption(Language? defaultLanguage)
 		{
             Data.OptionValues res = new Data.OptionValues();
+			postEffect = new Data.PostEffectValues();
 
 			var path = System.IO.Path.Combine(GetEntryDirectory(), OptionFilePath);
 
@@ -813,6 +879,19 @@ namespace Effekseer
 				Data.IO.LoadObjectFromElement(optionElement as System.Xml.XmlElement, ref o, false);
 			}
 
+			var postEffectElement = doc["EffekseerProject"]["PostEffect"];
+			if (postEffectElement != null) {
+				var o = postEffect as object;
+				Data.IO.LoadObjectFromElement(postEffectElement as System.Xml.XmlElement, ref o, false);
+			}
+
+			var recordingElement = doc["EffekseerProject"]["Recording"];
+			if(recordingElement != null)
+			{
+				var o = recording as object;
+				Data.IO.LoadObjectFromElement(recordingElement as System.Xml.XmlElement, ref o, false);
+			}
+
 			IsChanged = false;
 
             return res;
@@ -825,9 +904,18 @@ namespace Effekseer
 			System.Xml.XmlDocument doc = new System.Xml.XmlDocument();
 
 			var optionElement = Data.IO.SaveObjectToElement(doc, "Option", Option, false);
+			var postEffectElement = Data.IO.SaveObjectToElement(doc, "PostEffect", PostEffect, false);
 
 			System.Xml.XmlElement project_root = doc.CreateElement("EffekseerProject");
 			if(optionElement != null) project_root.AppendChild(optionElement);
+			if(postEffectElement != null) project_root.AppendChild(postEffectElement);
+
+			// recording option (this option is stored in local or global)
+			if (recording.RecordingStorageTarget.Value == Data.RecordingStorageTargetTyoe.Global)
+			{
+				var recordingElement = Data.IO.SaveObjectToElement(doc, "Recording", Recording, false);
+				if (recordingElement != null) project_root.AppendChild(recordingElement);
+			}
 
 			doc.AppendChild(project_root);
 
@@ -905,7 +993,7 @@ namespace Effekseer
 			// Check
 			if(movedNode.Parent == targetParent && targetIndex != int.MaxValue)
 			{
-				var index = targetParent.Children.Internal.Select((i, n) => Tuple.Create(i, n)).FirstOrDefault(_ => _.Item1 == movedNode).Item2;
+				var index = targetParent.Children.Internal.Select((i, n) => Tuple35.Create(i, n)).FirstOrDefault(_ => _.Item1 == movedNode).Item2;
 
 				// Not changed.
 				if (index == targetIndex || index + 1 == targetIndex)
@@ -944,7 +1032,7 @@ namespace Effekseer
 			// 
 			if(targetParent == movedNode.Parent && targetIndex != int.MaxValue)
 			{
-				var index = targetParent.Children.Internal.Select((i, n) => Tuple.Create(i, n)).FirstOrDefault(_ => _.Item1 == movedNode).Item2;
+				var index = targetParent.Children.Internal.Select((i, n) => Tuple35.Create(i, n)).FirstOrDefault(_ => _.Item1 == movedNode).Item2;
 				if(index < targetIndex)
 				{
 					targetIndex -= 1;
@@ -967,87 +1055,87 @@ namespace Effekseer
 			// 実行速度を上げるために、全て力技で対応
 
 			// 値を取得する
-			Func<Data.Node, Tuple<string, object>[]> getParameters = (node) =>
+			Func<Data.Node, Tuple35<string, object>[]> getParameters = (node) =>
 				{
-					var list = new List<Tuple<string, object>>();
+					var list = new List<Tuple35<string, object>>();
 
 					if (node.LocationValues.Type.Value == Data.LocationValues.ParamaterType.LocationFCurve)
 					{
 						var name = "Location";
-						if(Language == Effekseer.Language.Japanese)
+						if(Language == Language.Japanese)
 						{
 							name = "位置";
 						}
 
-						list.Add(Tuple.Create(name,(object)node.LocationValues.LocationFCurve.FCurve));
+						list.Add(Tuple35.Create(name,(object)node.LocationValues.LocationFCurve.FCurve));
 					}
 
 					if (node.RotationValues.Type.Value == Data.RotationValues.ParamaterType.RotationFCurve)
 					{
 						var name = "Angle";
-						if (Language == Effekseer.Language.Japanese)
+						if (Language == Language.Japanese)
 						{
 							name = "角度";
 						}
 
-						list.Add(Tuple.Create(name, (object)node.RotationValues.RotationFCurve.FCurve));
+						list.Add(Tuple35.Create(name, (object)node.RotationValues.RotationFCurve.FCurve));
 					}
 
 					if (node.ScalingValues.Type.Value == Data.ScaleValues.ParamaterType.FCurve)
 					{
 						var name = "Scaling Factor";
-						if (Language == Effekseer.Language.Japanese)
+						if (Language == Language.Japanese)
 						{
 							name = "拡大率";
 						}
 
-						list.Add(Tuple.Create(name, (object)node.ScalingValues.FCurve.FCurve));
+						list.Add(Tuple35.Create(name, (object)node.ScalingValues.FCurve.FCurve));
 					}
 
 					if (node.RendererCommonValues.UV.Value == Data.RendererCommonValues.UVType.FCurve)
 					{
 						var name = "UV(Start)";
-						if (Language == Effekseer.Language.Japanese)
+						if (Language == Language.Japanese)
 						{
 							name = "UV(始点)";
 						}
 
-						list.Add(Tuple.Create(name, (object)node.RendererCommonValues.UVFCurve.Start));
+						list.Add(Tuple35.Create(name, (object)node.RendererCommonValues.UVFCurve.Start));
 					}
 
 					if (node.RendererCommonValues.UV.Value == Data.RendererCommonValues.UVType.FCurve)
 					{
 						var name = "UV(Size)";
-						if (Language == Effekseer.Language.Japanese)
+						if (Language == Language.Japanese)
 						{
 							name = "UV(大きさ)";
 						}
 
-						list.Add(Tuple.Create(name, (object)node.RendererCommonValues.UVFCurve.Size));
+						list.Add(Tuple35.Create(name, (object)node.RendererCommonValues.UVFCurve.Size));
 					}
 
 					if (node.DrawingValues.Type.Value == Data.RendererValues.ParamaterType.Sprite &&
 						node.DrawingValues.Sprite.ColorAll.Value == Data.StandardColorType.FCurve)
 					{
 						var name = "Sprite-Color all(RGBA)";
-						if (Language == Effekseer.Language.Japanese)
+						if (Language == Language.Japanese)
 						{
 							name = "スプライト・全体色(RGBA)";
 						}
 
-						list.Add(Tuple.Create(name, (object)node.DrawingValues.Sprite.ColorAll_FCurve.FCurve));
+						list.Add(Tuple35.Create(name, (object)node.DrawingValues.Sprite.ColorAll_FCurve.FCurve));
 					}
 
 					if (node.DrawingValues.Type.Value == Data.RendererValues.ParamaterType.Model &&
 						node.DrawingValues.Model.Color.Value == Data.StandardColorType.FCurve)
 					{
 						var name = "Model-Color(RGBA)";
-						if (Language == Effekseer.Language.Japanese)
+						if (Language == Language.Japanese)
 						{
 							name = "モデル・色(RGBA)";
 						}
 
-						list.Add(Tuple.Create(name, (object)node.DrawingValues.Model.Color_FCurve.FCurve));
+						list.Add(Tuple35.Create(name, (object)node.DrawingValues.Model.Color_FCurve.FCurve));
 					}
 
 					if (node.DrawingValues.Type.Value == Data.RendererValues.ParamaterType.Track)
@@ -1055,67 +1143,67 @@ namespace Effekseer
 						if (node.DrawingValues.Track.ColorLeft.Value == Data.StandardColorType.FCurve)
 						{
 							var name = "Track-Color,Left(RGBA)";
-							if (Language == Effekseer.Language.Japanese)
+							if (Language == Language.Japanese)
 							{
 								name = "軌跡・左(RGBA)";
 							}
 
-							list.Add(Tuple.Create(name, (object)node.DrawingValues.Track.ColorLeft_FCurve.FCurve));
+							list.Add(Tuple35.Create(name, (object)node.DrawingValues.Track.ColorLeft_FCurve.FCurve));
 						}
 
 						if (node.DrawingValues.Track.ColorLeftMiddle.Value == Data.StandardColorType.FCurve)
 						{
 							var name = "Track-Color,Left-Center(RGBA)";
-							if (Language == Effekseer.Language.Japanese)
+							if (Language == Language.Japanese)
 							{
 								name = "軌跡・左中間(RGBA)";
 							}
 
-							list.Add(Tuple.Create(name, (object)node.DrawingValues.Track.ColorLeftMiddle_FCurve.FCurve));
+							list.Add(Tuple35.Create(name, (object)node.DrawingValues.Track.ColorLeftMiddle_FCurve.FCurve));
 						}
 
 						if (node.DrawingValues.Track.ColorCenter.Value == Data.StandardColorType.FCurve)
 						{
 							var name = "Track-Color,Center(RGBA)";
-							if (Language == Effekseer.Language.Japanese)
+							if (Language == Language.Japanese)
 							{
 								name = "軌跡・中央(RGBA)";
 							}
 
-							list.Add(Tuple.Create(name, (object)node.DrawingValues.Track.ColorCenter_FCurve.FCurve));
+							list.Add(Tuple35.Create(name, (object)node.DrawingValues.Track.ColorCenter_FCurve.FCurve));
 						}
 
 						if (node.DrawingValues.Track.ColorCenterMiddle.Value == Data.StandardColorType.FCurve)
 						{
 							var name = "Track-Color,Center-Middle(RGBA)";
-							if (Language == Effekseer.Language.Japanese)
+							if (Language == Language.Japanese)
 							{
 								name = "軌跡・中央中間(RGBA)";
 							}
 
-							list.Add(Tuple.Create(name, (object)node.DrawingValues.Track.ColorCenterMiddle_FCurve.FCurve));
+							list.Add(Tuple35.Create(name, (object)node.DrawingValues.Track.ColorCenterMiddle_FCurve.FCurve));
 						}
 
 						if (node.DrawingValues.Track.ColorRight.Value == Data.StandardColorType.FCurve)
 						{
 							var name = "Track-Color,Right(RGBA)";
-							if (Language == Effekseer.Language.Japanese)
+							if (Language == Language.Japanese)
 							{
 								name = "軌跡・右(RGBA)";
 							}
 
-							list.Add(Tuple.Create(name, (object)node.DrawingValues.Track.ColorRight_FCurve.FCurve));
+							list.Add(Tuple35.Create(name, (object)node.DrawingValues.Track.ColorRight_FCurve.FCurve));
 						}
 
 						if (node.DrawingValues.Track.ColorRightMiddle.Value == Data.StandardColorType.FCurve)
 						{
 							var name = "Track-Color,Right-Center(RGBA)";
-							if (Language == Effekseer.Language.Japanese)
+							if (Language == Language.Japanese)
 							{
 								name = "軌跡・右中間(RGBA)";
 
 							}
-							list.Add(Tuple.Create(name, (object)node.DrawingValues.Track.ColorRightMiddle_FCurve.FCurve));
+							list.Add(Tuple35.Create(name, (object)node.DrawingValues.Track.ColorRightMiddle_FCurve.FCurve));
 						}
 					}
 
@@ -1127,14 +1215,14 @@ namespace Effekseer
 
 			getParameterTreeNodes = (node) =>
 				{
-					Tuple<string, object>[] parameters = null;
+					Tuple35<string, object>[] parameters = null;
 
 					var rootNode = node as Data.NodeRoot;
 					var normalNode = node as Data.Node;
 
 					if (rootNode != null)
 					{
-						parameters = new Tuple<string, object>[0];
+						parameters = new Tuple35<string, object>[0];
 					}
 					else if (normalNode != null)
 					{

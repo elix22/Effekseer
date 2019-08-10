@@ -27,6 +27,8 @@ class InstanceGlobal
 	: public IRandObject
 {
 	friend class ManagerImplemented;
+	friend class Instance;
+
 
 private:
 	/* このエフェクトで使用しているインスタンス数 */
@@ -38,7 +40,15 @@ private:
 	InstanceContainer*	m_rootContainer;
 	Vector3D			m_targetLocation;
 
-	int32_t				m_seed = 0;
+	int64_t				m_seed = 0;
+
+	std::array<float, 4> dynamicInputParameters;
+
+	//! placement new
+	static void* operator new(size_t size);
+
+	//! placement delete
+	static void operator delete(void* p);
 
 	InstanceGlobal();
 
@@ -49,9 +59,12 @@ public:
 	bool		IsGlobalColorSet = false;
 	Color		GlobalColor = Color(255, 255, 255, 255);
 
+	std::array<std::array<float, 4>, 16> dynamicEqResults;
+
 	std::vector<InstanceContainer*>	RenderedInstanceContainers;
 
-	void SetSeed(int32_t seed);
+	std::array<float, 4> GetDynamicEquationResult(int32_t index);
+	void SetSeed(int64_t seed);
 
 	virtual float GetRand() override;
 
@@ -78,6 +91,10 @@ public:
 
 	const Vector3D& GetTargetLocation() const;
 	void SetTargetLocation( const Vector3D& location );
+
+	static float Rand(void* userData);
+
+	static float RandSeed(void* userData, float randSeed);
 };
 //----------------------------------------------------------------------------------
 //

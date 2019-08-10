@@ -3,10 +3,10 @@
 //----------------------------------------------------------------------------------
 //
 //----------------------------------------------------------------------------------
-#include "Effekseer.Manager.h"
+#include "Effekseer.EffectNode.h"
 #include "Effekseer.Effect.h"
 #include "Effekseer.EffectImplemented.h"
-#include "Effekseer.EffectNode.h"
+#include "Effekseer.Manager.h"
 
 #include "Effekseer.Vector3D.h"
 
@@ -14,10 +14,10 @@
 #include "Effekseer.InstanceContainer.h"
 #include "Effekseer.InstanceGlobal.h"
 
-#include "Effekseer.EffectNodeRoot.h"
-#include "Effekseer.EffectNodeSprite.h"
 #include "Effekseer.EffectNodeRibbon.h"
 #include "Effekseer.EffectNodeRing.h"
+#include "Effekseer.EffectNodeRoot.h"
+#include "Effekseer.EffectNodeSprite.h"
 #include "Sound/Effekseer.SoundPlayer.h"
 
 #include "Effekseer.Setting.h"
@@ -94,10 +94,15 @@ void EffectNodeImplemented::LoadParameter(unsigned char*& pos, EffectNode* paren
 		memcpy(&size, pos, sizeof(int));
 		pos += sizeof(int);
 
-		if (m_effect->GetVersion() >= 9)
+		if (ef->GetVersion() >= 14)
 		{
 			assert(size == sizeof(ParameterCommonValues));
 			memcpy(&CommonValues, pos, size);
+			pos += size;
+		}
+		else if (m_effect->GetVersion() >= 9)
+		{
+			memcpy(&CommonValues.MaxGeneration, pos, size);
 			pos += size;
 		}
 		else
@@ -126,36 +131,63 @@ void EffectNodeImplemented::LoadParameter(unsigned char*& pos, EffectNode* paren
 
 		if (TranslationType == ParameterTranslationType_Fixed)
 		{
-			memcpy(&size, pos, sizeof(int));
+			int32_t translationSize = 0;
+			memcpy(&translationSize, pos, sizeof(int));
 			pos += sizeof(int);
-			assert(size == sizeof(ParameterTranslationFixed));
-			memcpy(&TranslationFixed, pos, size);
-			pos += size;
 
-			// 無効化
-			if (TranslationFixed.Position.X == 0.0f &&
-				TranslationFixed.Position.Y == 0.0f &&
-				TranslationFixed.Position.Z == 0.0f)
+			if (ef->GetVersion() >= 14)
 			{
-				TranslationType = ParameterTranslationType_None;
-				EffekseerPrintDebug("LocationType Change None\n");
+				memcpy(&TranslationFixed, pos, sizeof(ParameterTranslationFixed));
 			}
+			else
+			{
+				memcpy(&(TranslationFixed.Position), pos, sizeof(float) * 3);
+
+				// make invalid
+				if (TranslationFixed.Position.X == 0.0f && TranslationFixed.Position.Y == 0.0f && TranslationFixed.Position.Z == 0.0f)
+				{
+					TranslationType = ParameterTranslationType_None;
+					EffekseerPrintDebug("LocationType Change None\n");
+				}
+			}
+
+			pos += translationSize;
 		}
 		else if (TranslationType == ParameterTranslationType_PVA)
 		{
-			memcpy(&size, pos, sizeof(int));
-			pos += sizeof(int);
-			assert(size == sizeof(ParameterTranslationPVA));
-			memcpy(&TranslationPVA, pos, size);
-			pos += size;
+			if (ef->GetVersion() >= 14)
+			{
+				memcpy(&size, pos, sizeof(int));
+				pos += sizeof(int);
+				assert(size == sizeof(ParameterTranslationPVA));
+				memcpy(&TranslationPVA, pos, size);
+				pos += size;
+			}
+			else
+			{
+				memcpy(&size, pos, sizeof(int));
+				pos += sizeof(int);
+				memcpy(&TranslationPVA.location, pos, size);
+				pos += size;
+			}
 		}
 		else if (TranslationType == ParameterTranslationType_Easing)
 		{
 			memcpy(&size, pos, sizeof(int));
 			pos += sizeof(int);
-			assert(size == sizeof(easing_vector3d));
-			memcpy(&TranslationEasing, pos, size);
-			pos += size;
+
+			if (ef->GetVersion() >= 14)
+			{
+				assert(size == sizeof(ParameterTranslationEasing));
+				memcpy(&TranslationEasing, pos, size);
+				pos += size;
+			}
+			else
+			{
+				assert(size == sizeof(easing_vector3d));
+				memcpy(&TranslationEasing.location, pos, size);
+				pos += size;
+			}
 		}
 		else if (TranslationType == ParameterTranslationType_FCurve)
 		{
@@ -169,6 +201,10 @@ void EffectNodeImplemented::LoadParameter(unsigned char*& pos, EffectNode* paren
 		/* 位置拡大処理 */
 		if (ef->IsDyanamicMagnificationValid())
 		{
+			DynamicFactor.Tra[0] *= m_effect->GetMaginification();
+			DynamicFactor.Tra[1] *= m_effect->GetMaginification();
+			DynamicFactor.Tra[2] *= m_effect->GetMaginification();
+
 			if (TranslationType == ParameterTranslationType_Fixed)
 			{
 				TranslationFixed.Position *= m_effect->GetMaginification();
@@ -184,10 +220,10 @@ void EffectNodeImplemented::LoadParameter(unsigned char*& pos, EffectNode* paren
 			}
 			else if (TranslationType == ParameterTranslationType_Easing)
 			{
-				TranslationEasing.start.min *= m_effect->GetMaginification();
-				TranslationEasing.start.max *= m_effect->GetMaginification();
-				TranslationEasing.end.min *= m_effect->GetMaginification();
-				TranslationEasing.end.max *= m_effect->GetMaginification();
+				TranslationEasing.location.start.min *= m_effect->GetMaginification();
+				TranslationEasing.location.start.max *= m_effect->GetMaginification();
+				TranslationEasing.location.end.min *= m_effect->GetMaginification();
+				TranslationEasing.location.end.max *= m_effect->GetMaginification();
 			}
 			else if (TranslationType == ParameterTranslationType_FCurve)
 			{
@@ -252,13 +288,20 @@ void EffectNodeImplemented::LoadParameter(unsigned char*& pos, EffectNode* paren
 		{
 			memcpy(&size, pos, sizeof(int));
 			pos += sizeof(int);
-			assert(size == sizeof(ParameterRotationFixed));
-			memcpy(&RotationFixed, pos, size);
+
+			if (ef->GetVersion() >= 14)
+			{
+				assert(size == sizeof(ParameterRotationFixed));
+				memcpy(&RotationFixed, pos, size);
+			}
+			else
+			{
+				memcpy(&RotationFixed.Position, pos, size);
+			}
 			pos += size;
 
-			// 無効化
-			if (RotationFixed.Position.X == 0.0f &&
-				RotationFixed.Position.Y == 0.0f &&
+			// make invalid
+			if (RotationFixed.RefEq < 0 && RotationFixed.Position.X == 0.0f && RotationFixed.Position.Y == 0.0f &&
 				RotationFixed.Position.Z == 0.0f)
 			{
 				RotationType = ParameterRotationType_None;
@@ -269,16 +312,32 @@ void EffectNodeImplemented::LoadParameter(unsigned char*& pos, EffectNode* paren
 		{
 			memcpy(&size, pos, sizeof(int));
 			pos += sizeof(int);
-			assert(size == sizeof(ParameterRotationPVA));
-			memcpy(&RotationPVA, pos, size);
+			if (ef->GetVersion() >= 14)
+			{
+				assert(size == sizeof(ParameterRotationPVA));
+				memcpy(&RotationPVA, pos, size);
+			}
+			else
+			{
+				memcpy(&RotationPVA.rotation, pos, size);
+			}
 			pos += size;
 		}
 		else if (RotationType == ParameterRotationType_Easing)
 		{
 			memcpy(&size, pos, sizeof(int));
 			pos += sizeof(int);
-			assert(size == sizeof(easing_vector3d));
-			memcpy(&RotationEasing, pos, size);
+			if (ef->GetVersion() >= 14)
+			{
+				assert(size == sizeof(RotationEasing));
+				memcpy(&RotationEasing, pos, size);
+			}
+			else
+			{
+				assert(size == sizeof(easing_vector3d));
+				memcpy(&RotationEasing.rotation, pos, size);
+			}
+
 			pos += size;
 		}
 		else if (RotationType == ParameterRotationType_AxisPVA)
@@ -313,13 +372,21 @@ void EffectNodeImplemented::LoadParameter(unsigned char*& pos, EffectNode* paren
 		{
 			memcpy(&size, pos, sizeof(int));
 			pos += sizeof(int);
-			assert(size == sizeof(ParameterScalingFixed));
-			memcpy(&ScalingFixed, pos, size);
-			pos += size;
 
-			// 無効化
-			if (ScalingFixed.Position.X == 1.0f &&
-				ScalingFixed.Position.Y == 1.0f &&
+			if (ef->GetVersion() >= 14)
+			{
+				assert(size == sizeof(ParameterScalingFixed));
+				memcpy(&ScalingFixed, pos, size);
+				pos += size;
+			}
+			else
+			{
+				memcpy(&ScalingFixed.Position, pos, size);
+				pos += size;
+			}
+
+			// make invalid
+			if (ScalingFixed.RefEq < 0 && ScalingFixed.Position.X == 1.0f && ScalingFixed.Position.Y == 1.0f &&
 				ScalingFixed.Position.Z == 1.0f)
 			{
 				ScalingType = ParameterScalingType_None;
@@ -330,16 +397,30 @@ void EffectNodeImplemented::LoadParameter(unsigned char*& pos, EffectNode* paren
 		{
 			memcpy(&size, pos, sizeof(int));
 			pos += sizeof(int);
-			assert(size == sizeof(ParameterScalingPVA));
-			memcpy(&ScalingPVA, pos, size);
+			if (ef->GetVersion() >= 14)
+			{
+				assert(size == sizeof(ParameterScalingPVA));
+				memcpy(&ScalingPVA, pos, size);
+			}
+			else
+			{
+				memcpy(&ScalingPVA.Position, pos, size);
+			}
 			pos += size;
 		}
 		else if (ScalingType == ParameterScalingType_Easing)
 		{
 			memcpy(&size, pos, sizeof(int));
 			pos += sizeof(int);
-			assert(size == sizeof(easing_vector3d));
-			memcpy(&ScalingEasing, pos, size);
+			if (ef->GetVersion() >= 14)
+			{
+				assert(size == sizeof(ParameterScalingEasing));
+				memcpy(&ScalingEasing, pos, size);
+			}
+			else
+			{
+				memcpy(&ScalingEasing.Position, pos, size);
+			}
 			pos += size;
 		}
 		else if (ScalingType == ParameterScalingType_SinglePVA)
@@ -419,12 +500,20 @@ void EffectNodeImplemented::LoadParameter(unsigned char*& pos, EffectNode* paren
 			memcpy(&IsDepthOffsetScaledWithParticleScale, pos, sizeof(int32_t));
 			pos += sizeof(int32_t);
 
-			DepthValues.IsDepthOffsetScaledWithParticleScale = IsDepthOffsetScaledWithParticleScale > 0;
+			if (m_effect->GetVersion() >= 15)
+			{
+				memcpy(&DepthValues.DepthParameter.SuppressionOfScalingByDepth, pos, sizeof(float));
+				pos += sizeof(float);
 
+				memcpy(&DepthValues.DepthParameter.DepthClipping, pos, sizeof(float));
+				pos += sizeof(float);
+			}
+	
 			if (m_effect->GetVersion() >= 13)
 			{
 				memcpy(&DepthValues.ZSort, pos, sizeof(int32_t));
 				pos += sizeof(int32_t);
+
 				memcpy(&DepthValues.DrawingPriority, pos, sizeof(int32_t));
 				pos += sizeof(int32_t);
 			}
@@ -434,12 +523,23 @@ void EffectNodeImplemented::LoadParameter(unsigned char*& pos, EffectNode* paren
 
 			DepthValues.DepthOffset *= m_effect->GetMaginification();
 			DepthValues.SoftParticle *= m_effect->GetMaginification();
+
+			if (DepthValues.DepthParameter.DepthClipping < FLT_MAX / 10)
+			{
+				DepthValues.DepthParameter.DepthClipping *= m_effect->GetMaginification();
+			}
+
+			DepthValues.DepthParameter.DepthOffset = DepthValues.DepthOffset;
+			DepthValues.DepthParameter.IsDepthOffsetScaledWithCamera = DepthValues.IsDepthOffsetScaledWithCamera;
+			DepthValues.DepthParameter.IsDepthOffsetScaledWithParticleScale = DepthValues.IsDepthOffsetScaledWithParticleScale;
 		}
 
 		// Convert right handle coordinate system into left handle coordinate system
 		if (setting->GetCoordinateSystem() == CoordinateSystem::LH)
 		{
 			// Translation
+			DynamicFactor.Tra[2] *= -1.0f;
+
 			if (TranslationType == ParameterTranslationType_Fixed)
 			{
 				TranslationFixed.Position.Z *= -1.0f;
@@ -455,13 +555,16 @@ void EffectNodeImplemented::LoadParameter(unsigned char*& pos, EffectNode* paren
 			}
 			else if (TranslationType == ParameterTranslationType_Easing)
 			{
-				TranslationEasing.start.max.z *= -1.0f;
-				TranslationEasing.start.min.z *= -1.0f;
-				TranslationEasing.end.max.z *= -1.0f;
-				TranslationEasing.end.min.z *= -1.0f;
+				TranslationEasing.location.start.max.z *= -1.0f;
+				TranslationEasing.location.start.min.z *= -1.0f;
+				TranslationEasing.location.end.max.z *= -1.0f;
+				TranslationEasing.location.end.min.z *= -1.0f;
 			}
 
 			// Rotation
+			DynamicFactor.Rot[0] *= -1.0f;
+			DynamicFactor.Rot[1] *= -1.0f;
+
 			if (RotationType == ParameterRotationType_Fixed)
 			{
 				RotationFixed.Position.X *= -1.0f;
@@ -484,14 +587,14 @@ void EffectNodeImplemented::LoadParameter(unsigned char*& pos, EffectNode* paren
 			}
 			else if (RotationType == ParameterRotationType_Easing)
 			{
-				RotationEasing.start.max.x *= -1.0f;
-				RotationEasing.start.min.x *= -1.0f;
-				RotationEasing.start.max.y *= -1.0f;
-				RotationEasing.start.min.y *= -1.0f;
-				RotationEasing.end.max.x *= -1.0f;
-				RotationEasing.end.min.x *= -1.0f;
-				RotationEasing.end.max.y *= -1.0f;
-				RotationEasing.end.min.y *= -1.0f;
+				RotationEasing.rotation.start.max.x *= -1.0f;
+				RotationEasing.rotation.start.min.x *= -1.0f;
+				RotationEasing.rotation.start.max.y *= -1.0f;
+				RotationEasing.rotation.start.min.y *= -1.0f;
+				RotationEasing.rotation.end.max.x *= -1.0f;
+				RotationEasing.rotation.end.min.x *= -1.0f;
+				RotationEasing.rotation.end.max.y *= -1.0f;
+				RotationEasing.rotation.end.min.y *= -1.0f;
 			}
 			else if (RotationType == ParameterRotationType_AxisPVA)
 			{
@@ -512,7 +615,6 @@ void EffectNodeImplemented::LoadParameter(unsigned char*& pos, EffectNode* paren
 			// GenerationLocation
 			if (GenerationLocation.type == ParameterGenerationLocation::TYPE_POINT)
 			{
-
 			}
 			else if (GenerationLocation.type == ParameterGenerationLocation::TYPE_SPHERE)
 			{
@@ -521,6 +623,22 @@ void EffectNodeImplemented::LoadParameter(unsigned char*& pos, EffectNode* paren
 				GenerationLocation.sphere.rotation_y.max *= -1.0f;
 				GenerationLocation.sphere.rotation_y.min *= -1.0f;
 			}
+		}
+
+		// generate inversed parameter
+		for (size_t i = 0; i < DynamicFactor.Tra.size(); i++)
+		{
+			DynamicFactor.TraInv[i] = 1.0f / DynamicFactor.Tra[i];
+		}
+
+		for (size_t i = 0; i < DynamicFactor.Rot.size(); i++)
+		{
+			DynamicFactor.RotInv[i] = 1.0f / DynamicFactor.Rot[i];
+		}
+
+		for (size_t i = 0; i < DynamicFactor.Scale.size(); i++)
+		{
+			DynamicFactor.ScaleInv[i] = 1.0f / DynamicFactor.Scale[i];
 		}
 
 		if (m_effect->GetVersion() >= 3)
@@ -589,28 +707,22 @@ EffectNodeImplemented::~EffectNodeImplemented()
 //----------------------------------------------------------------------------------
 //
 //----------------------------------------------------------------------------------
-Effect* EffectNodeImplemented::GetEffect() const
-{
-	return m_effect;
-}
+Effect* EffectNodeImplemented::GetEffect() const { return m_effect; }
 
 //----------------------------------------------------------------------------------
 //
 //----------------------------------------------------------------------------------
-int EffectNodeImplemented::GetChildrenCount() const
-{
-	return (int)m_Nodes.size();
-}
+int EffectNodeImplemented::GetChildrenCount() const { return (int)m_Nodes.size(); }
 
 //----------------------------------------------------------------------------------
 //
 //----------------------------------------------------------------------------------
 EffectNode* EffectNodeImplemented::GetChild(int index) const
 {
-	if (index >= GetChildrenCount()) return NULL;
+	if (index >= GetChildrenCount())
+		return NULL;
 	return m_Nodes[index];
 }
-
 
 EffectBasicRenderParameter EffectNodeImplemented::GetBasicRenderParameter()
 {
@@ -667,55 +779,39 @@ void EffectNodeImplemented::LoadRendererParameter(unsigned char*& pos, Setting* 
 //----------------------------------------------------------------------------------
 //
 //----------------------------------------------------------------------------------
-void EffectNodeImplemented::BeginRendering(int32_t count, Manager* manager)
-{
-}
+void EffectNodeImplemented::BeginRendering(int32_t count, Manager* manager) {}
 
 //----------------------------------------------------------------------------------
 //
 //----------------------------------------------------------------------------------
-void EffectNodeImplemented::BeginRenderingGroup(InstanceGroup* group, Manager* manager)
-{
-}
+void EffectNodeImplemented::BeginRenderingGroup(InstanceGroup* group, Manager* manager) {}
 
-void EffectNodeImplemented::EndRenderingGroup(InstanceGroup* group, Manager* manager)
-{
-}
+void EffectNodeImplemented::EndRenderingGroup(InstanceGroup* group, Manager* manager) {}
 
 //----------------------------------------------------------------------------------
 //
 //----------------------------------------------------------------------------------
-void EffectNodeImplemented::Rendering(const Instance& instance, const Instance* next_instance, Manager* manager)
-{
-}
+void EffectNodeImplemented::Rendering(const Instance& instance, const Instance* next_instance, Manager* manager) {}
 
 //----------------------------------------------------------------------------------
 //
 //----------------------------------------------------------------------------------
-void EffectNodeImplemented::EndRendering(Manager* manager)
-{
-}
+void EffectNodeImplemented::EndRendering(Manager* manager) {}
 
 //----------------------------------------------------------------------------------
 //
 //----------------------------------------------------------------------------------
-void EffectNodeImplemented::InitializeRenderedInstanceGroup(InstanceGroup& instanceGroup, Manager* manager)
-{
-}
+void EffectNodeImplemented::InitializeRenderedInstanceGroup(InstanceGroup& instanceGroup, Manager* manager) {}
 
 //----------------------------------------------------------------------------------
 //
 //----------------------------------------------------------------------------------
-void EffectNodeImplemented::InitializeRenderedInstance(Instance& instance, Manager* manager)
-{
-}
+void EffectNodeImplemented::InitializeRenderedInstance(Instance& instance, Manager* manager) {}
 
 //----------------------------------------------------------------------------------
 //
 //----------------------------------------------------------------------------------
-void EffectNodeImplemented::UpdateRenderedInstance(Instance& instance, Manager* manager)
-{
-}
+void EffectNodeImplemented::UpdateRenderedInstance(Instance& instance, Manager* manager) {}
 
 //----------------------------------------------------------------------------------
 //
@@ -727,23 +823,20 @@ float EffectNodeImplemented::GetFadeAlpha(const Instance& instance)
 	if (RendererCommon.FadeInType == ParameterRendererCommon::FADEIN_ON && instance.m_LivingTime < RendererCommon.FadeIn.Frame)
 	{
 		float v = 1.0f;
-		RendererCommon.FadeIn.Value.setValueToArg(
-			v,
-			0.0f,
-			1.0f,
-			(float)instance.m_LivingTime / (float)RendererCommon.FadeIn.Frame);
+		RendererCommon.FadeIn.Value.setValueToArg(v, 0.0f, 1.0f, (float)instance.m_LivingTime / (float)RendererCommon.FadeIn.Frame);
 
 		alpha *= v;
 	}
 
-	if (RendererCommon.FadeOutType == ParameterRendererCommon::FADEOUT_ON && instance.m_LivingTime + RendererCommon.FadeOut.Frame > instance.m_LivedTime)
+	if (RendererCommon.FadeOutType == ParameterRendererCommon::FADEOUT_ON &&
+		instance.m_LivingTime + RendererCommon.FadeOut.Frame > instance.m_LivedTime)
 	{
 		float v = 1.0f;
-		RendererCommon.FadeOut.Value.setValueToArg(
-			v,
-			1.0f,
-			0.0f,
-			(float)(instance.m_LivingTime + RendererCommon.FadeOut.Frame - instance.m_LivedTime) / (float)RendererCommon.FadeOut.Frame);
+		RendererCommon.FadeOut.Value.setValueToArg(v,
+												   1.0f,
+												   0.0f,
+												   (float)(instance.m_LivingTime + RendererCommon.FadeOut.Frame - instance.m_LivedTime) /
+													   (float)RendererCommon.FadeOut.Frame);
 
 		alpha *= v;
 	}
@@ -773,17 +866,138 @@ void EffectNodeImplemented::PlaySound_(Instance& instance, SoundTag tag, Manager
 		parameter.Pan = Sound.Pan.getValue(*instanceGlobal);
 
 		parameter.Mode3D = (Sound.PanType == ParameterSoundPanType_3D);
-		Vector3D::Transform(parameter.Position,
-			Vector3D(0.0f, 0.0f, 0.0f), instance.GetGlobalMatrix43());
+		Vector3D::Transform(parameter.Position, Vector3D(0.0f, 0.0f, 0.0f), instance.GetGlobalMatrix43());
 		parameter.Distance = Sound.Distance;
 
 		player->Play(tag, parameter);
 	}
 }
 
-//----------------------------------------------------------------------------------
-//
-//----------------------------------------------------------------------------------
+EffectInstanceTerm EffectNodeImplemented::CalculateInstanceTerm(EffectInstanceTerm& parentTerm) const
+{
+	EffectInstanceTerm ret;
+
+	auto addWithClip = [](int v1, int v2) -> int {
+		v1 = Max(v1, 0);
+		v2 = Max(v2, 0);
+
+		if (v1 >= INT_MAX / 2)
+			return INT_MAX;
+
+		if (v2 >= INT_MAX / 2)
+			return INT_MAX;
+
+		return v1 + v2;
+	};
+
+	int lifeMin = CommonValues.life.min;
+	int lifeMax = CommonValues.life.max;
+
+	if (CommonValues.RemoveWhenLifeIsExtinct <= 0)
+	{
+		lifeMin = INT_MAX;
+		lifeMax = INT_MAX;
+	}
+
+	auto firstBeginMin = CommonValues.GenerationTimeOffset.min;
+	auto firstBeginMax = CommonValues.GenerationTimeOffset.max;
+	auto firstEndMin = addWithClip(firstBeginMin, lifeMin);
+	auto firstEndMax = addWithClip(firstBeginMax, lifeMax);
+
+	auto lastBeginMin = 0;
+	auto lastBeginMax = 0;
+	if (CommonValues.MaxGeneration > INT_MAX / 2)
+	{
+		lastBeginMin = INT_MAX / 2;
+	}
+	else
+	{
+		lastBeginMin = CommonValues.GenerationTimeOffset.min + (CommonValues.MaxGeneration - 1) * (CommonValues.GenerationTime.min);
+	}
+
+	if (CommonValues.MaxGeneration > INT_MAX / 2)
+	{
+		lastBeginMax = INT_MAX / 2;
+	}
+	else
+	{
+		lastBeginMax = CommonValues.GenerationTimeOffset.max + (CommonValues.MaxGeneration - 1) * (CommonValues.GenerationTime.max);
+	}
+
+	auto lastEndMin = addWithClip(lastBeginMin, lifeMin);
+	auto lastEndMax = addWithClip(lastBeginMax, lifeMax);
+
+	auto parentFirstTermMin = parentTerm.FirstInstanceEndMin - parentTerm.FirstInstanceStartMin;
+	auto parentFirstTermMax = parentTerm.FirstInstanceEndMax - parentTerm.FirstInstanceStartMax;
+	auto parentLastTermMin = parentTerm.LastInstanceEndMin - parentTerm.LastInstanceStartMin;
+	auto parentLastTermMax = parentTerm.LastInstanceEndMax - parentTerm.LastInstanceStartMax;
+
+	if (CommonValues.RemoveWhenParentIsRemoved > 0)
+	{
+		if (firstEndMin - firstBeginMin > parentFirstTermMin)
+			firstEndMin = firstBeginMin + parentFirstTermMin;
+
+		if (firstEndMax - firstBeginMax > parentFirstTermMax)
+			firstEndMax = firstBeginMax + parentFirstTermMax;
+
+		if (lastEndMin > INT_MAX / 2)
+		{
+			lastBeginMin = parentLastTermMin;
+			lastEndMin = parentLastTermMin;
+		}
+		else if (lastEndMin - lastBeginMin > parentLastTermMin)
+		{
+			lastEndMin = lastBeginMin + parentLastTermMin;
+		}
+
+		if (lastEndMax > INT_MAX / 2)
+		{
+			lastBeginMax = parentLastTermMax;
+			lastEndMax = parentLastTermMax;
+		}
+		else if (lastEndMax - lastBeginMax > parentLastTermMax)
+		{
+			lastEndMax = lastBeginMax + parentLastTermMax;
+		}
+	}
+
+	ret.FirstInstanceStartMin = addWithClip(parentTerm.FirstInstanceStartMin, firstBeginMin);
+	ret.FirstInstanceStartMax = addWithClip(parentTerm.FirstInstanceStartMax, firstBeginMax);
+	ret.FirstInstanceEndMin = addWithClip(parentTerm.FirstInstanceStartMin, firstEndMin);
+	ret.FirstInstanceEndMax = addWithClip(parentTerm.FirstInstanceStartMax, firstEndMax);
+
+	ret.LastInstanceStartMin = addWithClip(parentTerm.LastInstanceStartMin, lastBeginMin);
+	ret.LastInstanceStartMax = addWithClip(parentTerm.LastInstanceStartMax, lastBeginMax);
+	ret.LastInstanceEndMin = addWithClip(parentTerm.LastInstanceStartMin, lastEndMin);
+	ret.LastInstanceEndMax = addWithClip(parentTerm.LastInstanceStartMax, lastEndMax);
+
+	// check children
+	if (CommonValues.RemoveWhenChildrenIsExtinct > 0)
+	{
+		int childFirstEndMin = 0;
+		int childFirstEndMax = 0;
+		int childLastEndMin = 0;
+		int childLastEndMax = 0;
+
+		for (int32_t i = 0; i < GetChildrenCount(); i++)
+		{
+			auto child = static_cast<EffectNodeImplemented*>(GetChild(i));
+			auto childTerm = child->CalculateInstanceTerm(ret);
+			childFirstEndMin = Max(childTerm.FirstInstanceEndMin, childFirstEndMin);
+			childFirstEndMax = Max(childTerm.FirstInstanceEndMax, childFirstEndMax);
+			childLastEndMin = Max(childTerm.LastInstanceEndMin, childLastEndMin);
+			childLastEndMax = Max(childTerm.LastInstanceEndMax, childLastEndMax);
+		}
+
+		ret.FirstInstanceEndMin = Min(ret.FirstInstanceEndMin, childFirstEndMin);
+		ret.FirstInstanceEndMax = Min(ret.FirstInstanceEndMax, childFirstEndMax);
+		ret.LastInstanceEndMin = Min(ret.LastInstanceEndMin, childLastEndMin);
+		ret.LastInstanceEndMax = Min(ret.LastInstanceEndMax, childLastEndMax);
+	}
+
+	return ret;
+}
+
 EffectNodeImplemented* EffectNodeImplemented::Create(Effect* effect, EffectNode* parent, unsigned char*& pos)
 {
 	EffectNodeImplemented* effectnode = NULL;
@@ -840,7 +1054,7 @@ EffectNodeImplemented* EffectNodeImplemented::Create(Effect* effect, EffectNode*
 //
 //----------------------------------------------------------------------------------
 
-}
+} // namespace Effekseer
 
 //----------------------------------------------------------------------------------
 //

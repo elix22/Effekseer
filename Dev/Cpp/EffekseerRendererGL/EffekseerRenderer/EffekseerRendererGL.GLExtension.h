@@ -1,4 +1,4 @@
-﻿
+
 #ifndef	__EFFEKSEERRENDERER_GL_GLEXTENSION_H__
 #define	__EFFEKSEERRENDERER_GL_GLEXTENSION_H__
 
@@ -47,6 +47,8 @@ namespace GLExt
 #define GL_LINK_STATUS 0x8B82
 
 #define GL_VERTEX_ARRAY_BINDING 0x85B5
+#define GL_ARRAY_BUFFER_BINDING 0x8894
+#define GL_ELEMENT_ARRAY_BUFFER_BINDING 0x8895
 
 #define GL_COMPRESSED_RGBA_S3TC_DXT1_EXT 0x83F1
 #define GL_COMPRESSED_RGBA_S3TC_DXT3_EXT 0x83F2
@@ -72,6 +74,7 @@ typedef ptrdiff_t GLintptr;
 typedef char GLchar;
 #endif
 
+OpenGLDeviceType GetDeviceType();
 bool Initialize(OpenGLDeviceType deviceType);
 bool IsSupportedVertexArray();
 bool IsSupportedBufferRange();
