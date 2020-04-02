@@ -1,15 +1,15 @@
 
 float4x4 mCameraProj		: register( c0 );
-float4x4 mModel[40]		: register( c4 );
-float4	fUV[40]			: register( c164 );
-float4	fModelColor[40]		: register( c204 );
+float4x4 mModel[20]		: register( c4 );
+float4	fUV[20]			: register( c84 );
+float4	fModelColor[20]		: register( c104 );
 
 #ifdef ENABLE_LIGHTING
-float4	fLightDirection		: register( c244 );
-float4	fLightColor		: register( c245 );
-float4	fLightAmbient		: register( c246 );
+float4	fLightDirection		: register( c124 );
+float4	fLightColor		: register( c125 );
+float4	fLightAmbient		: register( c126 );
 #endif
-float4 mUVInversed		: register(c247);
+float4 mUVInversed		: register(c127);
 
 
 struct VS_Input
@@ -47,6 +47,8 @@ VS_Output VS( const VS_Input Input )
 	localPosition = mul( matModel, localPosition );
 	Output.Pos = mul( mCameraProj, localPosition );
 
+	Output.Color = modelColor;
+
 	Output.UV.x = Input.UV.x * uv.z + uv.x;
 	Output.UV.y = Input.UV.y * uv.w + uv.y;
 
@@ -57,8 +59,6 @@ VS_Output VS( const VS_Input Input )
 	float4 localNormal = { 0.0, 0.0, 0.0, 1.0 };
 	localNormal.xyz = normalize( mul( lightMat, Input.Normal ) );
 
-#if ENABLE_NORMAL_TEXTURE
-	
 	float4 localBinormal = { 0.0, 0.0, 0.0, 1.0 };
 	localBinormal.xyz = normalize( mul( lightMat, Input.Binormal ) );
 
@@ -67,23 +67,6 @@ VS_Output VS( const VS_Input Input )
 	Output.Normal = localNormal.xyz;
 	Output.Binormal = localBinormal.xyz;
 	Output.Tangent = localTangent.xyz;
-
-#endif
-
-
-#if ENABLE_NORMAL_TEXTURE
-	float diffuse = 1.0;
-#else
-	float diffuse = max( dot( fLightDirection.xyz, localNormal.xyz ), 0.0 );
-#endif
-
-	Output.Color.r = diffuse;
-	Output.Color.g = diffuse;
-	Output.Color.b = diffuse;
-	Output.Color.a = 1.0;
-	Output.Color = Output.Color * fLightColor * modelColor;
-#else	
-	Output.Color = modelColor;
 #endif
 
 	return Output;

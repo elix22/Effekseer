@@ -3,7 +3,8 @@ namespace Effekseer.GUI.Dock
 {   
 	class BehaviorValues : DockPanel
     {
-        Component.ParameterList paramerterList = null;
+		Component.CopyAndPaste candp = null;
+		Component.ParameterList paramerterList = null;
 
         bool isFiestUpdate = true;
 
@@ -14,6 +15,8 @@ namespace Effekseer.GUI.Dock
             paramerterList = new Component.ParameterList();
 			paramerterList.SetType(typeof(Data.EffectBehaviorValues));
 
+			candp = new Component.CopyAndPaste("Behavior", GetTargetObject, Read);
+
             Core.OnAfterLoad += OnAfterLoad;
             Core.OnAfterNew += OnAfterLoad;
             Core.OnAfterSelectNode += OnAfterSelectNode;
@@ -21,7 +24,6 @@ namespace Effekseer.GUI.Dock
             Read();
 
 			Icon = Images.GetIcon("PanelBehavior");
-			IconSize = new swig.Vec2(24, 24);
 			TabToolTip = Resources.GetString("Behavior");
 		}
 
@@ -45,10 +47,17 @@ namespace Effekseer.GUI.Dock
             {
             }
 
+			candp.Update();
+
             paramerterList.Update();
         }
 
-        void Read()
+		object GetTargetObject()
+		{
+			return Core.EffectBehavior;
+		}
+
+		void Read()
         {
 			paramerterList.SetValue(Core.EffectBehavior);
 		}

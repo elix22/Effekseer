@@ -6,6 +6,7 @@
 // Include
 //----------------------------------------------------------------------------------
 #include "Effekseer.EffectNode.h"
+#include "Renderer/Effekseer.RingRenderer.h"
 
 //----------------------------------------------------------------------------------
 //
@@ -119,7 +120,8 @@ struct RingSingleValues
 //----------------------------------------------------------------------------------
 struct RingLocationValues
 {
-	vector2d	current;
+	Vec2f	current;
+
 	union
 	{
 		struct
@@ -129,15 +131,15 @@ struct RingLocationValues
 
 		struct
 		{
-			vector2d  start;
-			vector2d  velocity;
-			vector2d  acceleration;
+			Vec2f  start;
+			Vec2f  velocity;
+			Vec2f  acceleration;
 		} pva;
 
 		struct
 		{
-			vector2d  start;
-			vector2d  end;
+			Vec2f  start;
+			Vec2f  end;
 		} easing;
 	};
 };
@@ -170,6 +172,21 @@ struct RingColorValues
 	};
 };
 
+enum class RingShapeType : int32_t
+{
+	Dount,
+	Cresient,
+};
+
+struct RingShapeParameter
+{
+	RingShapeType Type = RingShapeType::Dount;
+	float StartingFade = 0.0f;
+	float EndingFade = 0.0f;
+	RingSingleParameter StartingAngle;
+	RingSingleParameter EndingAngle;
+};
+
 //----------------------------------------------------------------------------------
 //
 //----------------------------------------------------------------------------------
@@ -184,7 +201,8 @@ public:
 
 	struct InstanceValues
 	{
-		RingSingleValues viewingAngle;
+		RingSingleValues startingAngle;
+		RingSingleValues endingAngle;
 		RingLocationValues outerLocation;
 		RingLocationValues innerLocation;
 		RingSingleValues centerRatio;
@@ -200,7 +218,8 @@ public:
 
 	int32_t	VertexCount;
 
-	RingSingleParameter	ViewingAngle;
+	RingShapeParameter Shape;
+	//RingSingleParameter	ViewingAngle;
 
 	RingLocationParameter	OuterLocation;
 	RingLocationParameter	InnerLocation;
@@ -212,6 +231,8 @@ public:
 	RingColorParameter InnerColor;
 
 	int RingTexture;
+
+	RingRenderer::NodeParameter nodeParameter;
 
 	EffectNodeRing( Effect* effect, unsigned char*& pos )
 		: EffectNodeImplemented(effect, pos)

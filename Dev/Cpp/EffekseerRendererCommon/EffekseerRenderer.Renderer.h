@@ -27,9 +27,6 @@ public:
 
 	virtual bool OnDistorting() { return false; }
 };
-//-----------------------------------------------------------------------------------
-//
-//-----------------------------------------------------------------------------------
 
 /**
 	@brief	
@@ -42,6 +39,29 @@ enum class UVStyle
 	VerticalFlipped,
 };
 
+/**
+	@brief
+	\~english A type of texture which is rendered when textures are not assigned.
+	\~japanese テクスチャが設定されていないときに描画されるテクスチャの種類
+*/
+enum class ProxyTextureType
+{
+	White,
+	Normal,
+};
+
+/**
+	@brief
+	\~english A class which contains a graphics device
+	\~japanese グラフィックデバイスを格納しているクラス
+*/
+class GraphicsDevice : public ::Effekseer::IReference
+{
+public:
+	GraphicsDevice() = default;
+	virtual ~GraphicsDevice() = default;
+};	
+	
 class CommandList : public ::Effekseer::IReference
 {
 public:
@@ -74,6 +94,12 @@ protected:
 	Impl* impl = nullptr;
 
 public:
+
+	/**
+		@brief	only for Effekseer backend developer. Effekseer User doesn't need it.
+	*/
+	Impl* GetImpl();
+
 	/**
 		@brief	デバイスロストが発生した時に実行する。
 	*/
@@ -105,82 +131,87 @@ public:
 	virtual bool EndRendering() = 0;
 
 	/**
-		@brief	ライトの方向を取得する。
+		@brief	Get the direction of light
 	*/
-	virtual const ::Effekseer::Vector3D& GetLightDirection() const = 0;
+	virtual ::Effekseer::Vector3D GetLightDirection() const;
 
 	/**
-		@brief	ライトの方向を設定する。
+		@brief	Specifiy the direction of light
 	*/
-	virtual void SetLightDirection( const ::Effekseer::Vector3D& direction ) = 0;
+	virtual void SetLightDirection(const ::Effekseer::Vector3D& direction);
 
 	/**
-		@brief	ライトの色を取得する。
+		@brief	Get the color of light
 	*/
-	virtual const ::Effekseer::Color& GetLightColor() const = 0;
+	virtual const ::Effekseer::Color& GetLightColor() const;
 
 	/**
-		@brief	ライトの色を設定する。
+		@brief	Specify the color of light
 	*/
-	virtual void SetLightColor( const ::Effekseer::Color& color ) = 0;
+	virtual void SetLightColor(const ::Effekseer::Color& color);
 
 	/**
-		@brief	ライトの環境光の色を取得する。
+		@brief	Get the color of ambient
 	*/
-	virtual const ::Effekseer::Color& GetLightAmbientColor() const = 0;
+	virtual const ::Effekseer::Color& GetLightAmbientColor() const;
 
 	/**
-		@brief	ライトの環境光の色を設定する。
+		@brief	Specify the color of ambient
 	*/
-	virtual void SetLightAmbientColor( const ::Effekseer::Color& color ) = 0;
+	virtual void SetLightAmbientColor(const ::Effekseer::Color& color);
 
-		/**
+	/**
 		@brief	最大描画スプライト数を取得する。
 	*/
 	virtual int32_t GetSquareMaxCount() const = 0;
 
 	/**
-		@brief	投影行列を取得する。
+		@brief	Get a projection matrix
 	*/
-	virtual const ::Effekseer::Matrix44& GetProjectionMatrix() const = 0;
+	virtual ::Effekseer::Matrix44 GetProjectionMatrix() const;
 
 	/**
-		@brief	投影行列を設定する。
+		@brief	Set a projection matrix
 	*/
-	virtual void SetProjectionMatrix( const ::Effekseer::Matrix44& mat ) = 0;
+	virtual void SetProjectionMatrix( const ::Effekseer::Matrix44& mat );
 
 	/**
-		@brief	カメラ行列を取得する。
+		@brief	Get a camera matrix
 	*/
-	virtual const ::Effekseer::Matrix44& GetCameraMatrix() const = 0;
+	virtual ::Effekseer::Matrix44 GetCameraMatrix() const;
 
 	/**
-		@brief	カメラ行列を設定する。
+		@brief	Set a camera matrix
 	*/
-	virtual void SetCameraMatrix( const ::Effekseer::Matrix44& mat ) = 0;
+	virtual void SetCameraMatrix( const ::Effekseer::Matrix44& mat );
 
 	/**
-		@brief	カメラプロジェクション行列を取得する。
+		@brief	Get a camera projection matrix
 	*/
-	virtual ::Effekseer::Matrix44& GetCameraProjectionMatrix() = 0;
+	virtual ::Effekseer::Matrix44 GetCameraProjectionMatrix() const;
 
 	/**
 		@brief	Get a front direction of camera
+		@note
+		We don't recommend to use it without understanding of internal code.
 	*/
-	virtual ::Effekseer::Vector3D GetCameraFrontDirection() const = 0;
+	virtual ::Effekseer::Vector3D GetCameraFrontDirection() const;
 
 	/**
 		@brief	Get a position of camera
+		@note
+		We don't recommend to use it without understanding of internal code.
 	*/
-	virtual ::Effekseer::Vector3D GetCameraPosition() const = 0;
+	virtual ::Effekseer::Vector3D GetCameraPosition() const;
 
 	/**
 		@brief	Set a front direction and position of camera manually
+		@param front (Right Hand) a direction from focus to eye, (Left Hand) a direction from eye to focus, 
 		@note
 		These are set based on camera matrix automatically.
 		It is failed on some platform.
 	*/
-	virtual void SetCameraParameter(const ::Effekseer::Vector3D& front, const ::Effekseer::Vector3D& position) = 0;
+	virtual void SetCameraParameter(const ::Effekseer::Vector3D& front, const ::Effekseer::Vector3D& position);
 
 	/**
 		@brief	スプライトレンダラーを生成する。
@@ -269,14 +300,18 @@ public:
 	virtual void ResetDrawVertexCount();
 
 	/**
-	@brief	描画モードを設定する。
+	@brief
+	\~english Get a render mode.
+	\~japanese 描画モードを取得する。
 	*/
-	virtual void SetRenderMode( Effekseer::RenderMode renderMode ) = 0;
+	virtual Effekseer::RenderMode GetRenderMode() const;
 
 	/**
-	@brief	描画モードを取得する。
+	@brief	
+	\~english Specify a render mode.
+	\~japanese 描画モードを設定する。
 	*/
-	virtual Effekseer::RenderMode GetRenderMode() = 0;
+	virtual void SetRenderMode(Effekseer::RenderMode renderMode);
 
 	/**
 	@brief
@@ -332,10 +367,24 @@ public:
 	\~English	Specify a background texture.
 	\~Japanese	背景のテクスチャを設定する。
 	@note
-	\~English	Specified texture is not deleted by the renderer. This function is available except DirectX9, DirectX11 and OpenGL.
-	\~Japanese	設定されたテクスチャはレンダラーによって削除されない。この関数はDirectX9、DirectX11、OpenGL以外で使用できる。
+	\~English	Specified texture is not deleted by the renderer. This function is available except DirectX9, DirectX11.
+	\~Japanese	設定されたテクスチャはレンダラーによって削除されない。この関数はDirectX9、DirectX11以外で使用できる。
 	*/
 	virtual void SetBackgroundTexture(::Effekseer::TextureData* textureData);
+
+	/**
+	@brief
+	\~English	Create a proxy texture
+	\~Japanese	代替のテクスチャを生成する
+	*/
+	virtual Effekseer::TextureData* CreateProxyTexture(ProxyTextureType type) { return nullptr; }
+
+	/**
+	@brief
+	\~English	Delete a proxy texture
+	\~Japanese	代替のテクスチャを削除する
+	*/
+	virtual void DeleteProxyTexture(Effekseer::TextureData* data) { }
 };
 
 //----------------------------------------------------------------------------------

@@ -186,11 +186,11 @@ namespace Effekseer.GUI.Component
 			}
 			else
 			{
-				txt_r1 = Resources.GetString("Max");
-				txt_r2 = Resources.GetString("Min");
+				txt_r1 = Resources.GetString("Min");
+				txt_r2 = Resources.GetString("Max");
 			}
 
-			Manager.NativeManager.PushItemWidth(Manager.NativeManager.GetColumnWidth() - 60);
+			Manager.NativeManager.PushItemWidth(Manager.NativeManager.GetColumnWidth() - 48 * Manager.DpiScale);
 			if (Manager.NativeManager.DragFloat3EfkEx(id1, internalValue1, step,
 				float.MinValue, float.MaxValue,
 				float.MinValue, float.MaxValue,
@@ -228,6 +228,7 @@ namespace Effekseer.GUI.Component
 			if (binding.IsDynamicEquationEnabled)
 			{
 				DynamicSelector.SelectMaxInComponent(id_d1, binding.DynamicEquationMax);
+
 				Popup();
 			}
 
@@ -275,6 +276,7 @@ namespace Effekseer.GUI.Component
 			if (binding.IsDynamicEquationEnabled)
 			{
 				DynamicSelector.SelectMinInComponent(id_d2, binding.DynamicEquationMin);
+
 				Popup();
 			}
 
@@ -283,6 +285,8 @@ namespace Effekseer.GUI.Component
 
 			valueChangingProp.Disable();
 		}
+
+
 
 		void Popup()
 		{

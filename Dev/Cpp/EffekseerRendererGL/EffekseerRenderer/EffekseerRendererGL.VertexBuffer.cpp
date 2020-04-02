@@ -13,8 +13,8 @@ namespace EffekseerRendererGL
 //-----------------------------------------------------------------------------------
 //
 //-----------------------------------------------------------------------------------
-VertexBuffer::VertexBuffer( RendererImplemented* renderer, int size, bool isDynamic )
-	: DeviceObject		( renderer )
+VertexBuffer::VertexBuffer(RendererImplemented* renderer, int size, bool isDynamic, bool hasRefCount)
+	: DeviceObject(renderer, renderer->GetDeviceObjectCollection(), hasRefCount)
 	, VertexBufferBase	( size, isDynamic )
 	, m_vertexRingStart		( 0 )
 	, m_vertexRingOffset	( 0 )
@@ -45,9 +45,9 @@ VertexBuffer::~VertexBuffer()
 //-----------------------------------------------------------------------------------
 //
 //-----------------------------------------------------------------------------------
-VertexBuffer* VertexBuffer::Create( RendererImplemented* renderer, int size, bool isDynamic )
+VertexBuffer* VertexBuffer::Create(RendererImplemented* renderer, int size, bool isDynamic, bool hasRefCount)
 {
-	return new VertexBuffer( renderer, size, isDynamic );
+	return new VertexBuffer( renderer, size, isDynamic, hasRefCount);
 }
 
 GLuint VertexBuffer::GetInterface()
@@ -96,13 +96,15 @@ void VertexBuffer::Lock()
 //-----------------------------------------------------------------------------------
 //
 //-----------------------------------------------------------------------------------
-bool VertexBuffer::RingBufferLock( int32_t size, int32_t& offset, void*& data )
+bool VertexBuffer::RingBufferLock(int32_t size, int32_t& offset, void*& data, int32_t alignment)
 {
 	assert( !m_isLock );
 	assert( !m_ringBufferLock );
 	assert( this->m_isDynamic );
 
 	if( size > m_size ) return false;
+
+	m_vertexRingOffset =(m_vertexRingOffset + alignment - 1) / alignment* alignment;
 
 #ifdef __ANDROID__
 	if (true)
@@ -132,11 +134,11 @@ bool VertexBuffer::RingBufferLock( int32_t size, int32_t& offset, void*& data )
 	return true;
 }
 
-bool VertexBuffer::TryRingBufferLock(int32_t size, int32_t& offset, void*& data)
+bool VertexBuffer::TryRingBufferLock(int32_t size, int32_t& offset, void*& data, int32_t alignment)
 {
 	if ((int32_t) m_vertexRingOffset + size > m_size) return false;
 
-	return RingBufferLock(size, offset, data);
+	return RingBufferLock(size, offset, data, alignment);
 }
 
 //-----------------------------------------------------------------------------------
@@ -178,8 +180,24 @@ void VertexBuffer::Unlock()
 #endif // !__ANDROID__
 
 			auto target = (uint8_t*)GLExt::glMapBuffer(GL_ARRAY_BUFFER, GL_WRITE_ONLY);
-			memcpy(target + m_vertexRingStart, m_resource, m_offset);
-			GLExt::glUnmapBuffer(GL_ARRAY_BUFFER);
+			if (target == nullptr)
+			{
+				GLExt::MakeMapBufferInvalid();
+
+				if (m_vertexRingStart > 0)
+				{
+					GLExt::glBufferSubData(GL_ARRAY_BUFFER, m_vertexRingStart, m_offset, m_resource);
+				}
+				else
+				{
+					GLExt::glBufferData(GL_ARRAY_BUFFER, m_size, m_resource, GL_STREAM_DRAW);
+				}
+			}
+			else
+			{
+				memcpy(target + m_vertexRingStart, m_resource, m_offset);
+				GLExt::glUnmapBuffer(GL_ARRAY_BUFFER);
+			}
 		}
 		else
 		{

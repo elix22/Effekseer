@@ -9,7 +9,11 @@
 #include "EffekseerTool/EffekseerTool.Renderer.h"
 #include "EffekseerTool/EffekseerTool.Sound.h"
 #include <Effekseer.h>
+#include <IO/IO.h>
+#include <unordered_map>
+#include <unordered_set>
 
+#include "../IPC/IPC.h"
 #include "GUI/efk.ImageResource.h"
 #include "efk.Base.h"
 
@@ -24,6 +28,12 @@ enum class RenderMode
 {
 	Normal,
 	Wireframe,
+};
+
+enum class ViewMode
+{
+	_3D,
+	_2D,
 };
 
 class ViewerParamater
@@ -52,6 +62,7 @@ public:
 
 	DistortionType Distortion;
 	RenderMode RenderingMode;
+	ViewMode ViewerMode;
 
 	ViewerParamater();
 };
@@ -107,6 +118,8 @@ public:
 	float DynamicInput3 = 0.0f;
 	float DynamicInput4 = 0.0f;
 
+	float PlaybackSpeed = 1.0f;
+
 	ViewerEffectBehavior();
 };
 
@@ -155,7 +168,7 @@ private:
 		Effekseer::TextureLoader* m_originalTextureLoader;
 
 	public:
-		TextureLoader(EffekseerRenderer::Renderer* renderer);
+		TextureLoader(EffekseerRenderer::Renderer* renderer, Effekseer::ColorSpaceType colorSpaceType);
 		virtual ~TextureLoader();
 
 	public:
@@ -201,6 +214,26 @@ private:
 		std::u16string RootPath;
 	};
 
+	class MaterialLoader : public ::Effekseer::MaterialLoader
+	{
+	private:
+		EffekseerRenderer::Renderer* renderer_ = nullptr;
+		Effekseer::MaterialLoader* loader_ = nullptr;
+		std::unordered_map<std::u16string, std::shared_ptr<Effekseer::StaticFile>> materialFiles_;
+
+	public:
+		MaterialLoader(EffekseerRenderer::Renderer* renderer);
+		virtual ~MaterialLoader();
+
+	public:
+		Effekseer::MaterialData* Load(const EFK_CHAR* path) override;
+		std::u16string RootPath;
+
+		::Effekseer::MaterialLoader* GetOriginalLoader() { return loader_; }
+
+		void ReleaseAll();
+	};
+
 	ViewerEffectBehavior m_effectBehavior;
 	TextureLoader* m_textureLoader;
 
@@ -213,6 +246,11 @@ private:
 	::Effekseer::Vector3D m_rootLocation;
 	::Effekseer::Vector3D m_rootRotation;
 	::Effekseer::Vector3D m_rootScale;
+
+	std::shared_ptr<IPC::CommandQueue> commandQueueToMaterialEditor_;
+	std::shared_ptr<IPC::CommandQueue> commandQueueFromMaterialEditor_;
+
+	bool isUpdateMaterialRequired_ = false;
 
 	::Effekseer::Effect* GetEffect();
 
@@ -320,6 +358,14 @@ public:
 	void SetBloomParameters(bool enabled, float intensity, float threshold, float softKnee);
 
 	void SetTonemapParameters(int32_t algorithm, float exposure);
+
+	void OpenOrCreateMaterial(const char16_t* path);
+
+	void TerminateMaterialEditor();
+
+	bool GetIsUpdateMaterialRequiredAndReset();
+
+	static void SetFileLogger(const char16_t* path);
 
 #if !SWIG
 	EffekseerRenderer::Renderer* GetRenderer();

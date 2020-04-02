@@ -30,6 +30,31 @@ Effekseer主要用作遊戲開發,不僅是程序員而且設計師也可進行�
 
 * [ForDXLib](https://github.com/effekseer/EffekseerForDXLib)
 
+* [ToolHelp(Sphinx)](https://github.com/effekseer/docs_tool)
+
+Development
+=========
+
+### Branch
+
+* master 1.6(WIP)
+
+* [1.5x](https://github.com/effekseer/Effekseer/tree/15x)
+
+* [1.4x](https://github.com/effekseer/Effekseer/tree/14x)
+
+* [1.3x](https://github.com/effekseer/Effekseer/tree/13x)
+
+### Documents
+
+[CodeOverview](docs/Development/CodeOverview.md)
+
+[CodingRule](docs/Development/CodingRule_En.md)
+
+[HowToBuild](docs/Development/HowToBuild.md)
+
+[コーディングルール](docs/Development/CodingRule_Ja.md)
+
 Todo
 =========
 
@@ -43,46 +68,41 @@ issues、TrelloとTODOを読んでください。常時、機能追加、バグ�
 
 # RoadMap
 
+- I'm planning.
+
+## OnGoing
+
+- Support Metal
+- Support Vulkan
+
+[BackendRepository](https://github.com/altseed/LLGI)
+
 # Todo
 
-** Easy **
-* Add samples (サンプルの追加)
-* Add tutorial documents (チュートリアルのドキュメントの追加)
-* Add tests for a runtime (ランタイムのテストの追加)
-* Translate documents from Japanese into English (ドキュメントの日本語から英語への翻訳)
+## Easy
 
-** Medium
-* Add model exporters for 3D modeling softwares
-* HDR Color
-* Bloom Postprocess in Editor
-* Dynamically changing parameters of Effect from a runtime
+- Add samples (サンプルの追加)
+- Add tutorial documents (チュートリアルのドキュメントの追加)
+- Add tests for a runtime (ランタイムのテストの追加)
+- Translate documents from Japanese into English (ドキュメントの日本語から英語への翻訳)
 
-** Hard
-* Support Metal
-* Support DirectX12
-* Node material
+## Medium
+- Add model exporters for 3D modeling softwares
 
-** VeryHard
-* Support Vulkan
-* Support AfterEffects
+## Hard
 
-** Others
-* New method of rotation to match Z and moving direction.
-* Turbulence noise ( https://ics.media/entry/10921 )
+- Support AfterEffects
+
+## Others
+- New method of rotation to match Z and moving direction.
 
 # For contributor
 
-## How to build
-
-[CodeOverview](docs/Development/CodeOverview.md)
-
-[HowToBuild](docs/Development/HowToBuild.md)
-
-## How to release
+## How to release (under constructing)
 
 * Windows
 
-Visual Studio 2015 are required.
+Visual Studio 2017 are required.
 
 Open ```release.bat```
 
@@ -96,7 +116,7 @@ or
 
 Use cmake to ```Dev/Cpp/CMakeLists.txt```
 
-* Linux
+* Linux (not work now)
 
 Execute ```Dev/build.Linux.sh``` to compile and generate binary into Dev/release/
 

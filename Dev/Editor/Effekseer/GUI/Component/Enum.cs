@@ -12,6 +12,11 @@ namespace Effekseer.GUI.Component
 
 		public string Label { get; set; } = string.Empty;
 
+		/// <summary>
+		/// A label without parameter list
+		/// </summary>
+		internal string InternalLabel = string.Empty;
+
 		public string Description { get; set; } = string.Empty;
 
 		Data.Value.EnumBase binding = null;
@@ -116,11 +121,14 @@ namespace Effekseer.GUI.Component
 				selectedValues = -1;
 			}
 
-			valueChangingProp.Enable(binding);
+			if (EnableUndo)
+			{
+				valueChangingProp.Enable(binding);
+			}
 
 			var v = enums.Select((_, i) => Tuple.Create(_, i)).Where(_ => _.Item1 == selectedValues).FirstOrDefault();
 
-			if(Manager.NativeManager.BeginCombo(id, FieldNames[v.Item2], swig.ComboFlags.None, icons[v.Item2]))
+			if(Manager.NativeManager.BeginCombo(InternalLabel + id, FieldNames[v.Item2], swig.ComboFlags.None, icons[v.Item2]))
 			{
 				for(int i = 0; i < FieldNames.Count; i++)
 				{
@@ -142,7 +150,10 @@ namespace Effekseer.GUI.Component
 				Manager.NativeManager.EndCombo();
 			}
 
-			valueChangingProp.Disable();
+			if (EnableUndo)
+			{
+				valueChangingProp.Disable();
+			}
 		}
 	}
 }

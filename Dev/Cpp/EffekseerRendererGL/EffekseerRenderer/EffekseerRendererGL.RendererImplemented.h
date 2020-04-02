@@ -7,51 +7,16 @@
 //----------------------------------------------------------------------------------
 #include "EffekseerRendererGL.Base.h"
 #include "EffekseerRendererGL.Renderer.h"
+#include "EffekseerRendererGL.DeviceObjectCollection.h"
 #include "../../EffekseerRendererCommon/EffekseerRenderer.RenderStateBase.h"
 #include "../../EffekseerRendererCommon/EffekseerRenderer.StandardRenderer.h"
 
-//----------------------------------------------------------------------------------
-// Lib
-//----------------------------------------------------------------------------------
-
-//----------------------------------------------------------------------------------
-//
-//----------------------------------------------------------------------------------
 namespace EffekseerRendererGL
 {
 
-//----------------------------------------------------------------------------------
-//
-//----------------------------------------------------------------------------------
-struct Vertex
-{
-	::Effekseer::Vector3D	Pos;
-	::Effekseer::Color		Col;
-	float					UV[2];
+using Vertex = EffekseerRenderer::SimpleVertex;
+using VertexDistortion = EffekseerRenderer::VertexDistortion;
 
-	void SetColor( const ::Effekseer::Color& color )
-	{
-		Col = color;
-	}
-};
-
-struct VertexDistortion
-{
-	::Effekseer::Vector3D	Pos;
-	::Effekseer::Color		Col;
-	float					UV[2];
-	::Effekseer::Vector3D	Tangent;
-	::Effekseer::Vector3D	Binormal;
-
-	void SetColor(const ::Effekseer::Color& color)
-	{
-		Col = color;
-	}
-};
-
-//----------------------------------------------------------------------------------
-//
-//----------------------------------------------------------------------------------
 struct RenderStateSet
 {
 	GLboolean	blend;
@@ -65,6 +30,9 @@ struct RenderStateSet
 	GLint		blendDst;
 	GLint		blendEquation;
 	GLint		vao;
+	GLint arrayBufferBinding;
+	GLint elementArrayBufferBinding;
+	std::array<GLuint, ::Effekseer::TextureSlotMax> boundTextures;
 };
 
 /**
@@ -79,45 +47,31 @@ class RendererImplemented
 friend class DeviceObject;
 
 private:
+	DeviceObjectCollection* deviceObjectCollection_ = nullptr;
+
 	VertexBuffer*		m_vertexBuffer;
 	IndexBuffer*		m_indexBuffer = nullptr;
 	IndexBuffer*		m_indexBufferForWireframe = nullptr;
 	int32_t				m_squareMaxCount;
 
-	Shader*							m_shader;
-	Shader*							m_shader_no_texture;
+	Shader* m_shader = nullptr;
+	Shader* m_shader_distortion = nullptr;
+	Shader* m_shader_lighting = nullptr;
+	Shader* currentShader = nullptr;
 
-	Shader*							m_shader_distortion;
-	Shader*							m_shader_no_texture_distortion;
+	EffekseerRenderer::StandardRenderer<RendererImplemented, Shader, Vertex, VertexDistortion>* m_standardRenderer;
 
-	Shader*		currentShader = nullptr;
+	VertexArray* m_vao = nullptr;
+	VertexArray* m_vao_distortion = nullptr;
+	VertexArray* m_vao_lighting = nullptr;
+	VertexArray* m_vao_wire_frame = nullptr;
 
-	EffekseerRenderer::StandardRenderer<RendererImplemented, Shader, Vertex, VertexDistortion>*	m_standardRenderer;
-
-	VertexArray*			m_vao;
-	VertexArray*			m_vao_no_texture;
-
-	VertexArray*			m_vao_distortion;
-	VertexArray*			m_vao_no_texture_distortion;
-
-	VertexArray*			m_vao_wire_frame;
-
-	::Effekseer::Vector3D	m_lightDirection;
-	::Effekseer::Color		m_lightColor;
-	::Effekseer::Color		m_lightAmbient;
-
-	::Effekseer::Matrix44	m_proj;
-	::Effekseer::Matrix44	m_camera;
-	::Effekseer::Matrix44	m_cameraProj;
-
-	::Effekseer::Vector3D	m_cameraPosition;
-	::Effekseer::Vector3D	m_cameraFrontDirection;
+	//! default vao (alsmot for material)
+	GLuint defaultVertexArray_ = 0;
 
 	::EffekseerRenderer::RenderStateBase*		m_renderState;
 
 	Effekseer::TextureData	m_background;
-
-	std::set<DeviceObject*>	m_deviceObjects;
 
 	OpenGLDeviceType		m_deviceType;
 
@@ -128,18 +82,16 @@ private:
 
 	EffekseerRenderer::DistortingCallback* m_distortingCallback;
 
-	/* 現在設定されているテクスチャ */
-	std::vector<GLuint>	m_currentTextures;
+	// textures which are specified currently
+	std::vector<::Effekseer::TextureData> currentTextures_;
 
 	VertexArray*	m_currentVertexArray;
-
-	Effekseer::RenderMode m_renderMode = Effekseer::RenderMode::Normal;
 
 public:
 	/**
 		@brief	コンストラクタ
 	*/
-	RendererImplemented(int32_t squareMaxCount, OpenGLDeviceType deviceType);
+	RendererImplemented(int32_t squareMaxCount, OpenGLDeviceType deviceType, DeviceObjectCollection* deviceObjectCollection);
 
 	/**
 		@brief	デストラクタ
@@ -188,67 +140,6 @@ public:
 	::EffekseerRenderer::RenderStateBase* GetRenderState();
 	
 	/**
-		@brief	ライトの方向を取得する。
-	*/
-	const ::Effekseer::Vector3D& GetLightDirection() const override;
-
-	/**
-		@brief	ライトの方向を設定する。
-	*/
-	void SetLightDirection( const ::Effekseer::Vector3D& direction ) override;
-
-	/**
-		@brief	ライトの色を取得する。
-	*/
-	const ::Effekseer::Color& GetLightColor() const override;
-
-	/**
-		@brief	ライトの色を設定する。
-	*/
-	void SetLightColor( const ::Effekseer::Color& color ) override;
-
-	/**
-		@brief	ライトの環境光の色を取得する。
-	*/
-	const ::Effekseer::Color& GetLightAmbientColor() const override;
-
-	/**
-		@brief	ライトの環境光の色を設定する。
-	*/
-	void SetLightAmbientColor( const ::Effekseer::Color& color ) override;
-
-	/**
-		@brief	投影行列を取得する。
-	*/
-	const ::Effekseer::Matrix44& GetProjectionMatrix() const override;
-
-	/**
-		@brief	投影行列を設定する。
-	*/
-	void SetProjectionMatrix( const ::Effekseer::Matrix44& mat ) override;
-
-	/**
-		@brief	カメラ行列を取得する。
-	*/
-	const ::Effekseer::Matrix44& GetCameraMatrix() const override;
-
-	/**
-		@brief	カメラ行列を設定する。
-	*/
-	void SetCameraMatrix( const ::Effekseer::Matrix44& mat ) override;
-
-	/**
-		@brief	カメラプロジェクション行列を取得する。
-	*/
-	::Effekseer::Matrix44& GetCameraProjectionMatrix() override;
-
-	::Effekseer::Vector3D GetCameraFrontDirection() const override;
-
-	::Effekseer::Vector3D GetCameraPosition() const  override;
-
-	void SetCameraParameter(const ::Effekseer::Vector3D& front, const ::Effekseer::Vector3D& position)  override;
-
-	/**
 		@brief	スプライトレンダラーを生成する。
 	*/
 	::Effekseer::SpriteRenderer* CreateSpriteRenderer() override;
@@ -294,28 +185,19 @@ public:
 		return &m_background;
 	}
 
-	/**
-	@brief	背景を設定する。
-	*/
-	void SetBackground(GLuint background) override;
+	void SetBackground(GLuint background, bool hasMipmap) override;
+
+	void SetBackgroundTexture(::Effekseer::TextureData* textureData) override;
 
 	EffekseerRenderer::DistortingCallback* GetDistortingCallback() override;
 
 	void SetDistortingCallback(EffekseerRenderer::DistortingCallback* callback) override;
 
-	/**
-	@brief	描画モードを設定する。
-	*/
-	void SetRenderMode( Effekseer::RenderMode renderMode ) override
+	EffekseerRenderer::StandardRenderer<RendererImplemented, Shader, Vertex, VertexDistortion>*
+	GetStandardRenderer()
 	{
-		m_renderMode = renderMode;
+		return m_standardRenderer;
 	}
-	Effekseer::RenderMode GetRenderMode() override
-	{
-		return m_renderMode;
-	}
-
-	EffekseerRenderer::StandardRenderer<RendererImplemented, Shader, Vertex, VertexDistortion>* GetStandardRenderer() { return m_standardRenderer; }
 
 	void SetVertexBuffer( VertexBuffer* vertexBuffer, int32_t size );
 	void SetVertexBuffer(GLuint vertexBuffer, int32_t size);
@@ -327,7 +209,7 @@ public:
 	void DrawSprites( int32_t spriteCount, int32_t vertexOffset );
 	void DrawPolygon( int32_t vertexCount, int32_t indexCount);
 
-	Shader* GetShader(bool useTexture, bool useDistortion) const;
+	Shader* GetShader(bool useTexture, ::Effekseer::RendererMaterialType materialType) const;
 	void BeginShader(Shader* shader);
 	void EndShader(Shader* shader);
 
@@ -339,11 +221,17 @@ public:
 
 	void ResetRenderState() override;
 
-	std::vector<GLuint>& GetCurrentTextures() { return m_currentTextures; }
+	Effekseer::TextureData* CreateProxyTexture(EffekseerRenderer::ProxyTextureType type) override;
+
+	void DeleteProxyTexture(Effekseer::TextureData* data) override;
+
+	const std::vector<::Effekseer::TextureData>& GetCurrentTextures() const { return currentTextures_; }
 
 	OpenGLDeviceType GetDeviceType() const override { return m_deviceType; }
 
 	bool IsVertexArrayObjectSupported() const override;
+
+	DeviceObjectCollection* GetDeviceObjectCollection() const { return deviceObjectCollection_; }
 
 	virtual int GetRef() override { return ::Effekseer::ReferenceObject::GetRef(); }
 	virtual int AddRef() override { return ::Effekseer::ReferenceObject::AddRef(); }

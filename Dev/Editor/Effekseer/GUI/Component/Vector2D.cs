@@ -9,12 +9,15 @@ namespace Effekseer.GUI.Component
 	class Vector2D : Control, IParameterControl
 	{
 		string id = "";
-
+		string id_c = "";
+		string id_reset = "";
 		public string Label { get; set; } = string.Empty;
 
 		public string Description { get; set; } = string.Empty;
 
 		Data.Value.Vector2D binding = null;
+
+		bool isPopupShown = false;
 
 		ValueChangingProperty valueChangingProp = new ValueChangingProperty();
 
@@ -52,6 +55,8 @@ namespace Effekseer.GUI.Component
 			}
 
 			id = "###" + Manager.GetUniqueID().ToString();
+			id_c = "###" + Manager.GetUniqueID().ToString();
+			id_reset = "###" + Manager.GetUniqueID().ToString();
 		}
 
 		public void SetBinding(object o)
@@ -88,6 +93,7 @@ namespace Effekseer.GUI.Component
 
 		public override void Update()
 		{
+			isPopupShown = false;
 			if (binding == null) return;
 
 			valueChangingProp.Enable(binding);
@@ -108,6 +114,8 @@ namespace Effekseer.GUI.Component
 				FixValueInternal(isActive);
 			}
 
+			Popup();
+
 			var isActive_Current = Manager.NativeManager.IsItemActive();
 
 			if (isActive && !isActive_Current)
@@ -118,6 +126,20 @@ namespace Effekseer.GUI.Component
 			isActive = isActive_Current;
 
 			valueChangingProp.Disable();
+		}
+
+		void Popup()
+		{
+			if (isPopupShown) return;
+
+			if (Manager.NativeManager.BeginPopupContextItem(id_c))
+			{
+				Functions.ShowReset(binding, id_reset);
+
+				Manager.NativeManager.EndPopup();
+
+				isPopupShown = true;
+			}
 		}
 	}
 }

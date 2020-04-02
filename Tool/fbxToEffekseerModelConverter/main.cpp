@@ -1,36 +1,39 @@
 
+#include "Utils.h"
 #include "fbxToEfkMdl.Base.h"
 #include "fbxToEfkMdl.FBXConverter.h"
 #include "fbxToMdl.VertexAnimation.h"
 
-#include <iostream>
 #include <fstream>
+#include <iostream>
 
 #if _DEBUG
-#pragma comment(lib,"debug/libfbxsdk-mt.lib")
+#pragma comment(lib, "debug/libfbxsdk-mt.lib")
 #else
-#pragma comment(lib,"release/libfbxsdk-mt.lib")
+#pragma comment(lib, "release/libfbxsdk-mt.lib")
 #endif
 
-
 #ifdef _WIN32
-#include <windows.h>
-#include <string>
 #include <cstring>
+#include <string>
+#include <windows.h>
 
-std::string ANSI_to_UTF8(std::string inANSI) {
-    wchar_t tempWideChar[1024];
+std::string ANSI_to_UTF8(std::string inANSI)
+{
+	wchar_t tempWideChar[1024];
 	char outUTF8[1024];
-    MultiByteToWideChar( CP_ACP, 0, inANSI.c_str(), -1, tempWideChar, 1024);
-    WideCharToMultiByte( CP_UTF8, 0, tempWideChar, -1, outUTF8, 1024, NULL, NULL);
+	MultiByteToWideChar(CP_ACP, 0, inANSI.c_str(), -1, tempWideChar, 1024);
+	WideCharToMultiByte(CP_UTF8, 0, tempWideChar, -1, outUTF8, 1024, NULL, NULL);
 	return outUTF8;
 }
 
 #endif
 
+bool ExportStaticMesh(const char* path, std::shared_ptr<fbxToEfkMdl::Scene> scene, int modelCount, float modelScale);
+
 int main(int argc, char** argv)
 {
-	if(argc == 1)
+	if (argc == 1)
 	{
 		printf("Effekseer Model Conveter\n");
 		printf("Usage: fbxToEffekseerModelConverter InputFile(*.fbx) {OutputFile(*.efkmodel)} {options}\n");
@@ -134,7 +137,7 @@ int main(int argc, char** argv)
 	fbxImporter->Import(fbxScene);
 
 	auto scene = converter.LoadScene(fbxScene, sdkManager);
-	
+
 	fbxScene->Destroy();
 	fbxImporter->Destroy();
 	sdkManager->Destroy();
@@ -143,44 +146,55 @@ int main(int argc, char** argv)
 	if (scene->AnimationClips.size() > 0)
 	{
 		fbxToEfkMdl::VertexAnimation va;
-		va.Export(exportPath.c_str(), scene, modelScale);
+		va.Export(exportPath.c_str(), scene, scene->AnimationClips[0], modelScale);
 
 		return 0;
 	}
-	
-	// Find mesh
-	std::function<std::vector<std::shared_ptr<fbxToEfkMdl::Mesh>>(std::shared_ptr<fbxToEfkMdl::Node>)> findMesh = [&](std::shared_ptr<fbxToEfkMdl::Node> node) -> std::vector<std::shared_ptr<fbxToEfkMdl::Mesh>>
+	else
 	{
-		std::vector<std::shared_ptr<fbxToEfkMdl::Mesh>> data;
+		fbxToEfkMdl::VertexAnimation va;
+		va.Export(exportPath.c_str(), scene, nullptr, modelScale);
 
-		if (node->MeshData != nullptr) data.push_back(node->MeshData);
+		return 0;
+	}
 
-		for (auto c : node->Children)
-		{
-			auto m = findMesh(c);
-			
-			for (auto m_ : m)
-			{
-				data.push_back(m_);
-			}
-		}
+	// not used
+	if (ExportStaticMesh(exportPath.c_str(), scene, modelCount, modelScale))
+	{
+		return 0;
+	}
 
-		return data;
-	};
+	return -1;
+}
 
-	std::vector<std::shared_ptr<fbxToEfkMdl::Mesh>> meshes = findMesh(scene->Root);
+bool ExportStaticMesh(const char* path, std::shared_ptr<fbxToEfkMdl::Scene> scene, int modelCount, float modelScale)
+{
+	auto mesheStates = GetAllMeshes(scene->Root);
+	auto nodeStates = GetAllNodes(scene->Root, nullptr);
 
+	for (auto& node : nodeStates)
+	{
+		node.AssignDefaultValues();
+	}
+
+	for (auto& node : nodeStates)
+	{
+		node.CalculateLocalMatrix();
+		node.MatGlobal.SetIdentity();
+	}
+
+	CalculateAllGlobalMateixes(nodeStates);
 
 	// Export model.
 	const int Version = 5;
 	int32_t frameCount = 1;
 	std::ofstream fout;
-	fout.open(exportPath.c_str(), std::ios::out | std::ios::binary);
-	
+	fout.open(path, std::ios::out | std::ios::binary);
+
 	if (!fout)
 	{
 		printf("Failed to write a file..\n");
-		return -1;
+		return false;
 	}
 
 	fout.write((const char*)&Version, sizeof(int32_t));
@@ -191,37 +205,50 @@ int main(int argc, char** argv)
 	int32_t vcount = 0;
 	int32_t fcount = 0;
 
-	for (auto mesh : meshes)
+	for (auto mesh : mesheStates)
 	{
-		vcount += mesh->Vertexes.size();
-		fcount += mesh->Faces.size();
+		vcount += mesh.Target->Vertexes.size();
+		fcount += mesh.Target->Faces.size();
 	}
 
 	fout.write((const char*)&vcount, sizeof(int32_t));
 
-	for (auto& mesh : meshes)
+	for (auto node : nodeStates)
 	{
+		if (node.TargetNode->MeshData == nullptr)
+			continue;
+
+		auto mesh = node.TargetNode->MeshData;
+
 		for (auto v : mesh->Vertexes)
 		{
+			auto position = node.MatGlobal.MultNormalize(v.Position);
+
 			float p[3];
-			p[0] = (float)(v.Position[0] * modelScale);
-			p[1] = (float)(v.Position[1] * modelScale);
-			p[2] = (float)(v.Position[2] * modelScale);
+			p[0] = (float)(position[0] * modelScale);
+			p[1] = (float)(position[1] * modelScale);
+			p[2] = (float)(position[2] * modelScale);
+
+			auto normal = node.MatGlobal.MultNormalize(v.Normal);
 
 			float n[3];
-			n[0] = (float)(v.Normal[0]);
-			n[1] = (float)(v.Normal[1]);
-			n[2] = (float)(v.Normal[2]);
+			n[0] = (float)(normal[0]);
+			n[1] = (float)(normal[1]);
+			n[2] = (float)(normal[2]);
+
+			auto binormal = node.MatGlobal.MultNormalize(v.Binormal);
 
 			float b[3];
-			b[0] = (float)(v.Binormal[0]);
-			b[1] = (float)(v.Binormal[1]);
-			b[2] = (float)(v.Binormal[2]);
+			b[0] = (float)(binormal[0]);
+			b[1] = (float)(binormal[1]);
+			b[2] = (float)(binormal[2]);
+
+			auto tangent = node.MatGlobal.MultNormalize(v.Tangent);
 
 			float t[3];
-			t[0] = (float)(v.Tangent[0]);
-			t[1] = (float)(v.Tangent[1]);
-			t[2] = (float)(v.Tangent[2]);
+			t[0] = (float)(tangent[0]);
+			t[1] = (float)(tangent[1]);
+			t[2] = (float)(tangent[2]);
 
 			float uv[2];
 			uv[0] = (float)(v.UV[0]);
@@ -245,8 +272,13 @@ int main(int argc, char** argv)
 	fout.write((const char*)&fcount, sizeof(int32_t));
 	int32_t foffset = 0;
 
-	for (auto& mesh : meshes)
+	for (auto node : nodeStates)
 	{
+		if (node.TargetNode->MeshData == nullptr)
+			continue;
+
+		auto mesh = node.TargetNode->MeshData;
+
 		for (auto f : mesh->Faces)
 		{
 			int32_t i0 = f.Index[0] + foffset;
@@ -263,5 +295,5 @@ int main(int argc, char** argv)
 
 	fout.close();
 
-    return 0;
+	return true;
 }

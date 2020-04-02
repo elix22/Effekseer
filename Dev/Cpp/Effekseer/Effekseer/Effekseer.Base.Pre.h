@@ -12,6 +12,8 @@
 #include <climits>
 #include <vector>
 #include <cfloat>
+#include <array>
+#include <memory>
 
 //----------------------------------------------------------------------------------
 //
@@ -87,19 +89,29 @@ class Model;
 typedef	int	Handle;
 
 /**
-	@brief	メモリ確保関数
+	@brief	Memory Allocation function
 */
-typedef void* ( EFK_STDCALL *MallocFunc ) ( unsigned int size );
+typedef void*(EFK_STDCALL* MallocFunc)(unsigned int size);
 
 /**
-	@brief	メモリ破棄関数
+	@brief	Memory Free function
 */
-typedef	void ( EFK_STDCALL *FreeFunc ) ( void* p, unsigned int size );
+typedef void(EFK_STDCALL* FreeFunc)(void* p, unsigned int size);
 
 /**
-	@brief	ランダム関数
+	@brief	AlignedMemory Allocation function
 */
-typedef	int ( EFK_STDCALL *RandFunc ) (void);
+typedef void*(EFK_STDCALL* AlignedMallocFunc)(unsigned int size, unsigned int alignment);
+
+/**
+	@brief	AlignedMemory Free function
+*/
+typedef void(EFK_STDCALL* AlignedFreeFunc)(void* p, unsigned int size);
+
+/**
+	@brief	Random Function
+*/
+typedef int(EFK_STDCALL* RandFunc)(void);
 
 /**
 	@brief	エフェクトのインスタンス破棄時のコールバックイベント
@@ -115,6 +127,14 @@ typedef	void ( EFK_STDCALL *EffectInstanceRemovingCallback ) ( Manager* manager,
 #define ES_SAFE_DELETE_ARRAY(val)				if ( (val) != NULL ) { delete [] (val); (val) = NULL; }
 
 #define EFK_ASSERT(x) assert(x)
+
+//! the maximum number of texture slot which can be specified by an user
+const int32_t UserTextureSlotMax = 6;
+
+//! the maximum number of texture slot including textures system specified
+const int32_t TextureSlotMax = 8;
+
+const int32_t LocalFieldSlotMax = 4;
 
 //----------------------------------------------------------------------------------
 //
@@ -193,6 +213,12 @@ enum class TextureType : int32_t
 	Color,
 	Normal,
 	Distortion,
+};
+
+enum class MaterialFileType : int32_t
+{
+	Code,
+	Compiled,
 };
 
 enum class TextureFormatType : int32_t
@@ -276,30 +302,6 @@ T Clamp( T t, U max_, V min_ )
 	}
 
 	return t;
-}
-
-//----------------------------------------------------------------------------------
-//
-//----------------------------------------------------------------------------------
-inline float NormalizeAngle(float angle)
-{
-    int32_t ofs = (*(int32_t*)&angle & 0x80000000) | 0x3F000000; 
-    return (angle - ((int)(angle * 0.159154943f + *(float*)&ofs) * 6.283185307f)); 
-}
-
-//----------------------------------------------------------------------------------
-//
-//----------------------------------------------------------------------------------
-inline void SinCos(float x, float& s, float& c)
-{
-	x = NormalizeAngle(x);
-	float x2 = x * x;
-	float x4 = x * x * x * x;
-	float x6 = x * x * x * x * x * x;
-	float x8 = x * x * x * x * x * x * x * x;
-	float x10 = x * x * x * x * x * x * x * x * x * x;
-	s = x * (1.0f - x2 / 6.0f + x4 / 120.0f - x6 / 5040.0f + x8 / 362880.0f - x10 / 39916800.0f);
-	c = 1.0f - x2 / 2.0f + x4 / 24.0f - x6 / 720.0f + x8 / 40320.0f - x10 / 3628800.0f;
 }
 
 //----------------------------------------------------------------------------------
@@ -433,6 +435,35 @@ public:
 	virtual int Release() = 0;
 };
 
+/**
+	@brief	a deleter for IReference
+*/
+template <typename T>
+struct ReferenceDeleter
+{
+	void operator()(T* ptr) const
+	{ 
+		if (ptr != nullptr)
+		{
+			ptr->Release();
+		}
+	}
+};
+
+template<typename T> 
+inline std::unique_ptr<T, ReferenceDeleter<T>> CreateUniqueReference(T* ptr, bool addRef = false)
+{ 
+	if (ptr == nullptr)
+		return std::unique_ptr<T, ReferenceDeleter<T>>(nullptr); 
+
+	if (addRef)
+	{
+		ptr->AddRef();
+	}
+
+	return std::unique_ptr<T, ReferenceDeleter<T>>(ptr); 
+}
+
 //----------------------------------------------------------------------------------
 //
 //----------------------------------------------------------------------------------
@@ -485,6 +516,9 @@ public:
 class IRandObject
 {
 public:
+	IRandObject() = default;
+	virtual ~IRandObject() = default;
+
 	virtual float GetRand() = 0;
 
 	virtual float GetRand(float min_, float max_) = 0;
@@ -493,6 +527,13 @@ public:
 //----------------------------------------------------------------------------------
 //
 //----------------------------------------------------------------------------------
+
+enum class ColorSpaceType : int32_t
+{
+	Gamma,
+	Linear,
+};
+
 /**
 	@brief	\~english	Texture data
 			\~japanese	テクスチャデータ
@@ -504,19 +545,50 @@ struct TextureData
 	TextureFormatType	TextureFormat;
 	void*	UserPtr;
 	int64_t	UserID;
+
+	//! for OpenGL, it is ignored in other apis
+	bool HasMipmap = true;
+};
+
+enum class ShadingModelType : int32_t
+{
+	Lit,
+	Unlit,
+};
+
+/**
+	@brief	material type
+*/
+enum class RendererMaterialType : int32_t
+{
+	Default = 0,
+	BackDistortion = 6,
+	Lighting = 7,
+	File = 128,
 };
 
 /**
 	@brief	\~english	Material data
 			\~japanese	マテリアルデータ
 */
-struct MaterialData
+class MaterialData
 {
+public:
+	ShadingModelType ShadingModel = ShadingModelType::Lit;
+	bool IsSimpleVertex = false;
+	bool IsRefractionRequired = false;
+	int32_t CustomData1 = 0;
+	int32_t CustomData2 = 0;
 	int32_t TextureCount = 0;
 	int32_t UniformCount = 0;
+	std::array<TextureWrapType, UserTextureSlotMax> TextureWrapTypes;
 	void* UserPtr = nullptr;
-
 	void* ModelUserPtr = nullptr;
+	void* RefractionUserPtr = nullptr;
+	void* RefractionModelUserPtr = nullptr;
+
+	MaterialData() = default;
+	virtual ~MaterialData() = default;
 };
 
 /**
@@ -558,6 +630,38 @@ struct NodeRendererDepthParameter
 	ZSortType ZSort = ZSortType::None;
 	float SuppressionOfScalingByDepth = 1.0f;
 	float DepthClipping = FLT_MAX;
+};
+
+/**
+	@brief	\~english	Common parameters which is passed into a renderer
+			\~japanese	レンダラーに渡される共通に関するパラメーター
+*/
+struct NodeRendererBasicParameter
+{
+	RendererMaterialType MaterialType = RendererMaterialType::Default;
+	int32_t Texture1Index = -1;
+	int32_t Texture2Index = -1;
+#ifdef __EFFEKSEER_BUILD_VERSION16__
+	int32_t Texture3Index = -1;
+#endif
+	float DistortionIntensity = 0.0f;
+	MaterialParameter* MaterialParameterPtr = nullptr;
+	AlphaBlendType AlphaBlend = AlphaBlendType::Blend;
+
+	TextureFilterType TextureFilter1 = TextureFilterType::Nearest;
+	TextureWrapType TextureWrap1 = TextureWrapType::Repeat;
+	TextureFilterType TextureFilter2 = TextureFilterType::Nearest;
+	TextureWrapType TextureWrap2 = TextureWrapType::Repeat;
+#ifdef __EFFEKSEER_BUILD_VERSION16__
+	TextureFilterType TextureFilter3 = TextureFilterType::Nearest;
+	TextureWrapType TextureWrap3 = TextureWrapType::Repeat;
+
+	bool EnableInterpolation = false;
+	int32_t UVLoopType = 0;
+	int32_t InterpolationType = 0;
+	int32_t FlipbookDivideX = 1;
+	int32_t FlipbookDivideY = 1;
+#endif
 };
 
 //----------------------------------------------------------------------------------

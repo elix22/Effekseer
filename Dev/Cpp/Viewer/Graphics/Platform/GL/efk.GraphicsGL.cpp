@@ -29,7 +29,7 @@ namespace efk
 
 	bool RenderTextureGL::Initialize(int32_t width, int32_t height, TextureFormat format, uint32_t multisample)
 	{
-		if (glGetError() != GL_NO_ERROR) return false;
+        GLCheckError();
 
 		GLint glInternalFormat;
 		GLenum glFormat, glType;
@@ -60,7 +60,12 @@ namespace efk
 			glGenTextures(1, &texture);
 			glBindTexture(GL_TEXTURE_2D, texture);
 			glTexImage2D(GL_TEXTURE_2D, 0, glInternalFormat, width, height, 0, glFormat, glType, nullptr);
-			glGenerateMipmap(GL_TEXTURE_2D);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+
+			//glGenerateMipmap(GL_TEXTURE_2D);
 			glBindTexture(GL_TEXTURE_2D, 0);
 		}
 		else
@@ -164,8 +169,8 @@ namespace efk
 	{
 		glBindFramebuffer(GL_FRAMEBUFFER, 0);
 		glDeleteFramebuffers(1, &frameBuffer);
-
-		glDeleteFramebuffers(1, &frameBufferForCopy);
+		glDeleteFramebuffers(1, &frameBufferForCopySrc);
+		glDeleteFramebuffers(1, &frameBufferForCopyDst);
 
 		recordingTarget.reset();
 		recordingDepth.reset();
@@ -187,10 +192,7 @@ namespace efk
 
 		renderer = ::EffekseerRendererGL::Renderer::Create(spriteCount, EffekseerRendererGL::OpenGLDeviceType::OpenGL3);
 
-		if (this->isSRGBMode)
-		{
-			glEnable(GL_FRAMEBUFFER_SRGB);
-		}
+		glDisable(GL_FRAMEBUFFER_SRGB);
 
 		glGenFramebuffers(1, &frameBuffer);
 		
@@ -202,7 +204,9 @@ namespace efk
 		// TODO
 		// create VAO
 
-		glGenFramebuffers(1, &frameBufferForCopy);
+		// for glBlitFramebuffer
+		glGenFramebuffers(1, &frameBufferForCopySrc);
+		glGenFramebuffers(1, &frameBufferForCopyDst);
 
 		return true;
 	}
@@ -238,7 +242,7 @@ namespace efk
 			glGetFramebufferAttachmentParameteriv(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
 				GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME, &renderbuffer);
 
-			glBindFramebuffer(GL_FRAMEBUFFER, frameBufferForCopy);
+			glBindFramebuffer(GL_FRAMEBUFFER, frameBufferForCopySrc);
 			glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, renderbuffer);
 		}
 		else if (rbtype == GL_TEXTURE_2D) {
@@ -246,7 +250,7 @@ namespace efk
 			glGetFramebufferAttachmentParameteriv(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
 				GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME, &renderTexture);
 
-			glBindFramebuffer(GL_FRAMEBUFFER, frameBufferForCopy);
+			glBindFramebuffer(GL_FRAMEBUFFER, frameBufferForCopySrc);
 			glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, renderTexture, 0);
 		}
 #endif
@@ -403,23 +407,27 @@ namespace efk
 		auto rtSrc = (RenderTextureGL*)src;
 		auto rtDest = (RenderTextureGL*)dest;
 
-		glBindTexture(GL_TEXTURE_2D, 0);
-		glBindFramebuffer(GL_READ_FRAMEBUFFER, frameBuffer);
-		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, frameBufferForCopy);
+		GLint frameBufferBinding = 0;
+		glGetIntegerv(GL_FRAMEBUFFER_BINDING, &frameBufferBinding);
+		glBindFramebuffer(GL_READ_FRAMEBUFFER, frameBufferForCopySrc);
+		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, frameBufferForCopyDst);
+		GLCheckError();
 		
 		glFramebufferRenderbuffer(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, rtSrc->GetBuffer());
 		glFramebufferTexture2D(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, rtDest->GetTexture(), 0);
+		GLCheckError();
 
 		glBlitFramebuffer(0, 0, src->GetWidth(), src->GetHeight(),
 			0, 0, dest->GetWidth(), dest->GetHeight(), GL_COLOR_BUFFER_BIT, GL_NEAREST);
+		GLCheckError();
 
 		glFramebufferRenderbuffer(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, 0);
 		glFramebufferTexture2D(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, 0, 0);
+		GLCheckError();
 		
 		glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
 		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
-
-		GLCheckError();
+		glBindFramebuffer(GL_FRAMEBUFFER, frameBufferBinding);
 	}
 
 	void GraphicsGL::ResetDevice()

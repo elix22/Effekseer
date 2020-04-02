@@ -41,7 +41,7 @@ namespace efk
 		static const int BlurIterations = 4;
 
 		std::unique_ptr<EffekseerRendererDX11::Shader> shaderExtract;
-		std::unique_ptr<EffekseerRendererDX11::Shader> shaderCopy;
+		std::unique_ptr<EffekseerRendererDX11::Shader> shaderDownsample;
 		std::unique_ptr<EffekseerRendererDX11::Shader> shaderBlend;
 		std::unique_ptr<EffekseerRendererDX11::Shader> shaderBlurH;
 		std::unique_ptr<EffekseerRendererDX11::Shader> shaderBlurV;
@@ -84,4 +84,20 @@ namespace efk
 
 		void OnResetDevice() override {}
 	};
-}
+
+	class LinearToSRGBEffectDX11 : public LinearToSRGBEffect
+	{
+		std::unique_ptr<EffekseerRendererDX11::Shader> shader_;
+		BlitterDX11 blitter_;
+
+	public:
+		LinearToSRGBEffectDX11(Graphics* graphics);
+		virtual ~LinearToSRGBEffectDX11();
+
+		void Render(RenderTexture* src, RenderTexture* dest) override;
+
+		void OnLostDevice() override {}
+
+		void OnResetDevice() override {}
+	};
+	}

@@ -11,7 +11,7 @@ namespace Effekseer.GUI.Component
 		string id = "";
 		string id_c = "";
 		string id_d = "";
-
+		string id_reset = "";
 		public string Label { get; set; } = string.Empty;
 
 		public string Description { get; set; } = string.Empty;
@@ -57,6 +57,7 @@ namespace Effekseer.GUI.Component
 			id = "###" + Manager.GetUniqueID().ToString();
 			id_c = "###" + Manager.GetUniqueID().ToString();
 			id_d = "###" + Manager.GetUniqueID().ToString();
+			id_reset = "###" + Manager.GetUniqueID().ToString();
 		}
 
 		public void SetBinding(object o)
@@ -130,11 +131,14 @@ namespace Effekseer.GUI.Component
 		{
 			if (isPopupShown) return;
 
-			if (!binding.CanSelectDynamicEquation) return;
-
 			if (Manager.NativeManager.BeginPopupContextItem(id_c))
 			{
-				DynamicSelector.Popup(id_c, binding.DynamicEquation, binding.IsDynamicEquationEnabled);
+				Functions.ShowReset(binding, id_reset);
+
+				if (binding.CanSelectDynamicEquation)
+				{
+					DynamicSelector.Popup(id_c, binding.DynamicEquation, binding.IsDynamicEquationEnabled);
+				}
 
 				Manager.NativeManager.EndPopup();
 

@@ -7,6 +7,7 @@
 #include "Effekseer.Effect.h"
 #include "Effekseer.EffectNode.h"
 #include "Effekseer.Vector3D.h"
+#include "SIMD/Effekseer.SIMDUtils.h"
 
 #include "Effekseer.Instance.h"
 #include "Effekseer.InstanceContainer.h"
@@ -32,6 +33,11 @@ void EffectNodeRibbon::LoadRendererParameter(unsigned char*& pos, Setting* setti
 	pos += sizeof(int);
 	assert(type == GetType());
 	EffekseerPrintDebug("Renderer : Ribbon\n");
+
+	if (m_effect->GetVersion() >= 15)
+	{
+		TextureUVType.Load(pos, m_effect->GetVersion());
+	}
 
 	if (m_effect->GetVersion() >= 3)
 	{
@@ -139,21 +145,18 @@ void EffectNodeRibbon::BeginRendering(int32_t count, Manager* manager)
 	RibbonRenderer* renderer = manager->GetRibbonRenderer();
 	if (renderer != NULL)
 	{
-		m_nodeParameter.AlphaBlend = AlphaBlend;
-		m_nodeParameter.TextureFilter = RendererCommon.FilterType;
-		m_nodeParameter.TextureWrap = RendererCommon.WrapType;
+		//m_nodeParameter.TextureFilter = RendererCommon.FilterType;
+		//m_nodeParameter.TextureWrap = RendererCommon.WrapType;
 		m_nodeParameter.ZTest = RendererCommon.ZTest;
 		m_nodeParameter.ZWrite = RendererCommon.ZWrite;
 		m_nodeParameter.ViewpointDependent = ViewpointDependent != 0;
-		m_nodeParameter.ColorTextureIndex = RibbonTexture;
 		m_nodeParameter.EffectPointer = GetEffect();
-
-		m_nodeParameter.Distortion = RendererCommon.Distortion;
-		m_nodeParameter.DistortionIntensity = RendererCommon.DistortionIntensity;
 
 		m_nodeParameter.SplineDivision = SplineDivision;
 		m_nodeParameter.DepthParameterPtr = &DepthValues.DepthParameter;
-
+		m_nodeParameter.BasicParameterPtr = &RendererCommon.BasicParameter;
+		m_nodeParameter.TextureUVTypeParameterPtr = &TextureUVType;
+		m_nodeParameter.IsRightHand = manager->GetCoordinateSystem() == CoordinateSystem::RH;
 		renderer->BeginRendering(m_nodeParameter, count, m_userData);
 	}
 }
@@ -168,7 +171,17 @@ void EffectNodeRibbon::BeginRenderingGroup(InstanceGroup* group, Manager* manage
 
 		if (group->GetFirst() != nullptr)
 		{
+#ifdef __EFFEKSEER_BUILD_VERSION16__
+			m_instanceParameter.UV = group->GetFirst()->GetUV(0);
+			m_instanceParameter.AlphaUV = group->GetFirst()->GetUV(1);
+
+			m_instanceParameter.FlipbookIndexAndNextRate = group->GetFirst()->m_flipbookIndexAndNextRate;
+
+			m_instanceParameter.AlphaThreshold = group->GetFirst()->m_AlphaThreshold;
+#else
 			m_instanceParameter.UV = group->GetFirst()->GetUV();
+#endif
+			CalcCustomData(group->GetFirst(), m_instanceParameter.CustomData1, m_instanceParameter.CustomData2);
 		}
 
 		renderer->BeginRenderingGroup(m_nodeParameter, m_instanceParameter.InstanceCount, m_userData);

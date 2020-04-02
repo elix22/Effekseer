@@ -18,18 +18,16 @@ namespace Effekseer.Data
 
 	public class DynamicEquation
 	{
-		public const string DefaultName = "Eq";
-
 		public Value.String Name { get; private set; }
 
 		public Value.String Code { get; private set; }
 
 		DynamicEquationCollection parent = null;
 
-		public DynamicEquation(string name, DynamicEquationCollection parent)
+		public DynamicEquation(DynamicEquationCollection parent)
 		{
-			Name = new Value.String(name);
-			Code = new Value.String();
+			Name = new Value.String("");
+			Code = new Value.String("");
 			Code.IsMultiLine = true;
 			this.parent = parent;
 		}
@@ -97,7 +95,7 @@ namespace Effekseer.Data
 				EditableValue v = new EditableValue();
 
 				v.Value = values[i].Input;
-				v.Title = (i + 1).ToString();
+				v.Title = (i).ToString();
 				v.IsUndoEnabled = false;
 				ret.Add(v);
 			}
@@ -147,15 +145,20 @@ namespace Effekseer.Data
 		{
 			if (values.Count >= 16) return false;
 
+			var old_selected = selected;
 			var old_value = values;
 			var new_value = new List<DynamicEquation>(values);
-			new_value.Add(new DynamicEquation(DynamicEquation.DefaultName, this));
 
+			var value = new DynamicEquation(this);
+			value.Name.SetValue("New Expression");
+			value.Code.SetValue("@O.x = @In0\n@O.y = @In1");
+			new_value.Add(value);
 
 			var cmd = new Command.DelegateCommand(
 				() =>
 				{
 					values = new_value;
+					selected = new_value[new_value.Count - 1];
 					if (OnChanged != null)
 					{
 						OnChanged(this, null);
@@ -164,6 +167,46 @@ namespace Effekseer.Data
 				() =>
 				{
 					values = old_value;
+					selected = old_selected;
+					if (OnChanged != null)
+					{
+						OnChanged(this, null);
+					}
+				});
+
+			Command.CommandManager.Execute(cmd);
+
+			return true;
+		}
+
+		public bool Delete(DynamicEquation o)
+		{
+			if (o == null)
+				return false;
+
+			var old_index = values.IndexOf(o);
+			var old_value = values;
+			var new_value = new List<DynamicEquation>(values);
+			new_value.Remove(o);
+
+			var cmd = new Command.DelegateCommand(
+				() =>
+				{
+					values = new_value;
+					
+					if (old_index < values.Count) selected = new_value[old_index];
+					else if (old_index > 0 && values.Count > 0) selected = new_value[old_index - 1];
+					else selected = null;
+
+					if (OnChanged != null)
+					{
+						OnChanged(this, null);
+					}
+				},
+				() =>
+				{
+					values = old_value;
+					selected = o;
 					if (OnChanged != null)
 					{
 						OnChanged(this, null);
@@ -183,13 +226,13 @@ namespace Effekseer.Data
 
 			EditableValue vn = new EditableValue();
 			vn.Value = selected.Name;
-			vn.Title = "Name";
+			vn.Title = Resources.GetString("DynamicName");
 			vn.IsUndoEnabled = true;
 			ret.Add(vn);
 
 			EditableValue vx = new EditableValue();
 			vx.Value = selected.Code;
-			vx.Title = "Code";
+			vx.Title = Resources.GetString("DynamicEq");
 			vx.IsUndoEnabled = true;
 			ret.Add(vx);
 

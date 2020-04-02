@@ -1,10 +1,7 @@
 ﻿
-#ifndef	__EFFEKSEERRENDERER_GL_BASE_PRE_H__
-#define	__EFFEKSEERRENDERER_GL_BASE_PRE_H__
+#ifndef __EFFEKSEERRENDERER_GL_BASE_PRE_H__
+#define __EFFEKSEERRENDERER_GL_BASE_PRE_H__
 
-//----------------------------------------------------------------------------------
-// Include
-//----------------------------------------------------------------------------------
 #include <Effekseer.h>
 #include <vector>
 
@@ -12,28 +9,7 @@
 #include <Windows.h>
 #endif
 
-#if defined(__EFFEKSEER_RENDERER_GL_GLEW__)
-
-#if _WIN32
-#include <GL/gl.h>
-#elif defined(__APPLE__)
-#include <OpenGL/gl3.h>
-#else
-#include <GL/glew.h>
-#endif
-
-#elif defined(__EFFEKSEER_RENDERER_GL_GLEW_S__)
-
-#if _WIN32
-#include <GL/gl.h>
-#elif defined(__APPLE__)
-#include <OpenGL/gl3.h>
-#else
-#define GLEW_STATIC
-#include <GL/glew.h>
-#endif
-
-#elif defined(__EFFEKSEER_RENDERER_GLES2__)
+#if defined(__EFFEKSEER_RENDERER_GLES2__)
 
 #if defined(__APPLE__)
 #include <OpenGLES/ES2/gl.h>
@@ -54,7 +30,10 @@
 
 #elif defined(__EFFEKSEER_RENDERER_GL2__)
 
-#if defined(__APPLE__)
+#if _WIN32
+#include <GL/gl.h>
+#elif defined(__APPLE__)
+#define GL_SILENCE_DEPRECATION
 #include <OpenGL/gl.h>
 #else
 #include <GL/gl.h>
@@ -62,7 +41,10 @@
 
 #else
 
-#if defined(__APPLE__)
+#if _WIN32
+#include <GL/gl.h>
+#elif defined(__APPLE__)
+#define GL_SILENCE_DEPRECATION
 #include <OpenGL/gl3.h>
 #else
 #define GL_GLEXT_PROTOTYPES
@@ -76,14 +58,9 @@
 #pragma comment(lib, "opengl32.lib")
 #endif
 
-//----------------------------------------------------------------------------------
-//
-//----------------------------------------------------------------------------------
 namespace EffekseerRendererGL
 {
-//----------------------------------------------------------------------------------
-//
-//----------------------------------------------------------------------------------
+
 class Renderer;
 
 enum class OpenGLDeviceType
@@ -95,15 +72,61 @@ enum class OpenGLDeviceType
 	Emscripten,
 };
 
-//----------------------------------------------------------------------------------
-//
-//----------------------------------------------------------------------------------
-}
-//----------------------------------------------------------------------------------
-//
-//----------------------------------------------------------------------------------
-#endif	// __EFFEKSEERRENDERER_GL_BASE_PRE_H__
+} // namespace EffekseerRendererGL
 
+#endif // __EFFEKSEERRENDERER_GL_BASE_PRE_H__
+
+#ifndef __EFFEKSEERRENDERER_GL_DEVICEOBJECT_COLLECTION_H__
+#define __EFFEKSEERRENDERER_GL_DEVICEOBJECT_COLLECTION_H__
+
+#include <set>
+#include <Effekseer.h>
+
+namespace EffekseerRendererGL
+{
+
+class DeviceObject;
+
+class DeviceObjectCollection : public ::Effekseer::ReferenceObject
+{
+	friend class DeviceObject;
+
+private:
+	std::set<DeviceObject*> deviceObjects_;
+
+	/**
+		@brief	register an object
+	*/
+	void Register(DeviceObject* device);
+
+	/**
+		@brief	unregister an object
+	*/
+	void Unregister(DeviceObject* device);
+
+public:
+	DeviceObjectCollection() = default;
+
+	~DeviceObjectCollection() = default;
+
+	/**
+		@brief
+		\~english Call when device lost causes
+		\~japanese デバイスロストが発生した時に実行する。
+	*/
+	void OnLostDevice();
+
+	/**
+		@brief
+		\~english Call when device reset causes
+		\~japanese デバイスがリセットされた時に実行する。
+	*/
+	void OnResetDevice();
+};
+
+} // namespace EffekseerRendererGL
+
+#endif // __EFFEKSEERRENDERER_GL_DEVICEOBJECT_H__
 #ifndef	__EFFEKSEERRENDERER_RENDERER_H__
 #define	__EFFEKSEERRENDERER_RENDERER_H__
 
@@ -132,9 +155,6 @@ public:
 
 	virtual bool OnDistorting() { return false; }
 };
-//-----------------------------------------------------------------------------------
-//
-//-----------------------------------------------------------------------------------
 
 /**
 	@brief	
@@ -147,6 +167,29 @@ enum class UVStyle
 	VerticalFlipped,
 };
 
+/**
+	@brief
+	\~english A type of texture which is rendered when textures are not assigned.
+	\~japanese テクスチャが設定されていないときに描画されるテクスチャの種類
+*/
+enum class ProxyTextureType
+{
+	White,
+	Normal,
+};
+
+/**
+	@brief
+	\~english A class which contains a graphics device
+	\~japanese グラフィックデバイスを格納しているクラス
+*/
+class GraphicsDevice : public ::Effekseer::IReference
+{
+public:
+	GraphicsDevice() = default;
+	virtual ~GraphicsDevice() = default;
+};	
+	
 class CommandList : public ::Effekseer::IReference
 {
 public:
@@ -179,6 +222,12 @@ protected:
 	Impl* impl = nullptr;
 
 public:
+
+	/**
+		@brief	only for Effekseer backend developer. Effekseer User doesn't need it.
+	*/
+	Impl* GetImpl();
+
 	/**
 		@brief	デバイスロストが発生した時に実行する。
 	*/
@@ -210,82 +259,87 @@ public:
 	virtual bool EndRendering() = 0;
 
 	/**
-		@brief	ライトの方向を取得する。
+		@brief	Get the direction of light
 	*/
-	virtual const ::Effekseer::Vector3D& GetLightDirection() const = 0;
+	virtual ::Effekseer::Vector3D GetLightDirection() const;
 
 	/**
-		@brief	ライトの方向を設定する。
+		@brief	Specifiy the direction of light
 	*/
-	virtual void SetLightDirection( const ::Effekseer::Vector3D& direction ) = 0;
+	virtual void SetLightDirection(const ::Effekseer::Vector3D& direction);
 
 	/**
-		@brief	ライトの色を取得する。
+		@brief	Get the color of light
 	*/
-	virtual const ::Effekseer::Color& GetLightColor() const = 0;
+	virtual const ::Effekseer::Color& GetLightColor() const;
 
 	/**
-		@brief	ライトの色を設定する。
+		@brief	Specify the color of light
 	*/
-	virtual void SetLightColor( const ::Effekseer::Color& color ) = 0;
+	virtual void SetLightColor(const ::Effekseer::Color& color);
 
 	/**
-		@brief	ライトの環境光の色を取得する。
+		@brief	Get the color of ambient
 	*/
-	virtual const ::Effekseer::Color& GetLightAmbientColor() const = 0;
+	virtual const ::Effekseer::Color& GetLightAmbientColor() const;
 
 	/**
-		@brief	ライトの環境光の色を設定する。
+		@brief	Specify the color of ambient
 	*/
-	virtual void SetLightAmbientColor( const ::Effekseer::Color& color ) = 0;
+	virtual void SetLightAmbientColor(const ::Effekseer::Color& color);
 
-		/**
+	/**
 		@brief	最大描画スプライト数を取得する。
 	*/
 	virtual int32_t GetSquareMaxCount() const = 0;
 
 	/**
-		@brief	投影行列を取得する。
+		@brief	Get a projection matrix
 	*/
-	virtual const ::Effekseer::Matrix44& GetProjectionMatrix() const = 0;
+	virtual ::Effekseer::Matrix44 GetProjectionMatrix() const;
 
 	/**
-		@brief	投影行列を設定する。
+		@brief	Set a projection matrix
 	*/
-	virtual void SetProjectionMatrix( const ::Effekseer::Matrix44& mat ) = 0;
+	virtual void SetProjectionMatrix( const ::Effekseer::Matrix44& mat );
 
 	/**
-		@brief	カメラ行列を取得する。
+		@brief	Get a camera matrix
 	*/
-	virtual const ::Effekseer::Matrix44& GetCameraMatrix() const = 0;
+	virtual ::Effekseer::Matrix44 GetCameraMatrix() const;
 
 	/**
-		@brief	カメラ行列を設定する。
+		@brief	Set a camera matrix
 	*/
-	virtual void SetCameraMatrix( const ::Effekseer::Matrix44& mat ) = 0;
+	virtual void SetCameraMatrix( const ::Effekseer::Matrix44& mat );
 
 	/**
-		@brief	カメラプロジェクション行列を取得する。
+		@brief	Get a camera projection matrix
 	*/
-	virtual ::Effekseer::Matrix44& GetCameraProjectionMatrix() = 0;
+	virtual ::Effekseer::Matrix44 GetCameraProjectionMatrix() const;
 
 	/**
 		@brief	Get a front direction of camera
+		@note
+		We don't recommend to use it without understanding of internal code.
 	*/
-	virtual ::Effekseer::Vector3D GetCameraFrontDirection() const = 0;
+	virtual ::Effekseer::Vector3D GetCameraFrontDirection() const;
 
 	/**
 		@brief	Get a position of camera
+		@note
+		We don't recommend to use it without understanding of internal code.
 	*/
-	virtual ::Effekseer::Vector3D GetCameraPosition() const = 0;
+	virtual ::Effekseer::Vector3D GetCameraPosition() const;
 
 	/**
 		@brief	Set a front direction and position of camera manually
+		@param front (Right Hand) a direction from focus to eye, (Left Hand) a direction from eye to focus, 
 		@note
 		These are set based on camera matrix automatically.
 		It is failed on some platform.
 	*/
-	virtual void SetCameraParameter(const ::Effekseer::Vector3D& front, const ::Effekseer::Vector3D& position) = 0;
+	virtual void SetCameraParameter(const ::Effekseer::Vector3D& front, const ::Effekseer::Vector3D& position);
 
 	/**
 		@brief	スプライトレンダラーを生成する。
@@ -374,14 +428,18 @@ public:
 	virtual void ResetDrawVertexCount();
 
 	/**
-	@brief	描画モードを設定する。
+	@brief
+	\~english Get a render mode.
+	\~japanese 描画モードを取得する。
 	*/
-	virtual void SetRenderMode( Effekseer::RenderMode renderMode ) = 0;
+	virtual Effekseer::RenderMode GetRenderMode() const;
 
 	/**
-	@brief	描画モードを取得する。
+	@brief	
+	\~english Specify a render mode.
+	\~japanese 描画モードを設定する。
 	*/
-	virtual Effekseer::RenderMode GetRenderMode() = 0;
+	virtual void SetRenderMode(Effekseer::RenderMode renderMode);
 
 	/**
 	@brief
@@ -437,10 +495,24 @@ public:
 	\~English	Specify a background texture.
 	\~Japanese	背景のテクスチャを設定する。
 	@note
-	\~English	Specified texture is not deleted by the renderer. This function is available except DirectX9, DirectX11 and OpenGL.
-	\~Japanese	設定されたテクスチャはレンダラーによって削除されない。この関数はDirectX9、DirectX11、OpenGL以外で使用できる。
+	\~English	Specified texture is not deleted by the renderer. This function is available except DirectX9, DirectX11.
+	\~Japanese	設定されたテクスチャはレンダラーによって削除されない。この関数はDirectX9、DirectX11以外で使用できる。
 	*/
 	virtual void SetBackgroundTexture(::Effekseer::TextureData* textureData);
+
+	/**
+	@brief
+	\~English	Create a proxy texture
+	\~Japanese	代替のテクスチャを生成する
+	*/
+	virtual Effekseer::TextureData* CreateProxyTexture(ProxyTextureType type) { return nullptr; }
+
+	/**
+	@brief
+	\~English	Delete a proxy texture
+	\~Japanese	代替のテクスチャを削除する
+	*/
+	virtual void DeleteProxyTexture(Effekseer::TextureData* data) { }
 };
 
 //----------------------------------------------------------------------------------
@@ -468,6 +540,9 @@ public:
 //----------------------------------------------------------------------------------
 namespace EffekseerRendererGL
 {
+
+class DeviceObjectCollection;
+
 //----------------------------------------------------------------------------------
 //
 //----------------------------------------------------------------------------------
@@ -475,7 +550,7 @@ namespace EffekseerRendererGL
 /**
 @brief	テクスチャ読込クラスを生成する。
 */
-::Effekseer::TextureLoader* CreateTextureLoader(::Effekseer::FileInterface* fileInterface = NULL);
+::Effekseer::TextureLoader* CreateTextureLoader(::Effekseer::FileInterface* fileInterface = nullptr, ::Effekseer::ColorSpaceType colorSpaceType = ::Effekseer::ColorSpaceType::Gamma);
 
 /**
 @brief	モデル読込クラスを生成する。
@@ -494,12 +569,25 @@ protected:
 
 public:
 	/**
-		@brief	インスタンスを生成する。
-		@param	squareMaxCount		最大描画スプライト数
-		@param	OpenGLDeviceType	デバイスの種類
-		@return	インスタンス
+	@brief
+	\~english	Create an instance
+	\~japanese	インスタンスを生成する。
+	@param	squareMaxCount
+	\~english	the number of maximum sprites
+	\~japanese	最大描画スプライト数
+	@param	deviceType
+	\~english	device type of opengl
+	\~japanese	デバイスの種類
+	@param	deviceObjectCollection
+	\~english	for a middleware. it should be nullptr.
+	\~japanese	ミドルウェア向け。 nullptrにすべきである。
+	@return
+	\~english	instance
+	\~japanese	インスタンス
 	*/
-	static Renderer* Create(int32_t squareMaxCount, OpenGLDeviceType deviceType = OpenGLDeviceType::OpenGL2);
+	static Renderer* Create(int32_t squareMaxCount,
+							OpenGLDeviceType deviceType = OpenGLDeviceType::OpenGL2,
+							DeviceObjectCollection* deviceObjectCollection = nullptr);
 
 	/**
 		@brief	最大描画スプライト数を取得する。
@@ -514,14 +602,18 @@ public:
 	virtual void SetSquareMaxCount(int32_t count) = 0;
 
 	/**
-	@brief	背景を取得する。
+	@brief
+	\~english	Get a background.
+	\~japanese	背景を取得する。
 	*/
 	virtual Effekseer::TextureData* GetBackground() = 0;
 
 	/**
-	@brief	背景を設定する。
+	@brief	
+	\~english	Specify a background.
+	\~japanese	背景を設定する。
 	*/
-	virtual void SetBackground(GLuint background) = 0;
+	virtual void SetBackground(GLuint background, bool hasMipmap = false) = 0;
 
 	/**
 	@brief	

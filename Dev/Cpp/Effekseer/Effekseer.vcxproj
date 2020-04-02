@@ -21,6 +21,7 @@
   <PropertyGroup Label="Globals">
     <ProjectGuid>{91E36741-5DFC-46E3-A7F3-28A67FD637C8}</ProjectGuid>
     <RootNamespace>Effekseer</RootNamespace>
+    <WindowsTargetPlatformVersion>10.0.18362.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
@@ -157,6 +158,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="Effekseer.h" />
+    <ClInclude Include="Effekseer.Internal.h" />
     <ClInclude Include="Effekseer\Culling\Culling3D.Grid.h" />
     <ClInclude Include="Effekseer\Culling\Culling3D.h" />
     <ClInclude Include="Effekseer\Culling\Culling3D.Layer.h" />
@@ -169,7 +171,6 @@
     <ClInclude Include="Effekseer\Effekseer.Client.h" />
     <ClInclude Include="Effekseer\Effekseer.ClientImplemented.h" />
     <ClInclude Include="Effekseer\Effekseer.Color.h" />
-    <ClInclude Include="Effekseer\Effekseer.CustomAllocator.h" />
     <ClInclude Include="Effekseer\Effekseer.DefaultEffectLoader.h" />
     <ClInclude Include="Effekseer\Effekseer.DefaultFile.h" />
     <ClInclude Include="Effekseer\Effekseer.Effect.h" />
@@ -185,6 +186,7 @@
     <ClInclude Include="Effekseer\Effekseer.FCurves.h" />
     <ClInclude Include="Effekseer\Effekseer.File.h" />
     <ClInclude Include="Effekseer\Effekseer.Instance.h" />
+    <ClInclude Include="Effekseer\Effekseer.InstanceChunk.h" />
     <ClInclude Include="Effekseer\Effekseer.InstanceContainer.h" />
     <ClInclude Include="Effekseer\Effekseer.InstanceGlobal.h" />
     <ClInclude Include="Effekseer\Effekseer.InstanceGroup.h" />
@@ -207,13 +209,29 @@
     <ClInclude Include="Effekseer\Effekseer.TextureLoader.h" />
     <ClInclude Include="Effekseer\Effekseer.Vector2D.h" />
     <ClInclude Include="Effekseer\Effekseer.Vector3D.h" />
+    <ClInclude Include="Effekseer\IO\Effekseer.EfkEfcFactory.h" />
+    <ClInclude Include="Effekseer\Material\Effekseer.CompiledMaterial.h" />
+    <ClInclude Include="Effekseer\Material\Effekseer.Material.h" />
+    <ClInclude Include="Effekseer\Material\Effekseer.MaterialCompiler.h" />
+    <ClInclude Include="Effekseer\Parameter\Effekseer.Parameters.h" />
     <ClInclude Include="Effekseer\Renderer\Effekseer.ModelRenderer.h" />
     <ClInclude Include="Effekseer\Renderer\Effekseer.ParticleRenderer.h" />
     <ClInclude Include="Effekseer\Renderer\Effekseer.RibbonRenderer.h" />
     <ClInclude Include="Effekseer\Renderer\Effekseer.RingRenderer.h" />
     <ClInclude Include="Effekseer\Renderer\Effekseer.SpriteRenderer.h" />
     <ClInclude Include="Effekseer\Renderer\Effekseer.TrackRenderer.h" />
+    <ClInclude Include="Effekseer\SIMD\Effekseer.Mat43f.h" />
+    <ClInclude Include="Effekseer\SIMD\Effekseer.Mat44f.h" />
+    <ClInclude Include="Effekseer\SIMD\Effekseer.SIMD4f.h" />
+    <ClInclude Include="Effekseer\SIMD\Effekseer.SIMD4f_Gen.h" />
+    <ClInclude Include="Effekseer\SIMD\Effekseer.SIMD4f_NEON.h" />
+    <ClInclude Include="Effekseer\SIMD\Effekseer.SIMD4f_SSE.h" />
+    <ClInclude Include="Effekseer\SIMD\Effekseer.SIMDUtils.h" />
+    <ClInclude Include="Effekseer\SIMD\Effekseer.Vec2f.h" />
+    <ClInclude Include="Effekseer\SIMD\Effekseer.Vec3f.h" />
+    <ClInclude Include="Effekseer\SIMD\Effekseer.Vec4f.h" />
     <ClInclude Include="Effekseer\Sound\Effekseer.SoundPlayer.h" />
+    <ClInclude Include="Effekseer\Utils\Effekseer.CustomAllocator.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Effekseer\Culling\Culling3D.Grid.cpp" />
@@ -225,7 +243,6 @@
     <ClCompile Include="Effekseer\Culling\Culling3D.WorldInternal.cpp" />
     <ClCompile Include="Effekseer\Effekseer.Client.cpp" />
     <ClCompile Include="Effekseer\Effekseer.Color.cpp" />
-    <ClCompile Include="Effekseer\Effekseer.CustomAllocator.cpp" />
     <ClCompile Include="Effekseer\Effekseer.DefaultEffectLoader.cpp" />
     <ClCompile Include="Effekseer\Effekseer.DefaultFile.cpp" />
     <ClCompile Include="Effekseer\Effekseer.Effect.cpp" />
@@ -238,6 +255,7 @@
     <ClCompile Include="Effekseer\Effekseer.EffectNodeTrack.cpp" />
     <ClCompile Include="Effekseer\Effekseer.FCurves.cpp" />
     <ClCompile Include="Effekseer\Effekseer.Instance.cpp" />
+    <ClCompile Include="Effekseer\Effekseer.InstanceChunk.cpp" />
     <ClCompile Include="Effekseer\Effekseer.InstanceContainer.cpp" />
     <ClCompile Include="Effekseer\Effekseer.InstanceGlobal.cpp" />
     <ClCompile Include="Effekseer\Effekseer.InstanceGroup.cpp" />
@@ -252,6 +270,14 @@
     <ClCompile Include="Effekseer\Effekseer.Socket.cpp" />
     <ClCompile Include="Effekseer\Effekseer.Vector2D.cpp" />
     <ClCompile Include="Effekseer\Effekseer.Vector3D.cpp" />
+    <ClCompile Include="Effekseer\IO\Effekseer.EfkEfcFactory.cpp" />
+    <ClCompile Include="Effekseer\Material\Effekseer.CompiledMaterial.cpp" />
+    <ClCompile Include="Effekseer\Material\Effekseer.Material.cpp" />
+    <ClCompile Include="Effekseer\Material\Effekseer.MaterialCompiler.cpp" />
+    <ClCompile Include="Effekseer\Parameter\Effekseer.Parameters.cpp" />
+    <ClCompile Include="Effekseer\SIMD\Effekseer.Mat43f.cpp" />
+    <ClCompile Include="Effekseer\SIMD\Effekseer.Mat44f.cpp" />
+    <ClCompile Include="Effekseer\Utils\Effekseer.CustomAllocator.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

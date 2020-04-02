@@ -58,10 +58,10 @@ struct SpritePositionParameter
 
 		struct
 		{
-			vector2d ll;
-			vector2d lr;
-			vector2d ul;
-			vector2d ur;
+			Vec2f ll;
+			Vec2f lr;
+			Vec2f ul;
+			Vec2f ur;
 		} fixed;
 	};
 };
@@ -106,7 +106,7 @@ public:
 
 			struct
 			{
-				float	offset[4];
+				std::array<float, 4> offset;
 			} fcurve_rgba;
 
 		} allColorValues;

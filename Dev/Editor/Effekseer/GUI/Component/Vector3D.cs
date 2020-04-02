@@ -11,7 +11,7 @@ namespace Effekseer.GUI.Component
 		string id = "";
 		string id_d = "";
 		string id_c = "";
-
+		string id_reset = "";
 
 		public string Label { get; set; } = string.Empty;
 
@@ -61,6 +61,7 @@ namespace Effekseer.GUI.Component
 			id = "###" + Manager.GetUniqueID().ToString();
 			id_d = "###" + Manager.GetUniqueID().ToString();
 			id_c = "###" + Manager.GetUniqueID().ToString();
+			id_reset = "###" + Manager.GetUniqueID().ToString();
 		}
 
 		public void SetBinding(object o)
@@ -138,21 +139,6 @@ namespace Effekseer.GUI.Component
 
 			if (binding.IsDynamicEquationEnabled)
 			{
-				Manager.NativeManager.Text(Resources.GetString("DynamicEq"));
-				Manager.NativeManager.SameLine();
-
-				var nextParam = DynamicSelector.Select("", "", binding.DynamicEquation.Value, false, false);
-
-				if (binding.DynamicEquation.Value != nextParam)
-				{
-					binding.DynamicEquation.SetValue(nextParam);
-				}
-
-				Popup();
-			}
-
-			if (binding.IsDynamicEquationEnabled)
-			{
 				DynamicSelector.SelectInComponent(id_d, binding.DynamicEquation);
 				Popup();
 			}
@@ -164,11 +150,14 @@ namespace Effekseer.GUI.Component
 		{
 			if (isPopupShown) return;
 
-			if (!binding.CanSelectDynamicEquation) return;
-
 			if (Manager.NativeManager.BeginPopupContextItem(id_c))
 			{
-				DynamicSelector.Popup(id_c, binding.DynamicEquation, binding.IsDynamicEquationEnabled);
+				Functions.ShowReset(binding, id_reset);
+
+				if (binding.CanSelectDynamicEquation)
+				{
+					DynamicSelector.Popup(id_c, binding.DynamicEquation, binding.IsDynamicEquationEnabled);
+				}
 
 				Manager.NativeManager.EndPopup();
 

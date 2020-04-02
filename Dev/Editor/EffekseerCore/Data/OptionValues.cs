@@ -5,14 +5,35 @@ using System.Text;
 
 namespace Effekseer.Data
 {
+	public enum FontType
+	{
+		[Name(value = "普通", language = Language.Japanese)]
+		[Name(value = "Normal", language = Language.English)]
+		Normal,
+
+		[Name(value = "太い", language = Language.Japanese)]
+		[Name(value = "Bold", language = Language.English)]
+		Bold,
+	}
 	public class OptionValues
 	{
 		[Name(language = Language.Japanese, value = "描画モード")]
-		[Description(language = Language.Japanese, value = "エフェクトの通常モードの設定")]
+		[Description(language = Language.Japanese, value = "ビュワーのエフェクト描画モードの設定")]
 		[Name(language = Language.English, value = "Render Mode")]
-		[Description(language = Language.English, value = "Set the Render Mode of effects")]
+		[Description(language = Language.English, value = "Render Mode of effects")]
 		[Undo(Undo = false)]
 		public Value.Enum<RenderMode> RenderingMode
+		{
+			get;
+			private set;
+		}
+
+		[Name(language = Language.Japanese, value = "表示モード")]
+		[Description(language = Language.Japanese, value = "ビュワーの表示モードの設定")]
+		[Name(language = Language.English, value = "View Mode")]
+		[Description(language = Language.English, value = "View Mode of effect viewer.")]
+		[Undo(Undo = false)]
+		public Value.Enum<ViewMode> ViewerMode
 		{
 			get;
 			private set;
@@ -86,39 +107,6 @@ namespace Effekseer.Data
 			private set;
 		}
 
-		[Name(language = Language.Japanese, value = "ライト方向")]
-		[Description(language = Language.Japanese, value = "ディレクショナルライトの向き")]
-		[Name(language = Language.English, value = "Light Direction")]
-		[Description(language = Language.English, value = "Orientation of the directional light")]
-		[Undo(Undo = false)]
-		public Value.Vector3D LightDirection
-		{
-			get;
-			private set;
-		}
-
-		[Name(language = Language.Japanese, value = "ライト色")]
-		[Description(language = Language.Japanese, value = "ライトのディフュージョン色")]
-		[Name(language = Language.English, value = "Light Color")]
-		[Description(language = Language.English, value = "Diffuse color of the light")]
-		[Undo(Undo = false)]
-		public Value.Color LightColor
-		{
-			get;
-			private set;
-		}
-
-		[Name(language = Language.Japanese, value = "アンビエント色")]
-		[Description(language = Language.Japanese, value = "ライトのアンビエント色")]
-		[Name(language = Language.English, value = "Ambient Color")]
-		[Description(language = Language.English, value = "Ambient color of the light")]
-		[Undo(Undo = false)]
-		public Value.Color LightAmbientColor
-		{
-			get;
-			private set;
-		}
-
 		[Name(language = Language.Japanese, value = "出力時の拡大率")]
 		[Description(language = Language.Japanese, value = "出力時の拡大率")]
 		[Name(language = Language.English, value = "Output Magnification")]
@@ -165,46 +153,34 @@ namespace Effekseer.Data
 			private set;
 		}
 
-		[Name(language = Language.Japanese, value = "背景色")]
-		[Description(language = Language.Japanese, value = "背景色")]
-		[Name(language = Language.English, value = "Background Color")]
-		[Description(language = Language.English, value = "Background color")]
-		[Undo(Undo = false)]
-		public Value.Color BackgroundColor
-		{
-			get;
-			private set;
-		}
-
-
-        /// <summary>
-        /// this value is initialized lazily because it cannot decide using language in the constructor
-        /// </summary>
-        Value.PathForImage LasyBackgroundImage;
-
-		[Name(language = Language.Japanese, value = "背景画像")]
-		[Description(language = Language.Japanese, value = "背景画像")]
-		[Name(language = Language.English, value = "Background Image")]
-		[Description(language = Language.English, value = "Background image")]
-		[Undo(Undo = false)]
-		public Value.PathForImage BackgroundImage
-		{
-            get
-            {
-                if(LasyBackgroundImage == null)
-                {
-                    LasyBackgroundImage = new Value.PathForImage(Resources.GetString("ImageFilter"), false, "");
-                }
-                return LasyBackgroundImage;
-            }
-		}
-
 		[Name(language = Language.Japanese, value = "カラースペース")]
 		[Description(language = Language.Japanese, value = "カラースペース(再起動後に有効になります。)")]
 		[Name(language = Language.English, value = "Color Space")]
 		[Description(language = Language.English, value = "Color Space")]
 		[Undo(Undo = false)]
 		public Value.Enum<ColorSpaceType> ColorSpace
+		{
+			get;
+			private set;
+		}
+
+		[Name(language = Language.Japanese, value = "フォント")]
+		[Description(language = Language.Japanese, value = "フォント")]
+		[Name(language = Language.English, value = "Font")]
+		[Description(language = Language.English, value = "Font")]
+		[Undo(Undo = false)]
+		public Value.Enum<FontType> Font
+		{
+			get;
+			private set;
+		}
+
+		[Name(language = Language.Japanese, value = "フォントサイズ")]
+		[Description(language = Language.Japanese, value = "フォントサイズ")]
+		[Name(language = Language.English, value = "Font size")]
+		[Description(language = Language.English, value = "Font size")]
+		[Undo(Undo = false)]
+		public Value.Int FontSize
 		{
 			get;
 			private set;
@@ -254,18 +230,6 @@ namespace Effekseer.Data
 			private set;
 		}
 
-		[Name(language = Language.Japanese, value = "歪み方法")]
-		[Description(language = Language.Japanese, value = "歪み方法")]
-		[Name(language = Language.English, value = "Distortion method")]
-		[Description(language = Language.English, value = "Distortion method")]
-		[Undo(Undo = false)]
-		public Value.Enum<DistortionMethodType> DistortionType
-		{
-			get;
-			private set;
-		}
-
-
         [Name(language = Language.Japanese, value = "言語設定")]
         [Description(language = Language.Japanese, value = "言語設定")]
         [Name(language = Language.English, value = "Language")]
@@ -277,10 +241,21 @@ namespace Effekseer.Data
             private set;
         }
 
-        public OptionValues()
+		[Name(language = Language.Japanese, value = "歪み方法")]
+		[Description(language = Language.Japanese, value = "歪み方法")]
+		[Name(language = Language.English, value = "Distortion method")]
+		[Description(language = Language.English, value = "Distortion method")]
+		[Undo(Undo = false)]
+		public Value.Enum<DistortionMethodType> DistortionType
+		{
+			get;
+			private set;
+		}
+
+		public OptionValues()
 		{
 			RenderingMode = new Value.Enum<RenderMode>(RenderMode.Normal);
-			BackgroundColor = new Value.Color(0, 0, 0, 255);
+			ViewerMode = new Value.Enum<ViewMode>(ViewMode._3D);
 			GridColor = new Value.Color(255, 255, 255, 255);
 			
 			IsGridShown = new Value.Boolean(true);
@@ -289,9 +264,7 @@ namespace Effekseer.Data
 			IsYZGridShown = new Value.Boolean(false);
 
 			GridLength = new Value.Float(2, float.MaxValue, 0.1f);
-			LightDirection = new Value.Vector3D(1, 1, 1, 1, -1, 1, -1, 1, -1, 0.1f, 0.1f, 0.1f);
-			LightColor = new Value.Color(215, 215, 215, 255);
-			LightAmbientColor = new Value.Color(40, 40, 40, 255);
+
 			Magnification = new Value.Float(1, float.MaxValue, 0.00001f);
 			ExternalMagnification = new Value.Float(1, float.MaxValue, 0.00001f);
 			FPS = new Value.Enum<FPSType>(FPSType._60FPS);
@@ -306,6 +279,9 @@ namespace Effekseer.Data
 
 			DistortionType = new Value.Enum<DistortionMethodType>(DistortionMethodType.Current);
 
+			Font = new Value.Enum<FontType>(FontType.Normal);
+			FontSize = new Value.Int(16, 32, 8);
+
 			// Switch the language according to the OS settings
 			GuiLanguage = new Value.Enum<Language>(LanguageGetter.GetLanguage());
 		}
@@ -318,6 +294,16 @@ namespace Effekseer.Data
 			[Name(value = "ワイヤーフレーム", language = Language.Japanese)]
 			[Name(value = "Wireframe", language = Language.English)]
 			Wireframe = 1,
+		}
+
+		public enum ViewMode : int
+		{
+			[Name(value = "3D", language = Language.Japanese)]
+			[Name(value = "3D", language = Language.English)]
+			_3D = 0,
+			[Name(value = "2D", language = Language.Japanese)]
+			[Name(value = "2D", language = Language.English)]
+			_2D = 1,
 		}
 
 		public enum FPSType : int

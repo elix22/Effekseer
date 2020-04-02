@@ -14,58 +14,21 @@
 #include <xmmintrin.h>
 #endif
 
-//----------------------------------------------------------------------------------
-//
-//----------------------------------------------------------------------------------
 namespace EffekseerRendererDX11
 {
 
-//----------------------------------------------------------------------------------
-//
-//----------------------------------------------------------------------------------
-struct Vertex
-{
-	::Effekseer::Vector3D	Pos;
-	uint8_t		Col[4];
-	float		UV[2];
+using Vertex = EffekseerRenderer::SimpleVertex;
+using VertexDistortion = EffekseerRenderer::VertexDistortion;
 
-	void SetColor( const ::Effekseer::Color& color )
-	{
-		Col[0] = color.R;
-		Col[1] = color.G;
-		Col[2] = color.B;
-		Col[3] = color.A;
-	}
-};
-
-struct VertexDistortion
-{
-	::Effekseer::Vector3D	Pos;
-	uint8_t		Col[4];
-	float		UV[2];
-	::Effekseer::Vector3D	Tangent;
-	::Effekseer::Vector3D	Binormal;
-
-	void SetColor(const ::Effekseer::Color& color)
-	{
-		Col[0] = color.R;
-		Col[1] = color.G;
-		Col[2] = color.B;
-		Col[3] = color.A;
-	}
-};
-
-//----------------------------------------------------------------------------------
-//
-//----------------------------------------------------------------------------------
 class OriginalState
+	: public ::Effekseer::AlignedAllocationPolicy<16>
 {
 private:
-	ID3D11SamplerState*	m_samplers[4];
+	std::array<ID3D11SamplerState*, Effekseer::TextureSlotMax> m_samplers;
 
 	ID3D11BlendState*	m_blendState;
-	float				m_blendFactor[4];
-	UINT				m_blendSampleMask;
+	std::array<float, Effekseer::TextureSlotMax> m_blendFactor;
+	UINT m_blendSampleMask;
 
 	ID3D11DepthStencilState*	m_depthStencilState;
 	UINT						m_depthStencilStateRef;
@@ -81,7 +44,7 @@ private:
 	ID3D11InputLayout*			m_layout;
 	D3D11_PRIMITIVE_TOPOLOGY	m_topology;
 
-	ID3D11ShaderResourceView*	m_psSRVs[4];
+	std::array<ID3D11ShaderResourceView*, Effekseer::TextureSlotMax> m_psSRVs;
 
 	ID3D11Buffer*				m_pVB;
 	UINT						m_vbStrides;
@@ -110,6 +73,7 @@ public:
 class RendererImplemented
 	: public Renderer
 	, public ::Effekseer::ReferenceObject
+	, public ::Effekseer::AlignedAllocationPolicy<16>
 {
 friend class DeviceObject;
 
@@ -122,26 +86,12 @@ private:
 	IndexBuffer*		m_indexBufferForWireframe = nullptr;
 	int32_t				m_squareMaxCount;
 
-	Shader*							m_shader;
-	Shader*							m_shader_no_texture;
-
-	Shader*							m_shader_distortion;
-	Shader*							m_shader_no_texture_distortion;
-
-	Shader*		currentShader = nullptr;
+	Shader* m_shader = nullptr;
+	Shader* m_shader_distortion = nullptr;
+	Shader* m_shader_lighting = nullptr;
+	Shader* currentShader = nullptr;
 
 	EffekseerRenderer::StandardRenderer<RendererImplemented, Shader, Vertex, VertexDistortion>*	m_standardRenderer;
-
-	::Effekseer::Vector3D	m_lightDirection;
-	::Effekseer::Color		m_lightColor;
-	::Effekseer::Color		m_lightAmbient;
-
-	::Effekseer::Matrix44	m_proj;
-	::Effekseer::Matrix44	m_camera;
-	::Effekseer::Matrix44	m_cameraProj;
-
-	::Effekseer::Vector3D	m_cameraPosition;
-	::Effekseer::Vector3D	m_cameraFrontDirection;
 
 	// 座標系
 	::Effekseer::CoordinateSystem			m_coordinateSystem;
@@ -161,8 +111,6 @@ private:
 
 	EffekseerRenderer::DistortingCallback* m_distortingCallback;
 
-	Effekseer::RenderMode m_renderMode = Effekseer::RenderMode::Normal;
-
 public:
 	/**
 		@brief	コンストラクタ
@@ -180,7 +128,7 @@ public:
 	/**
 		@brief	初期化
 	*/
-	bool Initialize(ID3D11Device* device, ID3D11DeviceContext* context, D3D11_COMPARISON_FUNC depthFunc);
+	bool Initialize(ID3D11Device* device, ID3D11DeviceContext* context, D3D11_COMPARISON_FUNC depthFunc, bool isMSAAEnabled);
 
 	void Destroy();
 
@@ -222,67 +170,6 @@ public:
 	int32_t GetSquareMaxCount() const;
 
 	::EffekseerRenderer::RenderStateBase* GetRenderState();
-
-	/**
-		@brief	ライトの方向を取得する。
-	*/
-	const ::Effekseer::Vector3D& GetLightDirection() const;
-
-	/**
-		@brief	ライトの方向を設定する。
-	*/
-	void SetLightDirection( const ::Effekseer::Vector3D& direction );
-
-	/**
-		@brief	ライトの色を取得する。
-	*/
-	const ::Effekseer::Color& GetLightColor() const;
-
-	/**
-		@brief	ライトの色を設定する。
-	*/
-	void SetLightColor( const ::Effekseer::Color& color );
-
-	/**
-		@brief	ライトの環境光の色を取得する。
-	*/
-	const ::Effekseer::Color& GetLightAmbientColor() const;
-
-	/**
-		@brief	ライトの環境光の色を設定する。
-	*/
-	void SetLightAmbientColor( const ::Effekseer::Color& color );
-
-	/**
-		@brief	投影行列を取得する。
-	*/
-	const ::Effekseer::Matrix44& GetProjectionMatrix() const;
-
-	/**
-		@brief	投影行列を設定する。
-	*/
-	void SetProjectionMatrix( const ::Effekseer::Matrix44& mat );
-
-	/**
-		@brief	カメラ行列を取得する。
-	*/
-	const ::Effekseer::Matrix44& GetCameraMatrix() const;
-
-	/**
-		@brief	カメラ行列を設定する。
-	*/
-	void SetCameraMatrix( const ::Effekseer::Matrix44& mat );
-
-	::Effekseer::Vector3D GetCameraFrontDirection() const override;
-
-	::Effekseer::Vector3D GetCameraPosition() const  override;
-
-	void SetCameraParameter(const ::Effekseer::Vector3D& front, const ::Effekseer::Vector3D& position)  override;
-
-	/**
-		@brief	カメラプロジェクション行列を取得する。
-	*/
-	::Effekseer::Matrix44& GetCameraProjectionMatrix();
 
 	/**
 		@brief	スプライトレンダラーを生成する。
@@ -346,7 +233,7 @@ public:
 	void DrawSprites( int32_t spriteCount, int32_t vertexOffset );
 	void DrawPolygon( int32_t vertexCount, int32_t indexCount);
 
-	Shader* GetShader(bool useTexture, bool useDistortion) const;
+	Shader* GetShader(bool useTexture, ::Effekseer::RendererMaterialType materialType) const;
 	void BeginShader(Shader* shader);
 	void EndShader(Shader* shader);
 
@@ -358,9 +245,9 @@ public:
 
 	void ResetRenderState();
 
-	void SetRenderMode(Effekseer::RenderMode renderMode) override { m_renderMode = renderMode; }
+	Effekseer::TextureData* CreateProxyTexture(EffekseerRenderer::ProxyTextureType type) override;
 
-	Effekseer::RenderMode GetRenderMode() override { printf("Not implemented.\n"); return m_renderMode; }
+	void DeleteProxyTexture(Effekseer::TextureData* data) override;
 
 	virtual int GetRef() { return ::Effekseer::ReferenceObject::GetRef(); }
 	virtual int AddRef() { return ::Effekseer::ReferenceObject::AddRef(); }

@@ -1,322 +1,16 @@
 ﻿#include "EffekseerRendererDX11.MaterialLoader.h"
-#include "../EffekseerRendererCommon/EffekseerRenderer.ShaderLoader.h"
-#include "EffekseerRendererDX11.Shader.h"
 #include "EffekseerRendererDX11.ModelRenderer.h"
+#include "EffekseerRendererDX11.Shader.h"
 #include <d3dcompiler.h>
 #include <iostream>
 
+#include "../EffekseerMaterialCompiler/DirectX11/EffekseerMaterialCompilerDX11.h"
+#include "Effekseer/Material/Effekseer.CompiledMaterial.h"
+
+#undef min
+
 namespace EffekseerRendererDX11
 {
-
-namespace MaterialVS
-{
-static
-#include "Shader/EffekseerRenderer.Standard_VS.h"
-}; // namespace MaterialVS
-
-static ID3DBlob* CompileVertexShader(const char* vertexShaderText,
-									 const char* vertexShaderFileName,
-									 const std::vector<D3D_SHADER_MACRO>& macro,
-									 std::string& log)
-{
-	ID3DBlob* shader = nullptr;
-	ID3DBlob* error = nullptr;
-
-	UINT flag = D3D10_SHADER_PACK_MATRIX_COLUMN_MAJOR;
-#if !_DEBUG
-	flag = flag | D3D10_SHADER_OPTIMIZATION_LEVEL3;
-#endif
-
-	HRESULT hr;
-
-	hr = D3DCompile(vertexShaderText,
-					strlen(vertexShaderText),
-					vertexShaderFileName,
-					macro.size() > 0 ? (D3D_SHADER_MACRO*)&macro[0] : NULL,
-					NULL,
-					"main",
-					"vs_4_0",
-					flag,
-					0,
-					&shader,
-					&error);
-
-	if (FAILED(hr))
-	{
-		if (hr == E_OUTOFMEMORY)
-		{
-			log += "Out of memory\n";
-		}
-		else
-		{
-			log += "Unknown error\n";
-		}
-
-		if (error != NULL)
-		{
-			log += (const char*)error->GetBufferPointer();
-			error->Release();
-		}
-
-		return nullptr;
-	}
-
-	return shader;
-}
-
-static ID3DBlob* CompilePixelShader(const char* vertexShaderText,
-									const char* vertexShaderFileName,
-									const std::vector<D3D_SHADER_MACRO>& macro,
-									std::string& log)
-{
-	ID3DBlob* shader = nullptr;
-	ID3DBlob* error = nullptr;
-
-	UINT flag = D3D10_SHADER_PACK_MATRIX_COLUMN_MAJOR;
-#if !_DEBUG
-	flag = flag | D3D10_SHADER_OPTIMIZATION_LEVEL3;
-#endif
-
-	HRESULT hr;
-
-	hr = D3DCompile(vertexShaderText,
-					strlen(vertexShaderText),
-					vertexShaderFileName,
-					macro.size() > 0 ? (D3D_SHADER_MACRO*)&macro[0] : NULL,
-					NULL,
-					"main",
-					"ps_4_0",
-					flag,
-					0,
-					&shader,
-					&error);
-
-	if (FAILED(hr))
-	{
-		if (hr == E_OUTOFMEMORY)
-		{
-			log += "Out of memory\n";
-		}
-		else
-		{
-			log += "Unknown error\n";
-		}
-
-		if (error != NULL)
-		{
-			log += (const char*)error->GetBufferPointer();
-			error->Release();
-		}
-
-		return nullptr;
-	}
-
-	return shader;
-}
-
-static char* sprite_ps_pre = R"(
-
-struct PS_Input
-{
-	float4 Pos		: SV_POSITION;
-	float4 Color		: COLOR;
-	float2 UV		: TEXCOORD0;
-};
-
-
-float4 predefined_uniform : register(c0);
-
-)";
-
-static char* sprite_ps_suf = R"(
-
-float4 main( const PS_Input Input ) : SV_Target
-{
-	float4 Output =  Calculate(Input);
-
-	if(Output.a == 0.0f) discard;
-
-	return Output;
-}
-
-)";
-
-static char* model_vs = R"(
-
-float4x4 mCameraProj		: register( c0 );
-float4x4 mModel[40]		: register( c4 );
-float4	fUV[40]			: register( c164 );
-float4	fModelColor[40]		: register( c204 );
-
-float4 mUVInversed		: register(c247);
-
-
-struct VS_Input
-{
-	float3 Pos		: POSITION0;
-	float3 Normal		: NORMAL0;
-	float3 Binormal		: NORMAL1;
-	float3 Tangent		: NORMAL2;
-	float2 UV		: TEXCOORD0;
-	float4 Color		: NORMAL3;
-	uint4 Index		: BLENDINDICES0;
-
-};
-
-struct VS_Output
-{
-	float4 Pos		: SV_POSITION;
-	float2 UV		: TEXCOORD0;
-	half3 Normal		: TEXCOORD1;
-	half3 Binormal		: TEXCOORD2;
-	half3 Tangent		: TEXCOORD3;
-	float4 Color		: COLOR;
-};
-
-VS_Output main( const VS_Input Input )
-{
-	float4x4 matModel = mModel[Input.Index.x];
-	float4 uv = fUV[Input.Index.x];
-	float4 modelColor = fModelColor[Input.Index.x] * Input.Color;
-
-	VS_Output Output = (VS_Output)0;
-	float4 localPosition = { Input.Pos.x, Input.Pos.y, Input.Pos.z, 1.0 }; 
-	localPosition = mul( matModel, localPosition );
-	Output.Pos = mul( mCameraProj, localPosition );
-
-	Output.UV.x = Input.UV.x * uv.z + uv.x;
-	Output.UV.y = Input.UV.y * uv.w + uv.y;
-
-	float3x3 lightMat = (float3x3)matModel;
-
-	float4 localNormal = { 0.0, 0.0, 0.0, 1.0 };
-	localNormal.xyz = normalize( mul( lightMat, Input.Normal ) );
-	
-	float4 localBinormal = { 0.0, 0.0, 0.0, 1.0 };
-	localBinormal.xyz = normalize( mul( lightMat, Input.Binormal ) );
-
-	float4 localTangent = { 0.0, 0.0, 0.0, 1.0 };
-	localTangent.xyz = normalize( mul( lightMat, Input.Tangent ) );
-	Output.Normal = localNormal.xyz;
-	Output.Binormal = localBinormal.xyz;
-	Output.Tangent = localTangent.xyz;
-
-	Output.Color.r = 1.0;
-	Output.Color.g = 1.0;
-	Output.Color.b = 1.0;
-	Output.Color.a = 1.0;
-	Output.Color = Output.Color * modelColor;
-
-	Output.UV.y = mUVInversed.x + mUVInversed.y * Output.UV.y;
-
-	return Output;
-}
-
-
-)";
-
-static char* model_ps_pre = R"(
-
-struct PS_Input
-{
-	float4 Pos		: SV_POSITION;
-	float2 UV		: TEXCOORD0;
-	half3 Normal	: TEXCOORD1;
-	half3 Binormal	: TEXCOORD2;
-	half3 Tangent	: TEXCOORD3;
-	float4 Color	: COLOR;
-};
-
-float4	fLightDirection		: register( c0 );
-float4	fLightColor		: register( c1 );
-float4	fLightAmbient		: register( c2 );
-
-
-
-)";
-
-static char* model_ps_suf = R"(
-
-float4 main( const PS_Input Input ) : SV_Target
-{
-	float4 Output =  Calculate(Input);
-
-	if(Output.a == 0.0f) discard;
-
-	return Output;
-}
-
-)";
-
-class ShaderLoader : public EffekseerRenderer::ShaderLoader
-{
-public:
-	ShaderLoader() = default;
-	virtual ~ShaderLoader() = default;
-
-	virtual std::string GenerateShader(ShaderType shaderType) override
-	{
-		std::ostringstream maincode;
-
-		if (shaderType == ShaderType::Standard)
-		{
-			maincode << sprite_ps_pre;
-		}
-		else if (shaderType == ShaderType::Model)
-		{
-			maincode << model_ps_pre;
-		}
-
-		auto cind = 1;
-
-		for (size_t i = 0; i < Uniforms.size(); i++)
-		{
-			auto& uniform = Uniforms[i];
-			maincode << "float4 " << uniform.Name << " : register(c" << cind << ");" << std::endl;
-			cind++;
-		}
-
-		for (size_t i = 0; i < Textures.size(); i++)
-		{
-			auto& texture = Textures[i];
-			maincode << "Texture2D " << texture.Name << "_texture : register(t" << i << ");" << std::endl;
-			maincode << "SamplerState " << texture.Name << "_sampler : register(s" << i << ");" << std::endl;
-		}
-
-		auto baseCode = GenericCode;
-		baseCode = Replace(baseCode, "$F1$", "float");
-		baseCode = Replace(baseCode, "$F2$", "float2");
-		baseCode = Replace(baseCode, "$F3$", "float3");
-		baseCode = Replace(baseCode, "$F4$", "float4");
-		baseCode = Replace(baseCode, "$TIME$", "predefined_uniform.x");
-		baseCode = Replace(baseCode, "$UV$", "input.UV");
-		baseCode = Replace(baseCode, "$INPUT$", "const PS_Input input");
-
-		// replace textures
-		for (size_t i = 0; i < Textures.size(); i++)
-		{
-			auto& texture = Textures[i];
-			std::string keyP = "$TEX_P" + std::to_string(texture.Index) + "$";
-			std::string keyS = "$TEX_S" + std::to_string(texture.Index) + "$";
-
-			baseCode = Replace(baseCode, keyP, texture.Name + "_texture.Sample(" + texture.Name + "_sampler,");
-			baseCode = Replace(baseCode, keyS, ")");
-		}
-
-		maincode << baseCode;
-
-		if (shaderType == ShaderType::Standard)
-		{
-			maincode << sprite_ps_suf;
-		}
-		else if (shaderType == ShaderType::Model)
-		{
-			maincode << model_ps_suf;
-		}
-
-		return maincode.str();
-	}
-};
 
 MaterialLoader::MaterialLoader(Renderer* renderer, ::Effekseer::FileInterface* fileInterface) : fileInterface_(fileInterface)
 {
@@ -333,93 +27,178 @@ MaterialLoader ::~MaterialLoader() { ES_SAFE_RELEASE(renderer_); }
 
 ::Effekseer::MaterialData* MaterialLoader::Load(const EFK_CHAR* path)
 {
-	std::unique_ptr<Effekseer::FileReader> reader(fileInterface_->OpenRead(path));
-
-	if (reader.get() != nullptr)
+	// code file
 	{
-		size_t size = reader->GetLength();
-		char* data = new char[size];
-		reader->Read(data, size);
+		auto binaryPath = std::u16string(path) + u"d";
+		std::unique_ptr<Effekseer::FileReader> reader(fileInterface_->OpenRead(binaryPath.c_str()));
 
-		auto material = Load(data, (int32_t)size);
+		if (reader.get() != nullptr)
+		{
+			size_t size = reader->GetLength();
+			std::vector<char> data;
+			data.resize(size);
+			reader->Read(data.data(), size);
 
-		delete[] data;
+			auto material = Load(data.data(), (int32_t)size, ::Effekseer::MaterialFileType::Compiled);
 
-		return material;
+			if (material != nullptr)
+			{
+				return material;
+			}
+		}
+	}
+
+	// code file
+	{
+		std::unique_ptr<Effekseer::FileReader> reader(fileInterface_->OpenRead(path));
+
+		if (reader.get() != nullptr)
+		{
+			size_t size = reader->GetLength();
+			std::vector<char> data;
+			data.resize(size);
+			reader->Read(data.data(), size);
+
+			auto material = Load(data.data(), (int32_t)size, ::Effekseer::MaterialFileType::Code);
+
+			return material;
+		}
 	}
 
 	return nullptr;
 }
 
-::Effekseer::MaterialData* MaterialLoader::Load(const void* data, int32_t size)
+::Effekseer::MaterialData* MaterialLoader::LoadAcutually(::Effekseer::Material& material, ::Effekseer::CompiledMaterialBinary* binary)
 {
-	ShaderLoader loader;
-	if (!loader.Load((const uint8_t*)data, size))
+	auto materialData = new ::Effekseer::MaterialData();
+	materialData->IsSimpleVertex = material.GetIsSimpleVertex();
+	materialData->IsRefractionRequired = material.GetHasRefraction();
+
+	std::array<Effekseer::MaterialShaderType, 2> shaderTypes;
+	std::array<Effekseer::MaterialShaderType, 2> shaderTypesModel;
+
+	shaderTypes[0] = Effekseer::MaterialShaderType::Standard;
+	shaderTypes[1] = Effekseer::MaterialShaderType::Refraction;
+	shaderTypesModel[0] = Effekseer::MaterialShaderType::Model;
+	shaderTypesModel[1] = Effekseer::MaterialShaderType::RefractionModel;
+	int32_t shaderTypeCount = 1;
+
+	if (material.GetHasRefraction())
 	{
-		return nullptr;
+		shaderTypeCount = 2;
 	}
 
-	auto materialData = new ::Effekseer::MaterialData();
-
+	for (int32_t st = 0; st < shaderTypeCount; st++)
 	{
-		auto shaderCode = loader.GenerateShader(EffekseerRenderer::ShaderLoader::ShaderType::Standard);
+		Shader* shader = nullptr;
+		auto parameterGenerator = EffekseerRenderer::MaterialShaderParameterGenerator(material, false, st, 40);
 
-		// Pos(3) Color(1) UV(2)
-		D3D11_INPUT_ELEMENT_DESC decl[] = {
-			{"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0},
-			{"NORMAL", 0, DXGI_FORMAT_R8G8B8A8_UNORM, 0, sizeof(float) * 3, D3D11_INPUT_PER_VERTEX_DATA, 0},
-			{"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, sizeof(float) * 4, D3D11_INPUT_PER_VERTEX_DATA, 0},
-		};
-
-		// compile
-		std::string log;
-		std::vector<D3D_SHADER_MACRO> macros;
-
-		// auto vs = CompileVertexShader(shaderCode.c_str(), "VS", macros,  log);
-		auto ps = CompilePixelShader(shaderCode.c_str(), "PS", macros, log);
-
-		if (ps == nullptr)
+		if (materialData->IsSimpleVertex)
 		{
-			std::cout << shaderCode << std::endl;
-			std::cout << log << std::endl;
-			return nullptr;
+			// Pos(3) Color(1) UV(2)
+			D3D11_INPUT_ELEMENT_DESC decl[] = {
+				{"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0},
+				{"NORMAL", 0, DXGI_FORMAT_R8G8B8A8_UNORM, 0, sizeof(float) * 3, D3D11_INPUT_PER_VERTEX_DATA, 0},
+				{"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, sizeof(float) * 4, D3D11_INPUT_PER_VERTEX_DATA, 0},
+			};
+
+			shader = Shader::Create(static_cast<RendererImplemented*>(renderer_),
+									(uint8_t*)binary->GetVertexShaderData(shaderTypes[st]),
+									binary->GetVertexShaderSize(shaderTypes[st]),
+									(uint8_t*)binary->GetPixelShaderData(shaderTypes[st]),
+									binary->GetPixelShaderSize(shaderTypes[st]),
+									"MaterialStandardRenderer",
+									decl,
+									ARRAYSIZE(decl));
 		}
+		else
+		{
+			// Pos(3) Color(1) Normal(1) Tangent(1) UV(2) UV(2)
+			D3D11_INPUT_ELEMENT_DESC decl[] = {
+				{"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0},
+				{"NORMAL", 0, DXGI_FORMAT_R8G8B8A8_UNORM, 0, sizeof(float) * 3, D3D11_INPUT_PER_VERTEX_DATA, 0},
+				{"NORMAL", 1, DXGI_FORMAT_R8G8B8A8_UNORM, 0, sizeof(float) * 4, D3D11_INPUT_PER_VERTEX_DATA, 0},
+				{"NORMAL", 2, DXGI_FORMAT_R8G8B8A8_UNORM, 0, sizeof(float) * 5, D3D11_INPUT_PER_VERTEX_DATA, 0},
+				{"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, sizeof(float) * 6, D3D11_INPUT_PER_VERTEX_DATA, 0},
+				{"TEXCOORD", 1, DXGI_FORMAT_R32G32_FLOAT, 0, sizeof(float) * 8, D3D11_INPUT_PER_VERTEX_DATA, 0},
+				{"TEXCOORD", 2, DXGI_FORMAT_R32G32_FLOAT, 0, sizeof(float) * 0, D3D11_INPUT_PER_VERTEX_DATA, 0},
+				{"TEXCOORD", 3, DXGI_FORMAT_R32G32_FLOAT, 0, sizeof(float) * 0, D3D11_INPUT_PER_VERTEX_DATA, 0},
+			};
 
-		auto shader = Shader::Create(static_cast<RendererImplemented*>(renderer_),
-									 MaterialVS::g_VS,
-									 sizeof(MaterialVS::g_VS),
-									 (uint8_t*)ps->GetBufferPointer(),
-									 ps->GetBufferSize(),
-									 "MaterialStandardRenderer",
-									 decl,
-									 ARRAYSIZE(decl));
+			int32_t offset = 40;
+			int count = 6;
+			int index = 2;
 
-		ES_SAFE_RELEASE(ps);
+			auto getFormat = [](int32_t i) -> DXGI_FORMAT {
+				if (i == 1)
+					return DXGI_FORMAT_R32_FLOAT;
+				if (i == 2)
+					return DXGI_FORMAT_R32G32_FLOAT;
+				if (i == 3)
+					return DXGI_FORMAT_R32G32B32_FLOAT;
+				if (i == 4)
+					return DXGI_FORMAT_R32G32B32A32_FLOAT;
+			};
+			if (material.GetCustomData1Count() > 0)
+			{
+				decl[count].Format = getFormat(material.GetCustomData1Count());
+				decl[count].AlignedByteOffset = offset;
+				decl[count].SemanticIndex = index;
+				index++;
+				count++;
+				offset += sizeof(float) * material.GetCustomData1Count();
+			}
+
+			if (material.GetCustomData2Count() > 0)
+			{
+				decl[count].Format = getFormat(material.GetCustomData2Count());
+				decl[count].AlignedByteOffset = offset;
+				decl[count].SemanticIndex = index;
+				index++;
+				count++;
+
+				offset += sizeof(float) * material.GetCustomData2Count();
+			}
+
+			shader = Shader::Create(static_cast<RendererImplemented*>(renderer_),
+									(uint8_t*)binary->GetVertexShaderData(shaderTypes[st]),
+									binary->GetVertexShaderSize(shaderTypes[st]),
+									(uint8_t*)binary->GetPixelShaderData(shaderTypes[st]),
+									binary->GetPixelShaderSize(shaderTypes[st]),
+									"MaterialStandardRenderer",
+									decl,
+									count);
+		}
 
 		if (shader == nullptr)
 			return false;
 
-		int32_t vertexUniformSize = sizeof(Effekseer::Matrix44) * 2 + sizeof(float) * 4;
-
-		int32_t pixelUniformSize = sizeof(float) * 4;
-
-		pixelUniformSize += loader.Uniforms.size() * 4 * sizeof(float);
+		auto vertexUniformSize = parameterGenerator.VertexShaderUniformBufferSize;
+		auto pixelUniformSize = parameterGenerator.PixelShaderUniformBufferSize;
 
 		shader->SetVertexConstantBufferSize(vertexUniformSize);
-		shader->SetVertexRegisterCount(8 + 1);
+		shader->SetVertexRegisterCount(vertexUniformSize / (sizeof(float) * 4));
 
 		shader->SetPixelConstantBufferSize(pixelUniformSize);
 		shader->SetPixelRegisterCount(pixelUniformSize / (sizeof(float) * 4));
 
-		materialData->TextureCount = loader.Textures.size();
-		materialData->UniformCount = loader.Uniforms.size();
-		materialData->UserPtr = shader;
+		materialData->TextureCount = material.GetTextureCount();
+		materialData->UniformCount = material.GetUniformCount();
+
+		if (st == 0)
+		{
+			materialData->UserPtr = shader;
+		}
+		else
+		{
+			materialData->RefractionUserPtr = shader;
+		}
 	}
 
+	for (int32_t st = 0; st < shaderTypeCount; st++)
 	{
-		auto shaderCode = loader.GenerateShader(EffekseerRenderer::ShaderLoader::ShaderType::Model);
+		auto parameterGenerator = EffekseerRenderer::MaterialShaderParameterGenerator(material, true, st, 40);
 
-		// Pos(3) Color(1) UV(2)
 		D3D11_INPUT_ELEMENT_DESC decl[] = {
 			{"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0},
 			{"NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, sizeof(float) * 3, D3D11_INPUT_PER_VERTEX_DATA, 0},
@@ -432,57 +211,82 @@ MaterialLoader ::~MaterialLoader() { ES_SAFE_RELEASE(renderer_); }
 
 		// compile
 		std::string log;
-		std::vector<D3D_SHADER_MACRO> macros;
-
-		auto vs = CompileVertexShader(model_vs, "VS", macros,  log);
-		auto ps = CompilePixelShader(shaderCode.c_str(), "PS", macros, log);
-
-		if (vs == nullptr)
-		{
-			std::cout << model_vs << std::endl;
-			std::cout << log << std::endl;
-			return nullptr;
-		}
-
-		if (ps == nullptr)
-		{
-			std::cout << shaderCode << std::endl;
-			std::cout << log << std::endl;
-			return nullptr;
-		}
 
 		auto shader = Shader::Create(static_cast<RendererImplemented*>(renderer_),
-									 (uint8_t*)vs->GetBufferPointer(),
-									 vs->GetBufferSize(),
-									 (uint8_t*)ps->GetBufferPointer(),
-									 ps->GetBufferSize(),
-									 "MaterialStandardRenderer",
+									 (uint8_t*)binary->GetVertexShaderData(shaderTypesModel[st]),
+									 binary->GetVertexShaderSize(shaderTypesModel[st]),
+									 (uint8_t*)binary->GetPixelShaderData(shaderTypesModel[st]),
+									 binary->GetPixelShaderSize(shaderTypesModel[st]),
+									 "MaterialStandardModelRenderer",
 									 decl,
 									 ARRAYSIZE(decl));
-		ES_SAFE_RELEASE(vs);
-		ES_SAFE_RELEASE(ps);
-
 		if (shader == nullptr)
 			return false;
 
-		int32_t vertexUniformSize = sizeof(::EffekseerRenderer::ModelRendererVertexConstantBuffer<40>);
-
-		int32_t pixelUniformSize = sizeof(::EffekseerRenderer::ModelRendererPixelConstantBuffer) + sizeof(float) * 4;
-
-		pixelUniformSize += loader.Uniforms.size() * 4 * sizeof(float);
+		auto vertexUniformSize = parameterGenerator.VertexShaderUniformBufferSize;
+		auto pixelUniformSize = parameterGenerator.PixelShaderUniformBufferSize;
 
 		shader->SetVertexConstantBufferSize(vertexUniformSize);
-		shader->SetVertexRegisterCount(vertexUniformSize / 16);
+		shader->SetVertexRegisterCount(vertexUniformSize / (sizeof(float) * 4));
 
 		shader->SetPixelConstantBufferSize(pixelUniformSize);
 		shader->SetPixelRegisterCount(pixelUniformSize / (sizeof(float) * 4));
 
-		materialData->TextureCount = loader.Textures.size();
-		materialData->UniformCount = loader.Uniforms.size();
-		materialData->ModelUserPtr = shader;
+		if (st == 0)
+		{
+			materialData->ModelUserPtr = shader;
+		}
+		else
+		{
+			materialData->RefractionModelUserPtr = shader;
+		}
+	}
+
+	materialData->CustomData1 = material.GetCustomData1Count();
+	materialData->CustomData2 = material.GetCustomData2Count();
+	materialData->TextureCount = std::min(material.GetTextureCount(), Effekseer::UserTextureSlotMax);
+	materialData->UniformCount = material.GetUniformCount();
+	materialData->ShadingModel = material.GetShadingModel();
+
+	for (int32_t i = 0; i < materialData->TextureCount; i++)
+	{
+		materialData->TextureWrapTypes.at(i) = material.GetTextureWrap(i);
 	}
 
 	return materialData;
+}
+
+::Effekseer::MaterialData* MaterialLoader::Load(const void* data, int32_t size, Effekseer::MaterialFileType fileType)
+{
+	if (fileType == Effekseer::MaterialFileType::Compiled)
+	{
+		auto compiled = Effekseer::CompiledMaterial();
+		if (!compiled.Load(static_cast<const uint8_t*>(data), size))
+		{
+			return nullptr;
+		}
+
+		if (!compiled.GetHasValue(::Effekseer::CompiledMaterialPlatformType::DirectX11))
+		{
+			return nullptr;
+		}
+
+		// compiled
+		Effekseer::Material material;
+		material.Load((const uint8_t*)compiled.GetOriginalData().data(), static_cast<int32_t>(compiled.GetOriginalData().size()));
+		auto binary = compiled.GetBinary(::Effekseer::CompiledMaterialPlatformType::DirectX11);
+
+		return LoadAcutually(material, binary);
+	}
+	else
+	{
+		Effekseer::Material material;
+		material.Load((const uint8_t*)data, size);
+		auto compiler = ::Effekseer::CreateUniqueReference(new Effekseer::MaterialCompilerDX11());
+		auto binary = ::Effekseer::CreateUniqueReference(compiler->Compile(&material));
+
+		return LoadAcutually(material, binary.get());
+	}
 }
 
 void MaterialLoader::Unload(::Effekseer::MaterialData* data)
@@ -491,9 +295,13 @@ void MaterialLoader::Unload(::Effekseer::MaterialData* data)
 		return;
 	auto shader = reinterpret_cast<Shader*>(data->UserPtr);
 	auto modelShader = reinterpret_cast<Shader*>(data->ModelUserPtr);
+	auto refractionShader = reinterpret_cast<Shader*>(data->RefractionUserPtr);
+	auto refractionModelShader = reinterpret_cast<Shader*>(data->RefractionModelUserPtr);
 
 	ES_SAFE_DELETE(shader);
 	ES_SAFE_DELETE(modelShader);
+	ES_SAFE_DELETE(refractionShader);
+	ES_SAFE_DELETE(refractionModelShader);
 	ES_SAFE_DELETE(data);
 }
 

@@ -7,7 +7,12 @@
 //----------------------------------------------------------------------------------
 #include "Effekseer.Base.h"
 
-#include "Effekseer.Vector3D.h"
+#include "SIMD/Effekseer.Vec2f.h"
+#include "SIMD/Effekseer.Vec3f.h"
+#include "SIMD/Effekseer.Vec4f.h"
+#include "SIMD/Effekseer.Mat43f.h"
+#include "SIMD/Effekseer.Mat44f.h"
+
 #include "Effekseer.Matrix43.h"
 #include "Effekseer.RectF.h"
 #include "Effekseer.Color.h"
@@ -24,18 +29,46 @@
 //----------------------------------------------------------------------------------
 namespace Effekseer
 {
-//----------------------------------------------------------------------------------
-//
-//----------------------------------------------------------------------------------
+
+struct InstanceCustomData
+{
+	union {
+		struct
+		{
+			Vec2f start;
+			Vec2f end;
+		} easing;
+
+		struct
+		{
+			Vec2f value;
+		} random;
+
+		struct
+		{
+			Vec2f offset;
+		} fcruve;
+
+		struct
+		{
+			std::array<float, 4> offset;
+		} fcurveColor;
+	};
+};
 
 /**
 	@brief	エフェクトの実体
 */
-class Instance : public IntrusiveList<Instance>::Node
+class alignas(16) Instance : public IntrusiveList<Instance>::Node
 {
 	friend class Manager;
 	friend class InstanceContainer;
 
+protected:
+
+	//! custom data
+	InstanceCustomData customDataValues1;
+	InstanceCustomData customDataValues2;
 
 public:
 	static const int32_t ChildrenMax = 16;
@@ -49,20 +82,28 @@ public:
 	// コンテナ
 	InstanceContainer*	m_pContainer;
 
-	// グループの連結リストの先頭
-	InstanceGroup*	m_headGroups;
+	// a group which the instance belongs to
+	// 自分が所属するグループ
+	InstanceGroup* ownGroup_;
+
+	// a head of list in children group
+	// 子グループの連結リストの先頭
+	InstanceGroup* childrenGroups_;
 
 	// 親
 	Instance*	m_pParent;
 	
 	// グローバル位置
-	Vector3D	m_GlobalPosition;
-	Vector3D	m_GlobalVelocity;
+	Vec3f	m_GlobalPosition;
+	Vec3f	m_GlobalVelocity;
 	
 	// グローバル位置補正
-	Vector3D	m_GlobalRevisionLocation;
-	Vector3D	m_GlobalRevisionVelocity;
+	Vec3f	m_GlobalRevisionLocation;
+	Vec3f	m_GlobalRevisionVelocity;
 	
+	//! for noise
+	Vec3f modifyWithNoise_;
+
 	// Color for binding
 	Color		ColorInheritance;
 
@@ -78,20 +119,20 @@ public:
 
 		struct
 		{
-			vector3d location;
-			vector3d velocity;
-			vector3d acceleration;
+			Vec3f location;
+			Vec3f velocity;
+			Vec3f acceleration;
 		} random;
 
 		struct
 		{
-			vector3d	start;
-			vector3d	end;
+			Vec3f	start;
+			Vec3f	end;
 		} easing;
 
 		struct
 		{
-			vector3d	offset;
+			Vec3f	offset;
 		} fcruve;
 
 	} translation_values;
@@ -105,21 +146,21 @@ public:
 
 		struct
 		{
-			vector3d rotation;
-			vector3d velocity;
-			vector3d acceleration;
+			Vec3f rotation;
+			Vec3f velocity;
+			Vec3f acceleration;
 		} random;
 
 		struct
 		{
-			vector3d start;
-			vector3d end;
+			Vec3f start;
+			Vec3f end;
 		} easing;
 		
 		struct
 		{
 			float rotation;
-			vector3d axis;
+			Vec3f axis;
 
 			union
 			{
@@ -140,7 +181,7 @@ public:
 
 		struct
 		{
-			vector3d offset;
+			Vec3f offset;
 		} fcruve;
 
 	} rotation_values;
@@ -154,15 +195,15 @@ public:
 
 		struct
 		{
-			vector3d  scale;
-			vector3d  velocity;
-			vector3d  acceleration;
+			Vec3f  scale;
+			Vec3f  velocity;
+			Vec3f  acceleration;
 		} random;
 
 		struct
 		{
-			vector3d  start;
-			vector3d  end;
+			Vec3f  start;
+			Vec3f  end;
 		} easing;
 		
 		struct
@@ -180,7 +221,7 @@ public:
 
 		struct
 		{
-			vector3d offset;
+			Vec3f offset;
 		} fcruve;
 
 	} scaling_values;
@@ -210,14 +251,25 @@ public:
 	// 生成されてからの時間
 	float		m_LivingTime;
 
-	// The time offset for UV
-	int32_t		uvTimeOffset;
+#ifdef __EFFEKSEER_BUILD_VERSION16__
+	//! The time offset for UV animation
+	int32_t		uvTimeOffsets[ParameterRendererCommon::UVParameterNum];
+
+	// Scroll, FCurve area for UV
+	RectF		uvAreaOffsets[ParameterRendererCommon::UVParameterNum];
+
+	// Scroll speed for UV
+	Vec2f		uvScrollSpeeds[ParameterRendererCommon::UVParameterNum];
+#else
+	//! The time offset for UV animation
+	int32_t uvTimeOffset = 0;
 
 	// Scroll, FCurve area for UV
 	RectF		uvAreaOffset;
 
 	// Scroll speed for UV
-	Vector2D	uvScrollSpeed;
+	Vec2f	uvScrollSpeed;
+#endif
 
 	// The number of generated chiledren. (fixed size)
 	int32_t		m_fixedGeneratedChildrenCount[ChildrenMax];
@@ -247,13 +299,13 @@ public:
 	float*			m_nextGenerationTime;
 
 	// Spawning Method matrix
-	Matrix43		m_GenerationLocation;
+	Mat43f			m_GenerationLocation;
 
 	// 変換用行列
-	Matrix43		m_GlobalMatrix43;
+	Mat43f			m_GlobalMatrix43;
 
 	// 親の変換用行列
-	Matrix43		m_ParentMatrix43;
+	Mat43f			m_ParentMatrix;
 
 	// 変換用行列が計算済かどうか
 	bool			m_GlobalMatrix43Calculated;
@@ -267,13 +319,48 @@ public:
 	/* 更新番号 */
 	uint32_t		m_sequenceNumber;
 
+#ifdef __EFFEKSEER_BUILD_VERSION16__
+	float			m_flipbookIndexAndNextRate;
+
+	union
+	{
+		struct
+		{
+		} fixed;
+
+		struct
+		{
+			float begin_threshold;
+			int32_t transition_frame;
+			float no2_threshold;
+			float no3_threshold;
+			int32_t transition_frame2;
+			float end_threshold;
+		} four_point_interpolation;
+
+		struct
+		{
+			float start;
+			float end;
+		} easing;
+
+		struct
+		{
+			float offset;
+		} fcurve;
+
+	} alpha_crunch_values;
+
+	float m_AlphaThreshold;
+#endif
+
 	//! calculate dynamic equation and assign a result
 	template <typename T, typename U>
 	void ApplyEq(T& dstParam, Effect* e, InstanceGlobal* instg, int dpInd, const U& originalParam);
 
 	//! calculate dynamic equation and return a result
 	template <typename S> 
-	Vector3D ApplyEq(const int& dpInd, Vector3D originalParam, const S& scale, const S& scaleInv);
+	Vec3f ApplyEq(const int& dpInd, const Vec3f& originalParam, const S& scale, const S& scaleInv);
 
 	//! calculate dynamic equation and return a result
 	random_float ApplyEq(const RefMinMax& dpInd, random_float originalParam);
@@ -286,12 +373,18 @@ public:
 	random_int ApplyEq(const RefMinMax& dpInd, random_int originalParam);
 
 	// コンストラクタ
-	Instance( Manager* pManager, EffectNode* pEffectNode, InstanceContainer* pContainer );
+	Instance( Manager* pManager, EffectNode* pEffectNode, InstanceContainer* pContainer, InstanceGroup* pGroup );
 
 	// デストラクタ
 	virtual ~Instance();
 
+	bool IsRequiredToCreateChildren(float currentTime);
+
 	void GenerateChildrenInRequired(float currentTime);
+
+	void UpdateChildrenGroupMatrix();
+
+	InstanceGlobal* GetInstanceGlobal();
 
 public:
 	/**
@@ -302,12 +395,12 @@ public:
 	/**
 		@brief	行列の取得
 	*/
-	const Matrix43& GetGlobalMatrix43() const;
+	const Mat43f& GetGlobalMatrix43() const;
 
 	/**
 		@brief	初期化
 	*/
-	void Initialize( Instance* parent, int32_t instanceNumber, int32_t parentTime, const Matrix43& globalMatrix);
+	void Initialize( Instance* parent, int32_t instanceNumber, int32_t parentTime, const Mat43f& globalMatrix);
 
 	/**
 		@brief	更新
@@ -327,7 +420,14 @@ public:
 	/**
 		@brief	UVの位置取得
 	*/
+#ifdef __EFFEKSEER_BUILD_VERSION16__
+	RectF GetUV(const int32_t index) const;
+#else
 	RectF GetUV() const;
+#endif
+
+	//! get custom data
+	std::array<float,4> GetCustomData(int32_t index) const;
 
 private:
 	/**

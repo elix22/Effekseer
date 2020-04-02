@@ -27,11 +27,12 @@ private:
 	uint32_t				m_vertexRingOffset;
 	bool					m_ringBufferLock;
 
-	VertexBuffer( RendererImplemented* renderer, int size, bool isDynamic );
+	VertexBuffer(RendererImplemented* renderer, int size, bool isDynamic, bool hasRefCount);
+
 public:
 	virtual ~VertexBuffer();
 
-	static VertexBuffer* Create( RendererImplemented* renderer, int size, bool isDynamic );
+	static VertexBuffer* Create(RendererImplemented* renderer, int size, bool isDynamic, bool hasRefCount);
 
 	GLuint GetInterface();
 
@@ -41,8 +42,8 @@ public:	// デバイス復旧用
 
 public:
 	void Lock();
-	bool RingBufferLock( int32_t size, int32_t& offset, void*& data );
-	bool TryRingBufferLock(int32_t size, int32_t& offset, void*& data);
+	bool RingBufferLock(int32_t size, int32_t& offset, void*& data, int32_t alignment) override;
+	bool TryRingBufferLock(int32_t size, int32_t& offset, void*& data, int32_t alignment) override;
 
 	void Unlock();
 

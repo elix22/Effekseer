@@ -22,7 +22,6 @@ namespace Effekseer.GUI.Dock
 			UpdateFileListWithProjectPath(Core.FullPath);
 
 			Icon = Images.GetIcon("PanelFileViewer");
-			IconSize = new swig.Vec2(24, 24);
 			TabToolTip = Resources.GetString("FileViewer");
 		}
 
@@ -38,6 +37,15 @@ namespace Effekseer.GUI.Dock
 
 			// Address bar
 			{
+				// Back directory (BS shortcut key)
+				if (Manager.NativeManager.IsWindowFocused() &&
+					Manager.NativeManager.IsKeyPressed(Manager.NativeManager.GetKeyIndex(swig.Key.Backspace)) &&
+					!String.IsNullOrEmpty(currentPath))
+				{
+					UpdateFileListWithProjectPath(currentPath);
+				}
+
+				// Back directory
 				if (Manager.NativeManager.Button("↑") &&
 					!String.IsNullOrEmpty(currentPath))
 				{
@@ -79,7 +87,10 @@ namespace Effekseer.GUI.Dock
 				{
 				}
 
-				Manager.NativeManager.Image(image, 32, 32);
+				{
+					float iconSize = Manager.NativeManager.GetTextLineHeight();
+					Manager.NativeManager.Image(image, iconSize, iconSize);
+				}
 
 				Manager.NativeManager.SameLine();
 
@@ -88,9 +99,10 @@ namespace Effekseer.GUI.Dock
 				{
 					selectedIndex = i;
 
-					if(Manager.NativeManager.IsMouseDoubleClicked(0))
+					if (Manager.NativeManager.IsMouseDoubleClicked(0) ||
+						Manager.NativeManager.IsKeyDown(Manager.NativeManager.GetKeyIndex(swig.Key.Enter)))
 					{
-						DoubleClick();
+						OnFilePicked();
 					}
 				}
 				
@@ -159,6 +171,10 @@ namespace Effekseer.GUI.Dock
 				{
 					Type = FileType.EffekseerProject;
 				}
+				else if (System.IO.Path.GetExtension(filePath).ToLower() == ".efkefc")
+				{
+					Type = FileType.EffekseerProject;
+				}
 				else if (System.IO.Path.GetExtension(filePath).ToLower() == ".png")
 				{
 					Type = FileType.Image;
@@ -208,7 +224,7 @@ namespace Effekseer.GUI.Dock
 			}
 		}
 
-		void DoubleClick()
+		private void OnFilePicked()
 		{
 			if (items.Count == 0)
 			{
@@ -223,6 +239,11 @@ namespace Effekseer.GUI.Dock
 				// efkproj is opened internal function
 				Commands.Open(fileItem.FilePath);
 			}
+			else if (Path.GetExtension(fileItem.FilePath) == ".efkefc")
+			{
+				// efkproj is opened internal function
+				Commands.Open(fileItem.FilePath);
+			}
 			else if (Directory.Exists(fileItem.FilePath))
 			{
 				// move directory
@@ -230,8 +251,14 @@ namespace Effekseer.GUI.Dock
 			}
 			else
 			{
-				// open process
-				System.Diagnostics.Process.Start(fileItem.FilePath);
+				try
+				{
+					// open process
+					System.Diagnostics.Process.Start(fileItem.FilePath);
+				}
+				catch (Exception e)
+				{
+				}
 			}
 		}
 	}

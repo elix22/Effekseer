@@ -10,6 +10,8 @@
 #include <GLFW/glfw3.h>
 #include <GLFW/glfw3native.h>
 
+#include <EditorCommon/GUI/MainWindow.h>
+
 #include <codecvt>
 #include <locale>
 #include <functional>
@@ -21,9 +23,14 @@ namespace efk
 {
 	void GLFLW_ResizeCallback(GLFWwindow* w, int x, int y);
 	
+	/**
+		@note !!Important!! it is migrating into EditorCommon/GUI/MainWindow
+	*/
 	class Window
 	{
 	private:
+		std::shared_ptr<Effekseer::MainWindow> mainWindow_;
+
 		GLFWwindow*	window = nullptr;
 		bool		isOpenGLMode = false;
 		DeviceType	deviceType = DeviceType::OpenGL;
@@ -36,7 +43,7 @@ namespace efk
 		Window();
 		virtual ~Window();
 
-		bool Initialize(const char16_t* title, int32_t width, int32_t height, bool isSRGBMode, DeviceType deviceType);
+		bool Initialize(std::shared_ptr<Effekseer::MainWindow> mainWindow, DeviceType deviceType);
 
 		void Terminate();
 
@@ -75,6 +82,8 @@ namespace efk
 		std::function<bool()> Closing;
 
 		std::function<void(int)> Iconify;
+
+		std::function<void(float)> DpiChanged;
 	};
 
 }

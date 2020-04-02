@@ -48,6 +48,11 @@ namespace Effekseer.GUI.Component
 
 			var nextParam = DynamicSelector.Select("", id, reference.Value, false, false);
 
+			if (Manager.NativeManager.IsItemHovered())
+			{
+				DynamicEquationCodeTooltip.Render(reference);
+			}
+
 			if (reference.Value != nextParam)
 			{
 				reference.SetValue(nextParam);
@@ -56,12 +61,17 @@ namespace Effekseer.GUI.Component
 
 		public static void SelectMaxInComponent(string id, Data.Value.DynamicEquationReference reference)
 		{
-			Manager.NativeManager.PushItemWidth(Manager.NativeManager.GetColumnWidth() - 60);
+			Manager.NativeManager.PushItemWidth(Manager.NativeManager.GetColumnWidth() - 48 * Manager.DpiScale);
 
 			Manager.NativeManager.Text(Resources.GetString("DynamicEq"));
 			Manager.NativeManager.SameLine();
 
 			var nextParam = DynamicSelector.Select(Resources.GetString("Max") , id, reference.Value, false, false);
+
+			if (Manager.NativeManager.IsItemHovered())
+			{
+				DynamicEquationCodeTooltip.Render(reference);
+			}
 
 			if (reference.Value != nextParam)
 			{
@@ -73,12 +83,17 @@ namespace Effekseer.GUI.Component
 
 		public static void SelectMinInComponent(string id, Data.Value.DynamicEquationReference reference)
 		{
-			Manager.NativeManager.PushItemWidth(Manager.NativeManager.GetColumnWidth() - 60);
+			Manager.NativeManager.PushItemWidth(Manager.NativeManager.GetColumnWidth() - 48 * Manager.DpiScale);
 
 			Manager.NativeManager.Text(Resources.GetString("DynamicEq"));
 			Manager.NativeManager.SameLine();
 
 			var nextParam = DynamicSelector.Select(Resources.GetString("Min"), id, reference.Value, false, false);
+
+			if (Manager.NativeManager.IsItemHovered())
+			{
+				DynamicEquationCodeTooltip.Render(reference);
+			}
 
 			if (reference.Value != nextParam)
 			{

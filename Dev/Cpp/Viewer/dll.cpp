@@ -1,14 +1,20 @@
-﻿
+
 #include "Graphics/efk.AVIExporter.h"
 #include "Graphics/efk.GifHelper.h"
 #include "Graphics/efk.PNGHelper.h"
 
 #ifdef _WIN32
 #include "3rdParty/imgui_platform/imgui_impl_dx11.h"
-#include "3rdParty/imgui_platform/imgui_impl_dx9.h"
+#include <filesystem>
 #endif
 
 #include "dll.h"
+#include <IO/IO.h>
+#include <unordered_map>
+#include <unordered_set>
+
+#include <spdlog/sinks/basic_file_sink.h>
+#include <spdlog/spdlog.h>
 
 #pragma comment(lib, "d3d9.lib")
 #pragma comment(lib, "d3d11.lib")
@@ -57,10 +63,16 @@
 
 #endif
 
+const float DistanceBase = 15.0f;
+const float OrthoScaleBase = 16.0f;
+const float ZoomDistanceFactor = 1.125f;
+const float MaxZoom = 40.0f;
+const float MinZoom = -40.0f;
+
 static float g_RotX = 30.0f;
 static float g_RotY = -30.0f;
 static Effekseer::Vector3D g_lightDirection = Effekseer::Vector3D(1, 1, 1);
-static float g_Distance = 15.0f;
+static float g_Zoom = 0.0f;
 const float PI = 3.14159265f;
 
 static bool g_mouseRotDirectionInvX = false;
@@ -255,6 +267,21 @@ void GenerateExportedImageWithBlendAndAdd(std::vector<Effekseer::Color>& pixelsB
 	}
 }
 
+void SetZoom(float zoom)
+{
+	g_Zoom = Effekseer::Max(MinZoom, Effekseer::Min(MaxZoom, zoom));
+}
+
+float GetDistance()
+{
+	return DistanceBase * powf(ZoomDistanceFactor, g_Zoom);
+}
+
+float GetOrthoScale()
+{
+	return OrthoScaleBase / powf(ZoomDistanceFactor, g_Zoom);
+}
+
 ViewerParamater::ViewerParamater()
 	: GuideWidth(0)
 	, GuideHeight(0)
@@ -276,6 +303,7 @@ ViewerParamater::ViewerParamater()
 
 	, Distortion(DistortionType::Current)
 	, RenderingMode(RenderMode::Normal)
+	, ViewerMode(ViewMode::_3D)
 
 {
 }
@@ -329,6 +357,7 @@ static ::EffekseerTool::Sound* g_sound = NULL;
 static std::map<std::u16string, Effekseer::TextureData*> m_textures;
 static std::map<std::u16string, Effekseer::Model*> m_models;
 static std::map<std::u16string, std::shared_ptr<efk::ImageResource>> g_imageResources;
+static std::map<std::u16string, Effekseer::MaterialData*> g_materials_;
 
 static std::vector<HandleHolder> g_handles;
 
@@ -338,23 +367,23 @@ static ::Effekseer::Client* g_client = NULL;
 
 static efk::DeviceType g_deviceType = efk::DeviceType::OpenGL;
 
-Native::TextureLoader::TextureLoader(EffekseerRenderer::Renderer* renderer) : m_renderer(renderer)
+Native::TextureLoader::TextureLoader(EffekseerRenderer::Renderer* renderer, Effekseer::ColorSpaceType colorSpaceType)
+	: m_renderer(renderer)
 {
 	if (g_deviceType == efk::DeviceType::OpenGL)
 	{
 		auto r = (EffekseerRendererGL::Renderer*)m_renderer;
-		m_originalTextureLoader = EffekseerRendererGL::CreateTextureLoader();
+		m_originalTextureLoader = EffekseerRendererGL::CreateTextureLoader(nullptr, colorSpaceType);
 	}
 #ifdef _WIN32
 	else if (g_deviceType == efk::DeviceType::DirectX11)
 	{
 		auto r = (EffekseerRendererDX11::Renderer*)m_renderer;
-		m_originalTextureLoader = EffekseerRendererDX11::CreateTextureLoader(r->GetDevice(), r->GetContext());
+		m_originalTextureLoader = EffekseerRendererDX11::CreateTextureLoader(r->GetDevice(), r->GetContext(), nullptr, colorSpaceType);
 	}
 	else
 	{
-		auto r = (EffekseerRendererDX9::Renderer*)m_renderer;
-		m_originalTextureLoader = EffekseerRendererDX9::CreateTextureLoader(r->GetDevice());
+		assert(0);
 	}
 #endif
 }
@@ -457,18 +486,8 @@ void* Native::ModelLoader::Load(const EFK_CHAR* path)
 		}
 		else
 		{
-			auto r = (EffekseerRendererDX9::Renderer*)m_renderer;
-			auto loader = ::EffekseerRendererDX9::CreateModelLoader(r->GetDevice());
-			auto m = (Effekseer::Model*)loader->Load((const EFK_CHAR*)dst);
-
-			if (m != nullptr)
-			{
-				m_models[key] = m;
-			}
-
-			ES_SAFE_DELETE(loader);
-
-			return m;
+			assert(0);
+			return nullptr;
 		}
 #endif
 	}
@@ -485,14 +504,102 @@ void Native::ModelLoader::Unload(void* data)
 	*/
 }
 
+Native::MaterialLoader::MaterialLoader(EffekseerRenderer::Renderer* renderer) : renderer_(renderer)
+{
+	loader_ = renderer_->CreateMaterialLoader();
+}
+
+Native::MaterialLoader::~MaterialLoader() { ES_SAFE_DELETE(loader_); }
+
+Effekseer::MaterialData* Native::MaterialLoader::Load(const EFK_CHAR* path)
+{
+	if (loader_ == nullptr)
+	{
+		return nullptr;
+	}
+
+	char16_t dst[260];
+	Combine(RootPath.c_str(), (const char16_t*)path, dst, 260);
+
+	std::u16string key(dst);
+
+	if (g_materials_.count(key) > 0)
+	{
+		return g_materials_[key];
+	}
+	else
+	{
+		std::shared_ptr<Effekseer::StaticFile> staticFile;
+		::Effekseer::MaterialData* t = nullptr;
+
+		if (staticFile == nullptr)
+		{
+			staticFile = ::Effekseer::IO::GetInstance()->LoadIPCFile(dst);
+		}
+
+		if (staticFile == nullptr)
+		{
+			staticFile = ::Effekseer::IO::GetInstance()->LoadFile(dst);
+		}
+
+		if (staticFile != nullptr)
+		{
+			t = loader_->Load(staticFile->GetData(), staticFile->GetSize(), ::Effekseer::MaterialFileType::Code);
+			materialFiles_[dst] = staticFile;
+		}
+
+		if (t != nullptr)
+		{
+			g_materials_[key] = t;
+		}
+
+		return t;
+	}
+
+	return nullptr;
+}
+
+void Native::MaterialLoader::ReleaseAll()
+{
+	for (auto it : g_materials_)
+	{
+		((MaterialLoader*)g_manager->GetMaterialLoader())->GetOriginalLoader()->Unload(it.second);
+	}
+	g_materials_.clear();
+	materialFiles_.clear();
+}
+
 ::Effekseer::Effect* Native::GetEffect() { return g_effect; }
 
-Native::Native() : m_time(0), m_step(1) { g_client = Effekseer::Client::Create(); }
+Native::Native() : m_time(0), m_step(1)
+{
+	g_client = Effekseer::Client::Create();
 
-Native::~Native() { ES_SAFE_DELETE(g_client); }
+	commandQueueToMaterialEditor_ = std::make_shared<IPC::CommandQueue>();
+	commandQueueToMaterialEditor_->Start("EfkCmdToMatEdit", 1024 * 1024);
+
+	commandQueueFromMaterialEditor_ = std::make_shared<IPC::CommandQueue>();
+	commandQueueFromMaterialEditor_->Start("EfkCmdFromMatEdit", 1024 * 1024);
+}
+
+Native::~Native()
+{
+	spdlog::trace("Begin Native::~Native()");
+
+	ES_SAFE_DELETE(g_client);
+
+	commandQueueToMaterialEditor_->Stop();
+	commandQueueToMaterialEditor_.reset();
+
+	commandQueueFromMaterialEditor_->Stop();
+	commandQueueFromMaterialEditor_.reset();
+
+	spdlog::trace("End Native::~Native()");
+}
 
 bool Native::CreateWindow_Effekseer(void* pHandle, int width, int height, bool isSRGBMode, efk::DeviceType deviceType)
 {
+	spdlog::trace("Begin Native::CreateWindow_Effekseer");
 	m_isSRGBMode = isSRGBMode;
 	g_deviceType = deviceType;
 
@@ -500,12 +607,13 @@ bool Native::CreateWindow_Effekseer(void* pHandle, int width, int height, bool i
 	int32_t spriteCount = 65000 / 4;
 
 	g_renderer = new ::EffekseerTool::Renderer(spriteCount, isSRGBMode, g_deviceType);
+	
 	if (g_renderer->Initialize(pHandle, width, height))
 	{
-		// 関数追加
-		//::Effekseer::ScriptRegister::SetExternalFunction(0, print);
+		spdlog::trace("OK : ::EffekseerTool::Renderer::Initialize");
 
 		g_manager = ::Effekseer::Manager::Create(spriteCount);
+		spdlog::trace("OK : ::Effekseer::Manager::Create");
 
 		{
 			::Effekseer::SpriteRenderer* sprite_renderer = g_renderer->GetRenderer()->CreateSpriteRenderer();
@@ -516,24 +624,30 @@ bool Native::CreateWindow_Effekseer(void* pHandle, int width, int height, bool i
 
 			if (sprite_renderer == NULL)
 			{
-				printf("Failed create Renderer\n");
+				spdlog::trace("FAIL : CreateSpriteRenderer");
 				g_manager->Destroy();
 				g_manager = NULL;
 				ES_SAFE_DELETE(g_renderer);
 				return false;
 			}
+
+			spdlog::trace("OK : CreateRenderers");
+
 			g_manager->SetSpriteRenderer(sprite_renderer);
 			g_manager->SetRibbonRenderer(ribbon_renderer);
 			g_manager->SetRingRenderer(ring_renderer);
 			g_manager->SetModelRenderer(model_renderer);
 			g_manager->SetTrackRenderer(track_renderer);
 
-			m_textureLoader = new TextureLoader((EffekseerRenderer::Renderer*)g_renderer->GetRenderer());
+			spdlog::trace("OK : SetRenderers");
+
+			m_textureLoader = new TextureLoader((EffekseerRenderer::Renderer*)g_renderer->GetRenderer(),
+												isSRGBMode ? ::Effekseer::ColorSpaceType::Linear : ::Effekseer::ColorSpaceType::Gamma);
 			g_manager->SetTextureLoader(m_textureLoader);
 			g_manager->SetModelLoader(new ModelLoader((EffekseerRenderer::Renderer*)g_renderer->GetRenderer()));
+			g_manager->SetMaterialLoader(new MaterialLoader(g_renderer->GetRenderer()));
 
-			// temp
-			g_manager->SetMaterialLoader(g_renderer->GetRenderer()->CreateMaterialLoader());
+			spdlog::trace("OK : SetLoaders");
 		}
 
 		// Assign device lost events.
@@ -545,47 +659,9 @@ bool Native::CreateWindow_Effekseer(void* pHandle, int width, int height, bool i
 				e->UnloadResources();
 			}
 
+			for (auto& resource : g_imageResources)
 			{
-				Effekseer::TextureLoader* loader = nullptr;
-				if (g_deviceType == efk::DeviceType::OpenGL)
-				{
-					auto r = (EffekseerRendererGL::Renderer*)g_renderer->GetRenderer();
-					loader = EffekseerRendererGL::CreateTextureLoader();
-				}
-#ifdef _WIN32
-				else if (g_deviceType == efk::DeviceType::DirectX11)
-				{
-					auto r = (EffekseerRendererDX11::Renderer*)g_renderer->GetRenderer();
-					loader = EffekseerRendererDX11::CreateTextureLoader(r->GetDevice(), r->GetContext());
-				}
-				else
-				{
-					auto r = (EffekseerRendererDX9::Renderer*)g_renderer->GetRenderer();
-					loader = EffekseerRendererDX9::CreateTextureLoader(r->GetDevice());
-				}
-#endif
-				for (auto& resource : g_imageResources)
-				{
-					loader->Unload(resource.second->GetTextureData());
-					resource.second->GetTextureData() = nullptr;
-				}
-
-				delete loader;
-			}
-
-			{
-				if (g_deviceType == efk::DeviceType::OpenGL)
-				{
-				}
-#ifdef _WIN32
-				else if (g_deviceType == efk::DeviceType::DirectX11)
-				{
-				}
-				else
-				{
-					ImGui_ImplDX9_InvalidateDeviceObjects();
-				}
-#endif
+				resource.second->Invalidate();
 			}
 		};
 
@@ -596,52 +672,20 @@ bool Native::CreateWindow_Effekseer(void* pHandle, int width, int height, bool i
 				e->ReloadResources();
 			}
 
+			for (auto& resource : g_imageResources)
 			{
-				Effekseer::TextureLoader* loader = nullptr;
-				if (g_deviceType == efk::DeviceType::OpenGL)
-				{
-					auto r = (EffekseerRendererGL::Renderer*)g_renderer->GetRenderer();
-					loader = EffekseerRendererGL::CreateTextureLoader();
-				}
-#ifdef _WIN32
-				else if (g_deviceType == efk::DeviceType::DirectX11)
-				{
-					auto r = (EffekseerRendererDX11::Renderer*)g_renderer->GetRenderer();
-					loader = EffekseerRendererDX11::CreateTextureLoader(r->GetDevice(), r->GetContext());
-				}
-				else
-				{
-					auto r = (EffekseerRendererDX9::Renderer*)g_renderer->GetRenderer();
-					loader = EffekseerRendererDX9::CreateTextureLoader(r->GetDevice());
-				}
-#endif
-				for (auto& resource : g_imageResources)
-				{
-					resource.second->GetTextureData() = loader->Load(resource.second->GetPath(), Effekseer::TextureType::Color);
-				}
-
-				delete loader;
-			}
-
-			{
-				if (g_deviceType == efk::DeviceType::OpenGL)
-				{
-				}
-#ifdef _WIN32
-				else if (g_deviceType == efk::DeviceType::DirectX11)
-				{
-				}
-				else
-				{
-					ImGui_ImplDX9_CreateDeviceObjects();
-				}
-#endif
+				resource.second->Validate();
 			}
 		};
+
+		spdlog::trace("OK : AssignFunctions");
 	}
 	else
 	{
 		ES_SAFE_DELETE(g_renderer);
+
+		spdlog::trace("End Native::CreateWindow_Effekseer (false)");
+
 		return false;
 	}
 
@@ -651,6 +695,8 @@ bool Native::CreateWindow_Effekseer(void* pHandle, int width, int height, bool i
 		g_manager->SetSoundPlayer(g_sound->GetSound()->CreateSoundPlayer());
 		g_manager->SetSoundLoader(new SoundLoader(g_sound->GetSound()->CreateSoundLoader()));
 	}
+
+	spdlog::trace("End Native::CreateWindow_Effekseer (true)");
 
 	return true;
 }
@@ -662,7 +708,7 @@ bool Native::UpdateWindow()
 	assert(g_manager != NULL);
 	assert(g_renderer != NULL);
 
-	::Effekseer::Vector3D position(0, 0, g_Distance);
+	::Effekseer::Vector3D position(0, 0, GetDistance());
 	::Effekseer::Matrix43 mat, mat_rot_x, mat_rot_y;
 	mat_rot_x.RotationX(-g_RotX / 180.0f * PI);
 
@@ -706,8 +752,23 @@ bool Native::UpdateWindow()
 		drawParameter.CameraPosition = position;
 	}
 
+	g_renderer->SetOrthographicScale(GetOrthoScale());
+
 	g_sound->SetListener(position, g_focus_position, ::Effekseer::Vector3D(0.0f, 1.0f, 0.0f));
 	g_sound->Update();
+
+	// command
+	if (commandQueueFromMaterialEditor_ != nullptr)
+	{
+		IPC::CommandData commandDataFromMaterialEditor;
+		while (commandQueueFromMaterialEditor_->Dequeue(&commandDataFromMaterialEditor))
+		{
+			if (commandDataFromMaterialEditor.Type == IPC::CommandType::NotifyUpdate)
+			{
+				isUpdateMaterialRequired_ = true;
+			}
+		}
+	}
 
 	return true;
 }
@@ -716,7 +777,7 @@ void Native::RenderWindow()
 {
 	g_renderer->BeginRendering();
 
-	if (g_renderer->Distortion == EffekseerTool::eDistortionType::DistortionType_Current)
+	if (g_renderer->Distortion == EffekseerTool::DistortionType::Current)
 	{
 		g_manager->DrawBack(drawParameter);
 
@@ -760,32 +821,7 @@ bool Native::DestroyWindow()
 
 	InvalidateTextureCache();
 
-	{
-		Effekseer::TextureLoader* loader = nullptr;
-		if (g_deviceType == efk::DeviceType::OpenGL)
-		{
-			auto r = (EffekseerRendererGL::Renderer*)g_renderer->GetRenderer();
-			loader = EffekseerRendererGL::CreateTextureLoader();
-		}
-#ifdef _WIN32
-		else if (g_deviceType == efk::DeviceType::DirectX11)
-		{
-			auto r = (EffekseerRendererDX11::Renderer*)g_renderer->GetRenderer();
-			loader = EffekseerRendererDX11::CreateTextureLoader(r->GetDevice(), r->GetContext());
-		}
-		else
-		{
-			auto r = (EffekseerRendererDX9::Renderer*)g_renderer->GetRenderer();
-			loader = EffekseerRendererDX9::CreateTextureLoader(r->GetDevice());
-		}
-#endif
-		for (auto& resource : g_imageResources)
-		{
-			loader->Unload(resource.second->GetTextureData());
-		}
-
-		delete loader;
-	}
+	g_imageResources.clear();
 
 	ES_SAFE_RELEASE(g_effect);
 
@@ -803,6 +839,7 @@ bool Native::LoadEffect(void* pData, int size, const char16_t* Path)
 
 	((TextureLoader*)g_manager->GetTextureLoader())->RootPath = std::u16string(Path);
 	((ModelLoader*)g_manager->GetModelLoader())->RootPath = std::u16string(Path);
+	((MaterialLoader*)g_manager->GetMaterialLoader())->RootPath = std::u16string(Path);
 
 	SoundLoader* soundLoader = (SoundLoader*)g_manager->GetSoundLoader();
 	if (soundLoader)
@@ -857,6 +894,7 @@ bool Native::PlayEffect()
 				Effekseer::Matrix43::Multiple(mat, mat, matTra);
 
 				g_manager->SetMatrix(handleHolder.Handle, mat);
+				g_manager->SetSpeed(handleHolder.Handle, m_effectBehavior.PlaybackSpeed);
 
 				g_handles.push_back(handleHolder);
 
@@ -955,6 +993,11 @@ bool Native::StepEffect()
 		g_manager->SetDynamicInput(h.Handle, 3, m_effectBehavior.DynamicInput4);
 	}
 
+	for (auto h : g_handles)
+	{
+		g_manager->SetSpeed(h.Handle, m_effectBehavior.PlaybackSpeed);
+	}
+
 	if (m_time % m_step == 0)
 	{
 		m_rootLocation.X += m_effectBehavior.PositionVelocityX;
@@ -1005,7 +1048,6 @@ bool Native::StepEffect()
 												 m_effectBehavior.TargetPositionX,
 												 m_effectBehavior.TargetPositionY,
 												 m_effectBehavior.TargetPositionZ);
-
 					index++;
 				}
 			}
@@ -1104,16 +1146,18 @@ bool Native::Slide(float x, float y)
 	v.X = up.X + right.X;
 	v.Y = up.Y + right.Y;
 	v.Z = up.Z + right.Z;
-	g_focus_position.X += v.X;
-	g_focus_position.Y += v.Y;
-	g_focus_position.Z += v.Z;
+
+	float moveFactor = powf(ZoomDistanceFactor, g_Zoom);
+	g_focus_position.X += v.X * moveFactor;
+	g_focus_position.Y += v.Y * moveFactor;
+	g_focus_position.Z += v.Z * moveFactor;
 
 	return true;
 }
 
 bool Native::Zoom(float zoom)
 {
-	g_Distance -= zoom;
+	SetZoom(g_Zoom - zoom);
 
 	return true;
 }
@@ -1178,7 +1222,6 @@ public:
 		sprintf(path8_dst, "%s.%d%s", pathWOE, index, ext_);
 		Effekseer::ConvertUtf8ToUtf16((int16_t*)path_, 260, (const int8_t*)path8_dst);
 
-
 		efk::PNGHelper pngHelper;
 		pngHelper.Save((char16_t*)path_, g_renderer->GuideWidth, g_renderer->GuideHeight, pixels.data());
 	}
@@ -1204,11 +1247,11 @@ public:
 
 		pixels_out.resize((g_renderer->GuideWidth * recordingParameter_.HorizontalCount) * (g_renderer->GuideHeight * yCount));
 
-		if (recordingParameter_.Transparence == TransparenceType::Original)
+		if (recordingParameter_.Transparence == TransparenceType::None)
 		{
 			for (auto& p : pixels_out)
 			{
-				p = Effekseer::Color(0, 0, 0, 0);
+				p = Effekseer::Color(0, 0, 0, 255);
 			}
 		}
 		else
@@ -1216,7 +1259,7 @@ public:
 		{
 			for (auto& p : pixels_out)
 			{
-				p = Effekseer::Color(0, 0, 0, 255);
+				p = Effekseer::Color(0, 0, 0, 0);
 			}
 		}
 
@@ -1238,10 +1281,8 @@ public:
 		Effekseer::ConvertUtf8ToUtf16((int16_t*)path_, 260, (const int8_t*)path8_dst);
 
 		efk::PNGHelper pngHelper;
-		pngHelper.Save(path_,
-					   g_renderer->GuideWidth * recordingParameter_.HorizontalCount,
-					   g_renderer->GuideHeight * yCount,
-					   pixels_out.data());
+		pngHelper.Save(
+			path_, g_renderer->GuideWidth * recordingParameter_.HorizontalCount, g_renderer->GuideHeight * yCount, pixels_out.data());
 	}
 
 	void OnEndFrameRecord(int index, std::vector<Effekseer::Color>& pixels) override
@@ -1378,7 +1419,7 @@ bool Native::Record(RecordingParameter& recordingParameter)
 		char path8_dst[256];
 		char16_t* path_[256];
 		Effekseer::ConvertUtf16ToUtf8((int8_t*)pathWOE, 256, (const int16_t*)path);
-		sprintf(path8_dst, "%s_add%s", pathWOE, ext_);
+		sprintf(path8_dst, "%s_add", pathWOE);
 		Effekseer::ConvertUtf8ToUtf16((int16_t*)path_, 256, (const int8_t*)path8_dst);
 		recordingParameter2.SetPath((const char16_t*)path_);
 	}
@@ -1439,7 +1480,7 @@ bool Native::Record(RecordingParameter& recordingParameter)
 
 	g_renderer->IsBackgroundTranslucent = recordingParameter.Transparence == TransparenceType::Original;
 
-	::Effekseer::Vector3D position(0, 0, g_Distance);
+	::Effekseer::Vector3D position(0, 0, GetDistance());
 	::Effekseer::Matrix43 mat, mat_rot_x, mat_rot_y;
 	mat_rot_x.RotationX(-g_RotX / 180.0f * PI);
 	mat_rot_y.RotationY(-g_RotY / 180.0f * PI);
@@ -1451,6 +1492,8 @@ bool Native::Record(RecordingParameter& recordingParameter)
 
 	g_renderer->GetRenderer()->SetCameraMatrix(
 		::Effekseer::Matrix44().LookAtRH(position, g_focus_position, ::Effekseer::Vector3D(0.0f, 1.0f, 0.0f)));
+
+	g_renderer->SetOrthographicScale(GetOrthoScale());
 
 	StopEffect();
 
@@ -1577,7 +1620,7 @@ ViewerParamater Native::GetViewerParamater()
 	paramater.FocusZ = g_focus_position.Z;
 	paramater.AngleX = g_RotX;
 	paramater.AngleY = g_RotY;
-	paramater.Distance = g_Distance;
+	paramater.Distance = GetDistance();
 	paramater.RendersGuide = g_renderer->RendersGuide;
 	paramater.RateOfMagnification = g_renderer->RateOfMagnification;
 
@@ -1613,10 +1656,11 @@ void Native::SetViewerParamater(ViewerParamater& paramater)
 	g_focus_position.Z = paramater.FocusZ;
 	g_RotX = paramater.AngleX;
 	g_RotY = paramater.AngleY;
-	g_Distance = paramater.Distance;
-	g_renderer->RendersGuide = paramater.RendersGuide;
 
-	g_renderer->Distortion = (::EffekseerTool::eDistortionType)paramater.Distortion;
+	SetZoom(logf(Effekseer::Max(FLT_MIN, paramater.Distance / DistanceBase)) / logf(ZoomDistanceFactor));
+
+	g_renderer->RendersGuide = paramater.RendersGuide;
+	g_renderer->Distortion = (::EffekseerTool::DistortionType)paramater.Distortion;
 	g_renderer->RenderingMode = (::Effekseer::RenderMode)paramater.RenderingMode;
 }
 
@@ -1667,6 +1711,10 @@ bool Native::InvalidateTextureCache()
 			++it;
 		}
 		m_models.clear();
+	}
+
+	{
+		((MaterialLoader*)g_manager->GetMaterialLoader())->ReleaseAll();
 	}
 
 	return true;
@@ -1782,50 +1830,40 @@ void Native::SetCullingParameter(bool isCullingShown, float cullingRadius, float
 
 efk::ImageResource* Native::LoadImageResource(const char16_t* path)
 {
-	Effekseer::TextureLoader* loader = nullptr;
+	auto it = g_imageResources.find(path);
+	if (it != g_imageResources.end())
+	{
+		return it->second.get();
+	}
+
+	std::shared_ptr<Effekseer::TextureLoader> loader = nullptr;
 	if (g_deviceType == efk::DeviceType::OpenGL)
 	{
 		auto r = (EffekseerRendererGL::Renderer*)g_renderer->GetRenderer();
-		loader = EffekseerRendererGL::CreateTextureLoader();
+		loader = std::shared_ptr<Effekseer::TextureLoader>(EffekseerRendererGL::CreateTextureLoader());
 	}
 #ifdef _WIN32
 	else if (g_deviceType == efk::DeviceType::DirectX11)
 	{
 		auto r = (EffekseerRendererDX11::Renderer*)g_renderer->GetRenderer();
-		loader = EffekseerRendererDX11::CreateTextureLoader(r->GetDevice(), r->GetContext());
+		loader = std::shared_ptr<Effekseer::TextureLoader>(EffekseerRendererDX11::CreateTextureLoader(r->GetDevice(), r->GetContext()));
 	}
 	else
 	{
-		auto r = (EffekseerRendererDX9::Renderer*)g_renderer->GetRenderer();
-		loader = EffekseerRendererDX9::CreateTextureLoader(r->GetDevice());
+		assert(0);
 	}
 #endif
 
-auto textureData = loader->Load(path, Effekseer::TextureType::Color);
+	auto resource = std::make_shared<efk::ImageResource>(loader);
+	resource->SetPath(path);
 
-	if (textureData != nullptr)
+	if (resource->Validate())
 	{
-		auto resource = std::make_shared<efk::ImageResource>();
-
-		resource->GetTextureData() = textureData;
-		resource->SetPath(path);
-
-		if (g_imageResources[path] != nullptr)
-		{
-			loader->Unload(g_imageResources[path]->GetTextureData());
-		}
-
 		g_imageResources[path] = resource;
-
-		delete loader;
-
 		return resource.get();
 	}
-	else
-	{
-		delete loader;
-		return nullptr;
-	}
+
+	return nullptr;
 }
 
 int32_t Native::GetAndResetDrawCall()
@@ -1894,6 +1932,69 @@ void Native::SetTonemapParameters(int32_t algorithm, float exposure)
 		tonemap->SetEnabled(algorithm != 0);
 		tonemap->SetParameters((efk::TonemapEffect::Algorithm)algorithm, exposure);
 	}
+}
+
+void Native::OpenOrCreateMaterial(const char16_t* path)
+{
+	if (commandQueueToMaterialEditor_ == nullptr)
+		return;
+
+	char u8path[260];
+
+	Effekseer::ConvertUtf16ToUtf8((int8_t*)u8path, 260, (int16_t*)path);
+
+	IPC::CommandData commandData;
+	commandData.Type = IPC::CommandType::OpenOrCreateMaterial;
+	commandData.SetStr(u8path);
+	commandQueueToMaterialEditor_->Enqueue(&commandData);
+
+	spdlog::trace("ICP - Send - OpenOrCreateMaterial : {}", u8path);
+}
+
+void Native::TerminateMaterialEditor()
+{
+	if (commandQueueToMaterialEditor_ == nullptr)
+		return;
+
+	IPC::CommandData commandData;
+	commandData.Type = IPC::CommandType::Terminate;
+	commandQueueToMaterialEditor_->Enqueue(&commandData);
+
+	spdlog::trace("ICP - Send - Terminate");
+}
+
+bool Native::GetIsUpdateMaterialRequiredAndReset()
+{
+	return false;
+	auto ret = isUpdateMaterialRequired_;
+	isUpdateMaterialRequired_ = false;
+	return ret;
+}
+
+void Native::SetFileLogger(const char16_t* path)
+{
+	spdlog::flush_on(spdlog::level::trace);
+	spdlog::set_level(spdlog::level::trace);
+	spdlog::trace("Begin Native::SetFileLogger");
+
+#if defined(_WIN32)
+	auto wpath = std::filesystem::path(reinterpret_cast<const wchar_t*>(path));
+	auto fileLogger = spdlog::basic_logger_mt("logger", wpath.generic_string().c_str());
+#else
+	char cpath[512];
+	Effekseer::ConvertUtf16ToUtf8(reinterpret_cast<int8_t*>(cpath), 512, reinterpret_cast<const int16_t*>(path));
+	auto fileLogger = spdlog::basic_logger_mt("logger", cpath);
+#endif
+
+	spdlog::set_default_logger(fileLogger);
+
+#if defined(_WIN32)
+	spdlog::trace("Native::SetFileLogger : {}", wpath.generic_string().c_str());
+#else
+	spdlog::trace("Native::SetFileLogger : {}", cpath);
+#endif
+
+	spdlog::trace("End Native::SetFileLogger");
 }
 
 EffekseerRenderer::Renderer* Native::GetRenderer() { return g_renderer->GetRenderer(); }

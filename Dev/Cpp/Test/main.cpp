@@ -12,10 +12,8 @@
 #include "graphics.h"
 #include "sound.h"
 #include "common.h"
-
-#ifndef __EFFEKSEER_TEST_BUILD_AS_CMAKE__
-#include "../EffekseerRendererArea/EffekseerRenderer/EffekseerRendererArea.Renderer.h"
-#endif
+#include "../Effekseer/Effekseer/IO/Effekseer.EfkEfcFactory.h"
+#include "Runtime/RuntimeTest.h"
 
 #if _WIN32
 
@@ -30,11 +28,11 @@
 #pragma comment(lib, "x86/Effekseer.Release.lib" )
 #endif
 
-#if _DEBUG
-#pragma comment(lib, "x86/EffekseerRendererArea.Debug.lib")
-#else
-#pragma comment(lib, "x86/EffekseerRendererArea.Release.lib")
-#endif
+//#if _DEBUG
+//#pragma comment(lib, "x86/EffekseerRendererArea.Debug.lib")
+//#else
+//#pragma comment(lib, "x86/EffekseerRendererArea.Release.lib")
+//#endif
 
 #endif
 
@@ -45,12 +43,14 @@
 //----------------------------------------------------------------------------------
 //
 //----------------------------------------------------------------------------------
-#define __NormalMode 1
-#define __PerformanceCheckMode 0
+#define __NormalMode 0
+#define __PerformanceCheckMode 1
 
 #define __DDS_TEST 0
 
 #define __CULLING_TEST 0
+
+#define __SOUND_TEST 0
 
 //----------------------------------------------------------------------------------
 //
@@ -73,41 +73,6 @@ static ::Effekseer::Vector3D			g_focus;
 
 std::unique_ptr<TestManager> testManager;
 
-#ifdef _WIN32
-typedef wchar_t efchar;
-typedef std::wstring efstring;
-#else 
-typedef uint16_t efchar;
-typedef std::basic_string<uint16_t> efstring;
-#endif
-
-static efstring ToEFString(const wchar_t* src)
-{
-	if (sizeof(wchar_t)== 2)
-	{
-#ifdef _WIN32
-		return efstring(src);
-#else
-		return efstring((uint16_t*)src);
-#endif
-	}
-	if (sizeof(wchar_t)== 4)
-	{
-#ifndef _WIN32
-		uint16_t temp[2048];
-		int32_t length = 0;
-		while (src[length] != 0 && length < 2047)
-		{
-			temp[length] = (uint16_t)src[length];
-			length++;
-		}
-		temp[length] = 0;
-		return efstring(temp);
-#endif
-	}
-	return efstring();
-}
-
 void TestManagerPlayAndStop()
 {
 	{
@@ -128,23 +93,62 @@ void TestManagerPlayAndStop()
 	}
 }
 
+void TestShowEfcAssets() 
+{ 
+	Effekseer::EfkEfcProperty prop;
+	
+	    {
+		FILE* fp = nullptr;
+
+#if _WIN32
+		fopen_s(&fp, "Resource/em.efkefc", "rb");
+#else
+		fp = fopen("Resource/em.efkefc", "rb");
+#endif
+		if (fp == nullptr)
+			return;
+
+		fseek(fp, 0, SEEK_END);
+		auto size = ftell(fp);
+		fseek(fp, 0, SEEK_SET);
+
+		std::vector<uint8_t> data;
+		data.resize(size);
+		fread(data.data(), size, 1, fp);
+		fclose(fp);
+
+		prop.Load(data.data(), data.size());
+	}
+}
+
 //----------------------------------------------------------------------------------
 //
 //----------------------------------------------------------------------------------
 int main()
 {
 #if _WIN32
-	_CrtSetReportMode(_CRT_WARN, _CRTDBG_MODE_WNDW);
-	_CrtSetReportMode(_CRT_ERROR, _CRTDBG_MODE_WNDW);
-	_CrtSetReportMode(_CRT_ASSERT, _CRTDBG_MODE_WNDW);
 	_CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
 #endif
 
+#ifdef __EFFEKSEER_TEST_BUILD_AS_CMAKE__
+	StringAndPathHelperTest();
+	StartingFrameTest();
+	UpdateHandleTest();
+	PlaybackSpeedTest();
+	CustomAllocatorTest();
+	//SIMDTest();
+	BasicRuntimeTest();
+	UpdateHandleTest();
+	//BasicRuntimeDeviceLostTest();
+#else
+
+	//TestShowEfcAssets();
+	
 	testManager = std::unique_ptr<TestManager>(new TestManager());
 	
 	TestManagerPlayAndStop();
-
-	g_manager = ::Effekseer::Manager::Create( 2000 );
+	
+	g_manager = ::Effekseer::Manager::Create(32768);
 
 #if __CULLING_TEST
 	g_manager->CreateCullingWorld(200, 200, 200, 4);
@@ -152,10 +156,17 @@ int main()
 
 #if _WIN32
 	InitGraphics(g_window_width, g_window_height);
+#if __SOUND_TEST
 	InitSound();
+#endif
+
 #else
 	InitGraphics( g_window_width, g_window_height);
+
+#if __SOUND_TEST
 	InitSound();
+#endif
+
 #endif
 
 	Init();
@@ -169,22 +180,24 @@ int main()
 		Rendering();
 	}
 
-	g_manager->Destroy();
-
 	for (size_t i = 0; i < testManager->effects.size(); i++)
 	{
 		ES_SAFE_RELEASE(testManager->effects[i]);
 	}
 
+#if __SOUND_TEST
 	TermSound();
+#endif
 
 	TermGraphics();
-	
+
+	g_manager->Destroy();
 
 	testManager.reset();
+#endif
 
 #if _WIN32
-	_CrtDumpMemoryLeaks();
+	//_CrtDumpMemoryLeaks();
 #endif
 
 	return 0;
@@ -204,6 +217,8 @@ void Init()
 	testManager->effects.push_back( Effekseer::Effect::Create( g_manager, EFK_LOCALFILE(u"Resource/Laser01_dds.efk") ) );
 #elif __CULLING_TEST
 	testManager->effects.push_back( Effekseer::Effect::Create( g_manager, EFK_LOCALFILE(u"Resource/culling.efk") ) );
+#elif __PerformanceCheckMode
+	testManager->effects.push_back( Effekseer::Effect::Create( g_manager, EFK_LOCALFILE(u"Resource/Benediction.efk") ) );
 #else
 	testManager->effects.push_back( Effekseer::Effect::Create( g_manager, EFK_LOCALFILE(u"Resource/Laser01.efk") ) );
 	testManager->effects.push_back( Effekseer::Effect::Create( g_manager, EFK_LOCALFILE(u"Resource/Laser02.efk") ) );
@@ -216,20 +231,6 @@ void Init()
 	testManager->effects.push_back( Effekseer::Effect::Create( g_manager, EFK_LOCALFILE(u"Resource/block.efk") ) );
 	testManager->effects.push_back( Effekseer::Effect::Create( g_manager, EFK_LOCALFILE(u"Resource/block_simple.efk") ) );
 	testManager->effects.push_back( Effekseer::Effect::Create( g_manager, EFK_LOCALFILE(u"Resource/Simple_Distortion.efk") ) );
-#endif
-
-#ifndef __EFFEKSEER_TEST_BUILD_AS_CMAKE__ 
-	// test area
-	EffekseerRendererArea::BoundingBoxEstimator bbestimator;
-	bbestimator.Estimate(testManager->effects[0],
-						 ::Effekseer::Matrix44().LookAtRH(g_position, g_focus, ::Effekseer::Vector3D(0.0f, 1.0f, 0.0f)),
-						 ::Effekseer::Matrix44().PerspectiveFovRH(90.0f / 180.0f * 3.14f, 4.0f / 3.0f, 1.0f, 100.0f),
-						 640,
-						 480,
-						 100,
-						 0.90f,
-		0.0f,
-		1.0f);
 #endif
 
 	PlayEffect();
@@ -245,17 +246,14 @@ void Loop()
 #endif
 
 #if __PerformanceCheckMode
-	static int count = 0;
-
-	if( count % 10 == 1 && count < 100 )
+	int32_t instanceCount = g_manager->GetTotalInstanceCount();
+	if( instanceCount > 0 )
 	{
-		auto updateTime = g_manager->GetUpdateTime();
-		auto drawTime = g_manager->GetDrawTime();
+		int32_t updateTime = g_manager->GetUpdateTime();
+		int32_t drawTime = g_manager->GetDrawTime();
 
-		printf("UpdateTime %d, DrawTime %d\n", updateTime, drawTime );
+		printf("%d\t%d\t%d\n", instanceCount, updateTime, drawTime );
 	}
-
-	count++;
 #endif
 }
 
@@ -279,16 +277,17 @@ void PlayEffect()
 #endif
 
 #if __PerformanceCheckMode
-	
-	for( float y = -10.0f; y <= 10.0f; y += 2.0f )
+	static int target = 0;
+	printf("-------- Performance Mesuring --------\n");
+	printf("Instances\tUpdate\tDraw\n");
+	for( float y = -2.0f; y <= 2.0f; y += 2.0f )
 	{
-		for( float x = -10.0f; x <= 10.0f; x += 2.0f )
+		for( float x = -2.0f; x <= 2.0f; x += 2.0f )
 		{
-			auto handle = g_manager->Play( g_effect, x, y, 0 );
+			auto handle = g_manager->Play( testManager->effects[target], x, y, 0 );
 			//g_manager->SetShown( handle, false );
 		}
 	}
-	//g_manager->Play( g_effect, 0, 0, 0 );
 #endif
 }
 

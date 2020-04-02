@@ -5,7 +5,7 @@ using System.Text;
 
 namespace Effekseer.Data.Value
 {
-	public class Path
+	public class Path : IResettableValue
 	{
 		string _abspath = string.Empty;
 
@@ -101,12 +101,7 @@ namespace Effekseer.Data.Value
 		{
 			if (_abspath == string.Empty) return _abspath;
 			if (Core.FullPath == string.Empty) return _abspath;
-
-			Uri basepath = new Uri(Core.FullPath);
-			Uri path = new Uri(_abspath);
-			var relative_path = basepath.MakeRelativeUri(path).ToString();
-
-            return relative_path;
+			return Utils.Misc.GetRelativePath(Core.FullPath, _abspath);
 		}
 
 		public void SetRelativePath(string relative_path)
@@ -125,16 +120,23 @@ namespace Effekseer.Data.Value
 				}
 				else
 				{
-					Uri basepath = new Uri(Core.FullPath);
-					Uri path = new Uri(basepath, relative_path);
-					var absolute_path = path.LocalPath;
-					SetAbsolutePath(absolute_path);
+					SetAbsolutePath(Utils.Misc.GetAbsolutePath(Core.FullPath, relative_path));
 				}
 			}
 			catch (Exception e)
 			{
 				throw new Exception(e.ToString() + " Core.FullPath = " + Core.FullPath );
 			}
+		}
+
+		public void ResetValue()
+		{
+			SetAbsolutePath(DefaultValue);
+		}
+
+		internal void SetDefaultAbsolutePath(string abspath)
+		{
+			DefaultValue = abspath;
 		}
 
 		internal void SetAbsolutePathDirectly(string abspath)

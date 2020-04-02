@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-//using System.Windows.Forms;
 using System.Diagnostics;
 using System.Reflection;
 using System.IO;
@@ -73,29 +72,13 @@ namespace Effekseer.GUI
 		[UniqueName(value = "Internal.Open")]
 		public static bool Open()
 		{
-
-			var filter = Resources.GetString("ProjectFilter");
-            var result = swig.FileDialog.OpenDialog(filter, System.IO.Directory.GetCurrentDirectory());
+			var filter = Resources.GetString("ProjectFilterNew");
+			var result = swig.FileDialog.OpenDialog(filter, System.IO.Directory.GetCurrentDirectory());
 
             if(!string.IsNullOrEmpty(result))
             {
                 Open(result);
             }
-            
-
-			/*
-			OpenFileDialog ofd = new OpenFileDialog();
-
-			ofd.InitialDirectory = System.IO.Directory.GetCurrentDirectory();
-			ofd.Filter = Resources.GetString("ProjectFilter");
-			ofd.FilterIndex = 2;
-			ofd.Multiselect = false;
-
-			if (ofd.ShowDialog() == DialogResult.OK)
-			{
-				Open(ofd.FileName);
-			}
-			*/
 
 			return true;
 		}
@@ -122,14 +105,7 @@ namespace Effekseer.GUI
 						}
 						else
 						{
-							if (Core.Language == Language.Japanese)
-							{
-								swig.GUIManager.show(fullPath + "が見つかりません。", "Error", swig.DialogStyle.Error, swig.DialogButtons.OK);
-							}
-							else
-							{
-								swig.GUIManager.show(fullPath + " is not found.", "Error", swig.DialogStyle.Error, swig.DialogButtons.OK);
-							}
+							swig.GUIManager.show(string.Format(Resources.GetString("Error_NotFound"), fullPath), "Error", swig.DialogStyle.Error, swig.DialogButtons.OK);
 						}
 					}
 					catch (Exception e)
@@ -151,14 +127,7 @@ namespace Effekseer.GUI
 					}
 					else
 					{
-						if (Core.Language == Language.Japanese)
-						{
-							swig.GUIManager.show(fullPath + "が見つかりません。", "Error", swig.DialogStyle.Error, swig.DialogButtons.OK);
-						}
-						else
-						{
-							swig.GUIManager.show(fullPath + " is not found.", "Error", swig.DialogStyle.Error, swig.DialogButtons.OK);
-						}
+						swig.GUIManager.show(string.Format(Resources.GetString("Error_NotFound"), fullPath), "Error", swig.DialogStyle.Error, swig.DialogButtons.OK);
 					}
 				}
 				catch (Exception e)
@@ -195,18 +164,19 @@ namespace Effekseer.GUI
 		[UniqueName(value = "Internal.SaveAs")]
 		public static bool SaveAs()
 		{
-			var filter = Resources.GetString("ProjectFilter");
+			var filter = Resources.GetString("EffekseerParticleFilter");
+
 			var result = swig.FileDialog.SaveDialog(filter, System.IO.Directory.GetCurrentDirectory());
 
 			if (!string.IsNullOrEmpty(result))
 			{
 				var filepath = result;
 
-				if(System.IO.Path.GetExtension(filepath) != ".efkproj")
+				if (System.IO.Path.GetExtension(filepath) != ".efkefc")
 				{
-					filepath += ".efkproj";
+					filepath += ".efkefc";
 				}
-				
+
 				Core.SaveTo(filepath);
 				RecentFiles.AddRecentFile(filepath);
 
@@ -219,29 +189,6 @@ namespace Effekseer.GUI
 
 				return true;
 			}
-
-			/*
-			SaveFileDialog ofd = new SaveFileDialog();
-
-			ofd.InitialDirectory = System.IO.Directory.GetCurrentDirectory();
-			ofd.Filter = Resources.GetString("ProjectFilter");
-			ofd.FilterIndex = 2;
-			ofd.OverwritePrompt = true;
-
-			if (ofd.ShowDialog() == DialogResult.OK)
-			{
-				var filepath = ofd.FileName;
-				Core.SaveTo(filepath);
-				RecentFiles.AddRecentFile(filepath);
-
-				System.IO.Directory.SetCurrentDirectory(System.IO.Path.GetDirectoryName(filepath));
-
-				if (Manager.Network.SendOnSave)
-				{
-					Manager.Network.Send();
-				}
-			}
-			*/
 
 			return false;
 		}
@@ -277,7 +224,7 @@ namespace Effekseer.GUI
 			return true;
 		}
 
-		[Name(value = "InternalStop")]  // 停止
+		[Name(value = "InternalStop")]
 		[UniqueName(value = "Internal.StopViewer")]
 		public static bool Stop()
 		{
@@ -285,7 +232,7 @@ namespace Effekseer.GUI
 			return true;
 		}
 
-		[Name(value = "InternalStep")]  // ステップ
+		[Name(value = "InternalStep")]
 		[UniqueName(value = "Internal.StepViewer")]
 		public static bool Step()
 		{
@@ -293,7 +240,7 @@ namespace Effekseer.GUI
 			return true;
 		}
 
-		[Name(value = "InternalBaskStep")] // ステップ(後)
+		[Name(value = "InternalBaskStep")]
 		[UniqueName(value = "Internal.BackStepViewer")]
 		public static bool BackStep()
 		{
@@ -301,7 +248,7 @@ namespace Effekseer.GUI
 			return true;
 		}
 
-		[Name(value = "InternalUndo")]  // 元に戻す
+		[Name(value = "InternalUndo")]
 		[UniqueName(value = "Internal.Undo")]
 		public static bool Undo()
 		{
@@ -309,7 +256,7 @@ namespace Effekseer.GUI
 			return true;
 		}
 
-		[Name(value = "InternalRedo")]  // やり直し
+		[Name(value = "InternalRedo")]
 		[UniqueName(value = "Internal.Redo")]
 		public static bool Redo()
 		{
@@ -317,13 +264,10 @@ namespace Effekseer.GUI
 			return true;
 		}
 
-		[Name(value = "InternalCopy")] // ノードのコピー
+		[Name(value = "InternalCopy")]
 		[UniqueName(value = "Internal.Copy")]
 		public static bool Copy()
 		{
-			//if (Manager.NodeTreeView == null) return false;
-			//if (!Manager.NodeTreeView.NodeTreeView.Focused) return false;
-
 			if (Core.SelectedNode != null)
 			{
 				var data = Core.Copy(Core.SelectedNode);
@@ -334,13 +278,10 @@ namespace Effekseer.GUI
 			return false;
 		}
 
-		[Name(value = "InternalPaste")] // ノードの貼り付け
+		[Name(value = "InternalPaste")]
 		[UniqueName(value = "Internal.Paste")]
 		public static bool Paste()
 		{
-			//if (Manager.NodeTreeView == null) return false;
-			//if (!Manager.NodeTreeView.NodeTreeView.Focused) return false;
-
 			if (Core.SelectedNode != null)
 			{
 				var data = Manager.NativeManager.GetClipboardText();
@@ -355,6 +296,13 @@ namespace Effekseer.GUI
 						var node = selected.AddChild();
 						Core.Paste(node, data);
 						Command.CommandManager.EndCollection();
+
+
+						if (Core.Root.GetDeepestLayerNumberInChildren() > Constant.NodeLayerLimit)
+						{
+							Command.CommandManager.Undo(true);
+							ErrorUtils.ShowErrorByNodeLayerLimit();
+						}
 					}
 				}
 
@@ -368,9 +316,6 @@ namespace Effekseer.GUI
 		[UniqueName(value = "Internal.PasteInfo")]
 		public static bool PasteInfo()
 		{
-			//if (Manager.NodeTreeView == null) return false;
-			//if (!Manager.NodeTreeView.NodeTreeView.Focused) return false;
-
 			if (Core.SelectedNode != null)
 			{
 				var data = Manager.NativeManager.GetClipboardText();
@@ -394,13 +339,20 @@ namespace Effekseer.GUI
 
 			if (selected != null)
 			{
-				selected.AddChild();
+				if (selected.GetLayerNumber() < Constant.NodeLayerLimit)
+				{
+					selected.AddChild();
+				}
+				else
+				{
+					ErrorUtils.ShowErrorByNodeLayerLimit();
+				}
 			}
 
 			return true;
 		}
 
-		[Name(value = "InternalInsertNode")] // ノードの挿入
+		[Name(value = "InternalInsertNode")]
 		[UniqueName(value = "Internal.InsertNode")]
 		public static bool InsertNode()
 		{
@@ -408,13 +360,20 @@ namespace Effekseer.GUI
 
 			if (selected != null && selected.Parent != null)
 			{
-				selected.InsertParent();
+				if (Core.Root.GetDeepestLayerNumberInChildren() < Constant.NodeLayerLimit)
+				{
+					selected.InsertParent();
+				}
+				else
+				{
+					ErrorUtils.ShowErrorByNodeLayerLimit();
+				}
 			}
 
 			return true;
 		}
 
-		[Name(value = "InternalRemoveNode")] // ノードの削除
+		[Name(value = "InternalRemoveNode")]
 		[UniqueName(value = "Internal.RemoveNode")]
 		public static bool RemoveNode()
 		{
@@ -429,97 +388,66 @@ namespace Effekseer.GUI
 		}
 
 		/// <summary>
-		/// if to save an effect is required, show disposing dialog box
+		/// Rename node with a dialog
 		/// </summary>
 		/// <returns></returns>
-        /*
-		static public bool SaveOnDisposing()
+		[Name(value = "InternalRenameNode")]
+		[UniqueName(value = "Internal.RenameNode")]
+		public static bool RenameNode()
 		{
-			if (Core.IsChanged)
-			{
-				var format = Resources.GetString("ConfirmSaveChanged");
-
-				var result = MessageBox.Show(
-					string.Format(format, System.IO.Path.GetFileName(Core.FullPath)),
-					"Warning",
-					MessageBoxButtons.YesNoCancel);
-
-				if (result == System.Windows.Forms.DialogResult.Yes)
-				{
-					if (Core.FullPath != string.Empty)
-					{
-						Core.SaveTo(Core.FullPath);
-					}
-					else
-					{
-						SaveFileDialog ofd = new SaveFileDialog();
-
-						ofd.InitialDirectory = System.IO.Directory.GetCurrentDirectory();
-
-						ofd.Filter = Resources.GetString("ProjectFilter");
-						ofd.FilterIndex = 2;
-						ofd.OverwritePrompt = true;
-
-						if (ofd.ShowDialog() == DialogResult.OK)
-						{
-							var filepath = ofd.FileName;
-							Core.SaveTo(filepath);
-						}
-						else
-						{
-							return false;
-						}
-					}
-				}
-				else if (result == System.Windows.Forms.DialogResult.No)
-				{
-					return true;
-				}
-				else if (result == System.Windows.Forms.DialogResult.Cancel)
-				{
-					return false;
-				}
-			}
-
+			var selected = Core.SelectedNode;
+			var renameNode = new GUI.Dialog.RenameNode();
+			renameNode.Show(selected);
 			return true;
 		}
-        */
 
 		/// <summary>
-		/// ヘルプを表示
+		/// show a help
 		/// </summary>
 		/// <returns></returns>
-		[Name(value = "InternalViewHelp")] // ヘルプを表示
+		[Name(value = "InternalViewHelp")]
 		[UniqueName(value = "Internal.ViewHelp")]
 		static public bool ViewHelp()
 		{
-			string rootDir = Path.GetDirectoryName(Manager.GetEntryDirectory());
-			string helpPath = Path.Combine(rootDir, @"Help\index_en.html");
+			string helpPath = @"https://effekseer.github.io/Helps/15x/Tool/en/index.html";
 
 			if (Core.Language == Language.Japanese)
 			{
-				helpPath = Path.Combine(rootDir, @"Help\index_ja.html");
+				helpPath = @"https://effekseer.github.io/Helps/15x/Tool/ja/index.html";
 			}
 
-			if (File.Exists(helpPath))
+			try
 			{
-				Process.Start(helpPath);
+				System.Diagnostics.Process.Start(helpPath);
+			}
+			catch
+			{
+				if (Core.Language == Language.Japanese)
+				{
+					swig.GUIManager.show("ヘルプを開けませんでした。公式サイトからご覧ください。", "Error", swig.DialogStyle.Error, swig.DialogButtons.OK);
+				}
+				else
+				{
+					swig.GUIManager.show("Could not open help. Please see from the official website.", "Error", swig.DialogStyle.Error, swig.DialogButtons.OK);
+				}
 			}
 
 			return true;
 		}
 
+		/*
 		/// <summary>
-		/// サンプルを開く
+		/// Open sample
 		/// </summary>
 		/// <returns></returns>
-		[Name(value = "InternalOpenSample")] // サンプルを開く
+		[Name(value = "InternalOpenSample")]
 		[UniqueName(value = "Internal.OpenSample")]
 		static public bool OpenSample()
 		{
 			string rootDir = Path.GetDirectoryName(Manager.GetEntryDirectory());
 
-			var filter = Resources.GetString("ProjectFilter");
+			var filter = Resources.GetString("ProjectFilterNew");
+
 			var result = swig.FileDialog.OpenDialog(filter, Path.Combine(rootDir, @"Sample"));
 
             if (!string.IsNullOrEmpty(result))
@@ -527,28 +455,15 @@ namespace Effekseer.GUI
                 Open(result);
             }
 
-            /*
-			OpenFileDialog ofd = new OpenFileDialog();
-
-			ofd.InitialDirectory = Path.Combine(rootDir, @"Sample");
-			ofd.Filter = Resources.GetString("ProjectFilter");
-			ofd.FilterIndex = 2;
-			ofd.Multiselect = false;
-
-			if (ofd.ShowDialog() == DialogResult.OK)
-			{
-				Open(ofd.FileName);
-			}
-            */
-
 			return true;
 		}
+		*/
 
 		/// <summary>
-		/// Effekseerについて
+		/// About effekseer
 		/// </summary>
 		/// <returns></returns>
-		[Name(value = "InternalAbout")] // Effekseerについて
+		[Name(value = "InternalAbout")]
 		[UniqueName(value = "Internal.About")]
 		static public bool About()
 		{

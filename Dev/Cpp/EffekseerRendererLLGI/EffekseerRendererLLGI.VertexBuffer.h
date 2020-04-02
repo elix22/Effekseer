@@ -11,12 +11,12 @@ namespace EffekseerRendererLLGI
 
 class VertexBuffer : public DeviceObject, public ::EffekseerRenderer::VertexBufferBase
 {
-private:
+protected:
 	// TODO make ring buffer
 	int32_t currentIndex = 0;
 	std::vector<LLGI::VertexBuffer*> vertexBuffers;
 
-	void* m_lockedResource;
+	void* lockedResource_;
 
 	uint32_t m_vertexRingOffset;
 	bool m_ringBufferLock;
@@ -24,20 +24,20 @@ private:
 	int32_t m_ringLockedOffset;
 	int32_t m_ringLockedSize;
 
-	VertexBuffer(RendererImplemented* renderer, LLGI::VertexBuffer* buffer, int size, bool isDynamic);
+	VertexBuffer(GraphicsDevice* graphicsDevice, LLGI::VertexBuffer* buffer, int size, bool isDynamic, bool hasRefCount);
 
 public:
 	virtual ~VertexBuffer();
 
-	static VertexBuffer* Create(RendererImplemented* renderer, int size, bool isDynamic);
+	static VertexBuffer* Create(GraphicsDevice* graphicsDevice, int size, bool isDynamic, bool hasRefCount);
 
 	LLGI::VertexBuffer* GetVertexBuffer() { return vertexBuffers[currentIndex]; }
 
 public:
-	void Lock();
-	bool RingBufferLock(int32_t size, int32_t& offset, void*& data);
-	bool TryRingBufferLock(int32_t size, int32_t& offset, void*& data);
-	void Unlock();
+	void Lock() override;
+	bool RingBufferLock(int32_t size, int32_t& offset, void*& data, int32_t alignment) override;
+	bool TryRingBufferLock(int32_t size, int32_t& offset, void*& data, int32_t alignment) override;
+	void Unlock() override;
 };
 
 } // namespace EffekseerRendererLLGI

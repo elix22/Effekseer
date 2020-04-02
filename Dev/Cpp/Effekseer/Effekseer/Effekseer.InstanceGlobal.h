@@ -6,8 +6,9 @@
 // Include
 //----------------------------------------------------------------------------------
 #include "Effekseer.Base.h"
-#include "Effekseer.Vector3D.h"
 #include "Effekseer.Color.h"
+#include "SIMD/Effekseer.Vec3f.h"
+#include "SIMD/Effekseer.Mat43f.h"
 
 //----------------------------------------------------------------------------------
 //
@@ -38,7 +39,7 @@ private:
 	float		m_updatedFrame;
 
 	InstanceContainer*	m_rootContainer;
-	Vector3D			m_targetLocation;
+	Vec3f				m_targetLocation;
 
 	int64_t				m_seed = 0;
 
@@ -55,6 +56,12 @@ private:
 	virtual ~InstanceGlobal();
 
 public:
+	//! A delta time for next update
+	float NextDeltaFrame = 0.0f;
+
+	void BeginDeltaFrame(float frame);
+
+	void EndDeltaFrame();
 
 	bool		IsGlobalColorSet = false;
 	Color		GlobalColor = Color(255, 255, 255, 255);
@@ -74,8 +81,6 @@ public:
 
 	void DecInstanceCount();
 
-	void AddUpdatedFrame( float frame );
-
 	/**
 		@brief	全てのインスタンス数を取得
 	*/
@@ -89,7 +94,7 @@ public:
 	InstanceContainer* GetRootContainer() const;
 	void SetRootContainer( InstanceContainer* container );
 
-	const Vector3D& GetTargetLocation() const;
+	const Vec3f& GetTargetLocation() const;
 	void SetTargetLocation( const Vector3D& location );
 
 	static float Rand(void* userData);

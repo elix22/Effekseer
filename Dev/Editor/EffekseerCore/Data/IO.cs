@@ -70,7 +70,6 @@ namespace Effekseer.Data
 			return e;
 		}
 
-#if MATERIAL_ENABLED
 		public static XmlElement SaveToElement(XmlDocument doc, string element_name, MaterialFileParameter mfp, bool isClip)
 		{
 			var e = doc.CreateElement(element_name);
@@ -82,6 +81,8 @@ namespace Effekseer.Data
 			}
 
 			var e_float1 = doc.CreateElement("Float1");
+			var e_float2 = doc.CreateElement("Float2");
+			var e_float3 = doc.CreateElement("Float3");
 			var e_float4 = doc.CreateElement("Float4");
 			var e_texture = doc.CreateElement("Texture");
 
@@ -92,26 +93,60 @@ namespace Effekseer.Data
 			{
 				var uniforms = mfp.GetUniforms(info);
 
-				foreach(var uniform in uniforms)
+				foreach(var uniform in uniforms.Where(_=>_.Item1 != null))
 				{
-					var status = uniform;
+					var status = uniform.Item1;
 
 					if (status.Value is Data.Value.Vector4D)
 					{
 						var v = status.Value as Data.Value.Vector4D;
-						var v_e = SaveToElement(doc, uniform.Key, v, isClip);
+						var v_k = doc.CreateTextElement("Key", status.Key.ToString());
+						var v_e = SaveToElement(doc, "Value", v, isClip);
 						if(v_e != null)
 						{
-							e_float4.AppendChild(v_e);
+							var e_root = doc.CreateElement("KeyValue");
+							e_root.AppendChild(v_k);
+							e_root.AppendChild(v_e);
+							e_float4.AppendChild(e_root);
+						}
+					}
+					else if (status.Value is Data.Value.Vector3D)
+					{
+						var v = status.Value as Data.Value.Vector3D;
+						var v_k = doc.CreateTextElement("Key", status.Key.ToString());
+						var v_e = SaveToElement(doc, "Value", v, isClip);
+						if (v_e != null)
+						{
+							var e_root = doc.CreateElement("KeyValue");
+							e_root.AppendChild(v_k);
+							e_root.AppendChild(v_e);
+							e_float3.AppendChild(e_root);
+						}
+					}
+					if (status.Value is Data.Value.Vector2D)
+					{
+						var v = status.Value as Data.Value.Vector2D;
+						var v_k = doc.CreateTextElement("Key", status.Key.ToString());
+						var v_e = SaveToElement(doc, "Value", v, isClip);
+						if (v_e != null)
+						{
+							var e_root = doc.CreateElement("KeyValue");
+							e_root.AppendChild(v_k);
+							e_root.AppendChild(v_e);
+							e_float2.AppendChild(e_root);
 						}
 					}
 					else if (status.Value is Data.Value.Float)
 					{
 						var v = status.Value as Data.Value.Float;
-						var v_e = SaveToElement(doc, uniform.Key, v, isClip);
+						var v_k = doc.CreateTextElement("Key", status.Key.ToString());
+						var v_e = SaveToElement(doc, "Value", v, isClip);
 						if (v_e != null)
 						{
-							e_float1.AppendChild(v_e);
+							var e_root = doc.CreateElement("KeyValue");
+							e_root.AppendChild(v_k);
+							e_root.AppendChild(v_e);
+							e_float1.AppendChild(e_root);
 						}
 					}
 				}
@@ -121,7 +156,10 @@ namespace Effekseer.Data
 				foreach (var kv in textures)
 				{
 					var status = kv.Item1;
-					
+
+					if (status == null)
+						continue;
+
 					// regard as defalt texture
 					if (!status.IsShown)
 						continue;
@@ -129,51 +167,90 @@ namespace Effekseer.Data
 					if (status.Value is Data.Value.PathForImage)
 					{
 						var v = status.Value as Data.Value.PathForImage;
-						var v_e = SaveToElement(doc, status.Key, v, isClip);
+						var v_k = doc.CreateTextElement("Key", status.Key.ToString());
+						var v_e = SaveToElement(doc, "Value", v, isClip);
 						if (v_e != null)
 						{
-							e_texture.AppendChild(v_e);
+							var e_root = doc.CreateElement("KeyValue");
+							e_root.AppendChild(v_k);
+							e_root.AppendChild(v_e);
+							e_texture.AppendChild(e_root);
 						}
 					}
 				}
 			}
 			else
 			{
-				foreach(var kv in mfp.KeyValues)
+				foreach(var status in mfp.GetValueStatus())
 				{
-					var key = kv.Key;
-					var status = kv.Value as MaterialFileParameter.ValueStatus;
-
 					if(status.Value is Data.Value.Vector4D)
 					{
 						var v = status.Value as Data.Value.Vector4D;
-						var v_e = SaveToElement(doc, status.Key, v, isClip);
+						var v_k = doc.CreateTextElement("Key", status.Key.ToString());
+						var v_e = SaveToElement(doc, "Value", v, isClip);
 						if (v_e != null)
 						{
-							e_float4.AppendChild(v_e);
+							var e_root = doc.CreateElement("KeyValue");
+							e_root.AppendChild(v_k);
+							e_root.AppendChild(v_e);
+							e_float4.AppendChild(e_root);
+						}
+					}
+					if (status.Value is Data.Value.Vector3D)
+					{
+						var v = status.Value as Data.Value.Vector3D;
+						var v_k = doc.CreateTextElement("Key", status.Key.ToString());
+						var v_e = SaveToElement(doc, "Value", v, isClip);
+						if (v_e != null)
+						{
+							var e_root = doc.CreateElement("KeyValue");
+							e_root.AppendChild(v_k);
+							e_root.AppendChild(v_e);
+							e_float3.AppendChild(e_root);
+						}
+					}
+					if (status.Value is Data.Value.Vector2D)
+					{
+						var v = status.Value as Data.Value.Vector2D;
+						var v_k = doc.CreateTextElement("Key", status.Key.ToString());
+						var v_e = SaveToElement(doc, "Value", v, isClip);
+						if (v_e != null)
+						{
+							var e_root = doc.CreateElement("KeyValue");
+							e_root.AppendChild(v_k);
+							e_root.AppendChild(v_e);
+							e_float2.AppendChild(e_root);
 						}
 					}
 					else if (status.Value is Data.Value.Float)
 					{
 						var v = status.Value as Data.Value.Float;
-						var v_e = SaveToElement(doc, status.Key, v, isClip);
+						var v_k = doc.CreateTextElement("Key", status.Key.ToString());
+						var v_e = SaveToElement(doc, "Value", v, isClip);
 						if (v_e != null)
 						{
-							e_float1.AppendChild(v_e);
+							var e_root = doc.CreateElement("KeyValue");
+							e_root.AppendChild(v_k);
+							e_root.AppendChild(v_e);
+							e_float1.AppendChild(e_root);
 						}
 					}
 					else if (status.Value is Data.Value.PathForImage)
 					{
-						var v = status.Value as Data.Value.PathForImage;
-
 						// regard as defalt texture
 						if (!status.IsShown)
 							continue;
 
-						var v_e = SaveToElement(doc, status.Key, v, isClip);
+						var v = status.Value as Data.Value.PathForImage;
+						var v_k = doc.CreateTextElement("Key", status.Key.ToString());
+						var v_e = SaveToElement(doc, "Value", v, isClip);
+
 						if (v_e != null)
 						{
-							e_texture.AppendChild(v_e);
+							var e_root = doc.CreateElement("KeyValue");
+							e_root.AppendChild(v_k);
+							e_root.AppendChild(v_e);
+							e_texture.AppendChild(e_root);
 						}
 					}
 				}
@@ -182,6 +259,16 @@ namespace Effekseer.Data
 			if(e_float1.ChildNodes.Count > 0)
 			{
 				e.AppendChild(e_float1);
+			}
+
+			if (e_float2.ChildNodes.Count > 0)
+			{
+				e.AppendChild(e_float2);
+			}
+
+			if (e_float3.ChildNodes.Count > 0)
+			{
+				e.AppendChild(e_float3);
 			}
 
 			if (e_float4.ChildNodes.Count > 0)
@@ -196,7 +283,7 @@ namespace Effekseer.Data
 
 			return e.ChildNodes.Count > 0 ? e : null;
 		}
-#endif
+
 		public static XmlElement SaveToElement(XmlDocument doc, string element_name, Data.DynamicInputCollection collection, bool isClip)
 		{
 			var e = doc.CreateElement(element_name);
@@ -217,8 +304,13 @@ namespace Effekseer.Data
 			var e = doc.CreateElement(element_name);
 			for (int i = 0; i < collection.Values.Count; i++)
 			{
-				var e_node = SaveToElement(doc, collection.Values[i].GetType().Name, collection.Values[i], isClip);
-				e.AppendChild(e_node);
+				var name = collection.Values[i].GetType().Name;
+				// a node must be generated
+				var e_node = SaveToElement(doc, name, collection.Values[i], true);
+				if (e_node != null)
+				{
+					e.AppendChild(e_node);
+				}
 			}
 
 			return e;
@@ -490,6 +582,7 @@ namespace Effekseer.Data
 		public static XmlElement SaveToElement(XmlDocument doc, string element_name, Value.FCurveVector2D value, bool isClip)
 		{
 			var e = doc.CreateElement(element_name);
+			var timeline = SaveToElement(doc, "Timeline", value.Timeline, isClip);
 			var keys = doc.CreateElement("Keys");
 			var x = doc.CreateElement("X");
 			var y = doc.CreateElement("Y");
@@ -532,6 +625,7 @@ namespace Effekseer.Data
 			setValues(value.X, x);
 			setValues(value.Y, y);
 
+			if (timeline != null) keys.AppendChild(timeline);
 			if (x.ChildNodes.Count > 0) keys.AppendChild(x);
 			if (y.ChildNodes.Count > 0) keys.AppendChild(y);
 			if (keys.ChildNodes.Count > 0) e.AppendChild(keys);
@@ -542,6 +636,7 @@ namespace Effekseer.Data
 		public static XmlElement SaveToElement(XmlDocument doc, string element_name, Value.FCurveVector3D value, bool isClip)
 		{
 			var e = doc.CreateElement(element_name);
+			var timeline = SaveToElement(doc, "Timeline", value.Timeline, isClip);
 			var keys = doc.CreateElement("Keys");
 			var x = doc.CreateElement("X");
 			var y = doc.CreateElement("Y");
@@ -586,6 +681,7 @@ namespace Effekseer.Data
 			setValues(value.Y, y);
 			setValues(value.Z, z);
 
+			if (timeline != null) keys.AppendChild(timeline);
 			if (x.ChildNodes.Count > 0) keys.AppendChild(x);
 			if (y.ChildNodes.Count > 0) keys.AppendChild(y);
 			if (z.ChildNodes.Count > 0) keys.AppendChild(z);
@@ -597,6 +693,7 @@ namespace Effekseer.Data
 		public static XmlElement SaveToElement(XmlDocument doc, string element_name, Value.FCurveColorRGBA value, bool isClip)
 		{
 			var e = doc.CreateElement(element_name);
+			var timeline = SaveToElement(doc, "Timeline", value.Timeline, isClip);
 			var keys = doc.CreateElement("Keys");
 			var r = doc.CreateElement("R");
 			var g = doc.CreateElement("G");
@@ -605,7 +702,7 @@ namespace Effekseer.Data
 
 			int index = 0;
 
-			Action<Value.FCurve<byte>, XmlElement> setValues = (v, xml) =>
+			Action<Value.FCurve<int>, XmlElement> setValues = (v, xml) =>
 			{
 				index = 0;
 
@@ -643,6 +740,7 @@ namespace Effekseer.Data
 			setValues(value.B, b);
 			setValues(value.A, a);
 
+			if (timeline != null) keys.AppendChild(timeline);
 			if (r.ChildNodes.Count > 0) keys.AppendChild(r);
 			if (g.ChildNodes.Count > 0) keys.AppendChild(g);
 			if (b.ChildNodes.Count > 0) keys.AppendChild(b);
@@ -756,21 +854,109 @@ namespace Effekseer.Data
 			}
 
 			var e_float1 = e["Float1"] as XmlElement;
+			var e_float2 = e["Float2"] as XmlElement;
+			var e_float3 = e["Float3"] as XmlElement;
 			var e_float4 = e["Float4"] as XmlElement;
 			var e_texture = e["Texture"] as XmlElement;
-
-			var kv = mfp.KeyValues;
 
 			if (e_float1 != null)
 			{
 				for (var i = 0; i < e_float1.ChildNodes.Count; i++)
 				{
 					var e_child = e_float1.ChildNodes[i] as XmlElement;
-					if (kv.ContainsKey((e_child.Name)))
+
+					// compatibility
+					string key = string.Empty;
+					XmlElement valueElement = null;
+					if(MaterialFileParameter.GetVersionOfKey(e_child.Name) == 0)
 					{
-						var vs = kv[e_child.Name] as MaterialFileParameter.ValueStatus;
+						key = e_child.Name;
+						valueElement = e_child;
+					}
+					else
+					{
+						var e_k = e_child["Key"] as XmlElement;
+						valueElement = e_child["Value"] as XmlElement;
+						
+						if(e_k != null)
+						{
+							key = e_k.GetText();
+						}
+					}
+
+					var vs = mfp.FindValue(key, null, false);
+					if (vs != null)
+					{
 						var v = vs.Value as Value.Float;
-						LoadFromElement(e_child, v, isClip);
+						LoadFromElement(valueElement, v, isClip);
+					}
+				}
+			}
+
+			if (e_float2 != null)
+			{
+				for (var i = 0; i < e_float2.ChildNodes.Count; i++)
+				{
+					var e_child = e_float2.ChildNodes[i] as XmlElement;
+
+					// compatibility
+					string key = string.Empty;
+					XmlElement valueElement = null;
+					if (MaterialFileParameter.GetVersionOfKey(e_child.Name) == 0)
+					{
+						key = e_child.Name;
+						valueElement = e_child;
+					}
+					else
+					{
+						var e_k = e_child["Key"] as XmlElement;
+						valueElement = e_child["Value"] as XmlElement;
+
+						if (e_k != null)
+						{
+							key = e_k.GetText();
+						}
+					}
+
+					var vs = mfp.FindValue(key, null, false);
+					if (vs != null)
+					{
+						var v = vs.Value as Value.Vector2D;
+						LoadFromElement(valueElement, v, isClip);
+					}
+				}
+			}
+
+			if (e_float3 != null)
+			{
+				for (var i = 0; i < e_float3.ChildNodes.Count; i++)
+				{
+					var e_child = e_float3.ChildNodes[i] as XmlElement;
+
+					// compatibility
+					string key = string.Empty;
+					XmlElement valueElement = null;
+					if (MaterialFileParameter.GetVersionOfKey(e_child.Name) == 0)
+					{
+						key = e_child.Name;
+						valueElement = e_child;
+					}
+					else
+					{
+						var e_k = e_child["Key"] as XmlElement;
+						valueElement = e_child["Value"] as XmlElement;
+
+						if (e_k != null)
+						{
+							key = e_k.GetText();
+						}
+					}
+
+					var vs = mfp.FindValue(key, null, false);
+					if (vs != null)
+					{
+						var v = vs.Value as Value.Vector3D;
+						LoadFromElement(valueElement, v, isClip);
 					}
 				}
 			}
@@ -780,11 +966,31 @@ namespace Effekseer.Data
 				for (var i = 0; i < e_float4.ChildNodes.Count; i++)
 				{
 					var e_child = e_float4.ChildNodes[i] as XmlElement;
-					if (kv.ContainsKey(e_child.Name))
+
+					// compatibility
+					string key = string.Empty;
+					XmlElement valueElement = null;
+					if (MaterialFileParameter.GetVersionOfKey(e_child.Name) == 0)
 					{
-						var vs = kv[e_child.Name] as MaterialFileParameter.ValueStatus;
+						key = e_child.Name;
+						valueElement = e_child;
+					}
+					else
+					{
+						var e_k = e_child["Key"] as XmlElement;
+						valueElement = e_child["Value"] as XmlElement;
+
+						if (e_k != null)
+						{
+							key = e_k.GetText();
+						}
+					}
+
+					var vs = mfp.FindValue(key, null, false);
+					if (vs != null)
+					{
 						var v = vs.Value as Value.Vector4D;
-						LoadFromElement(e_child, v, isClip);
+						LoadFromElement(valueElement, v, isClip);
 					}
 				}
 			}
@@ -794,11 +1000,31 @@ namespace Effekseer.Data
 				for (var i = 0; i < e_texture.ChildNodes.Count; i++)
 				{
 					var e_child = e_texture.ChildNodes[i] as XmlElement;
-					if (kv.ContainsKey(e_child.Name))
+
+					// compatibility
+					string key = string.Empty;
+					XmlElement valueElement = null;
+					if (MaterialFileParameter.GetVersionOfKey(e_child.Name) == 0)
 					{
-						var vs = kv[e_child.Name] as MaterialFileParameter.ValueStatus;
+						key = e_child.Name;
+						valueElement = e_child;
+					}
+					else
+					{
+						var e_k = e_child["Key"] as XmlElement;
+						valueElement = e_child["Value"] as XmlElement;
+
+						if (e_k != null)
+						{
+							key = e_k.GetText();
+						}
+					}
+
+					var vs = mfp.FindValue(key, null, false);
+					if (vs != null)
+					{
 						var v = vs.Value as Value.PathForImage;
-						LoadFromElement(e_child, v, isClip);
+						LoadFromElement(valueElement, v, isClip);
 					}
 				}
 			}
@@ -824,7 +1050,7 @@ namespace Effekseer.Data
 			for (var i = 0; i < e.ChildNodes.Count; i++)
 			{
 				var e_child = e.ChildNodes[i] as XmlElement;
-				var element = new DynamicEquation(DynamicEquation.DefaultName, collection);
+				var element = new DynamicEquation(collection);
 				LoadFromElement(e_child, element, isClip);
 				collection.Values.Add(element);
 			}
@@ -1195,6 +1421,7 @@ namespace Effekseer.Data
 			var e_keys = e["Keys"] as XmlElement;
 			if (e_keys == null) return;
 
+			var e_timeline = e_keys["Timeline"] as XmlElement;
 			var e_x = e_keys["X"] as XmlElement;
 			var e_y = e_keys["Y"] as XmlElement;
 
@@ -1248,6 +1475,7 @@ namespace Effekseer.Data
 				}
 			};
 
+			if (e_timeline != null) LoadFromElement(e_timeline, value.Timeline, isClip);
 			if (e_x != null) import(value.X, e_x);
 			if (e_y != null) import(value.Y, e_y);
 		}
@@ -1257,6 +1485,7 @@ namespace Effekseer.Data
 			var e_keys = e["Keys"] as XmlElement;
 			if (e_keys == null) return;
 
+			var e_timeline = e_keys["Timeline"] as XmlElement;
 			var e_x = e_keys["X"] as XmlElement;
 			var e_y = e_keys["Y"] as XmlElement;
 			var e_z = e_keys["Z"] as XmlElement;
@@ -1310,6 +1539,7 @@ namespace Effekseer.Data
 				}
 			};
 
+			if (e_timeline != null) LoadFromElement(e_timeline, value.Timeline, isClip);
 			if (e_x != null) import(value.X, e_x);
 			if (e_y != null) import(value.Y, e_y);
 			if (e_z != null) import(value.Z, e_z);
@@ -1317,7 +1547,7 @@ namespace Effekseer.Data
 
 		public static void LoadFromElement(XmlElement e, Value.FCurveColorRGBA value, bool isClip)
 		{
-			Action<Data.Value.FCurve<byte>, XmlElement> import = (v_, e_) =>
+			Action<Data.Value.FCurve<int>, XmlElement> import = (v_, e_) =>
 				{
 					foreach (XmlElement r in e_.ChildNodes)
 					{
@@ -1331,7 +1561,7 @@ namespace Effekseer.Data
 							var ry = r.GetTextAsFloat("RightY");
 							var i = r.GetTextAsInt("InterpolationType");
 
-							var t = new Value.FCurveKey<byte>(f, (byte)v);
+							var t = new Value.FCurveKey<int>(f, (int)v);
 							t.SetLeftDirectly(lx, ly);
 							t.SetRightDirectly(rx, ry);
 							t.InterpolationType.SetValue(i);
@@ -1370,11 +1600,13 @@ namespace Effekseer.Data
 			var e_keys = e["Keys"] as XmlElement;
 			if (e_keys == null) return;
 
+			var e_timeline = e_keys["Timeline"] as XmlElement;
 			var e_r = e_keys["R"] as XmlElement;
 			var e_g = e_keys["G"] as XmlElement;
 			var e_b = e_keys["B"] as XmlElement;
 			var e_a = e_keys["A"] as XmlElement;
 
+			if (e_timeline != null) LoadFromElement(e_timeline, value.Timeline, isClip);
 			if (e_r != null) import(value.R, e_r);
 			if (e_g != null) import(value.G, e_g);
 			if (e_b != null) import(value.B, e_b);

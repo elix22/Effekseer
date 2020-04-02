@@ -17,6 +17,9 @@
 //----------------------------------------------------------------------------------
 namespace EffekseerRendererGL
 {
+
+class DeviceObjectCollection;
+
 //----------------------------------------------------------------------------------
 //
 //----------------------------------------------------------------------------------
@@ -24,7 +27,7 @@ namespace EffekseerRendererGL
 /**
 @brief	テクスチャ読込クラスを生成する。
 */
-::Effekseer::TextureLoader* CreateTextureLoader(::Effekseer::FileInterface* fileInterface = NULL);
+::Effekseer::TextureLoader* CreateTextureLoader(::Effekseer::FileInterface* fileInterface = nullptr, ::Effekseer::ColorSpaceType colorSpaceType = ::Effekseer::ColorSpaceType::Gamma);
 
 /**
 @brief	モデル読込クラスを生成する。
@@ -43,12 +46,25 @@ protected:
 
 public:
 	/**
-		@brief	インスタンスを生成する。
-		@param	squareMaxCount		最大描画スプライト数
-		@param	OpenGLDeviceType	デバイスの種類
-		@return	インスタンス
+	@brief
+	\~english	Create an instance
+	\~japanese	インスタンスを生成する。
+	@param	squareMaxCount
+	\~english	the number of maximum sprites
+	\~japanese	最大描画スプライト数
+	@param	deviceType
+	\~english	device type of opengl
+	\~japanese	デバイスの種類
+	@param	deviceObjectCollection
+	\~english	for a middleware. it should be nullptr.
+	\~japanese	ミドルウェア向け。 nullptrにすべきである。
+	@return
+	\~english	instance
+	\~japanese	インスタンス
 	*/
-	static Renderer* Create(int32_t squareMaxCount, OpenGLDeviceType deviceType = OpenGLDeviceType::OpenGL2);
+	static Renderer* Create(int32_t squareMaxCount,
+							OpenGLDeviceType deviceType = OpenGLDeviceType::OpenGL2,
+							DeviceObjectCollection* deviceObjectCollection = nullptr);
 
 	/**
 		@brief	最大描画スプライト数を取得する。
@@ -63,14 +79,18 @@ public:
 	virtual void SetSquareMaxCount(int32_t count) = 0;
 
 	/**
-	@brief	背景を取得する。
+	@brief
+	\~english	Get a background.
+	\~japanese	背景を取得する。
 	*/
 	virtual Effekseer::TextureData* GetBackground() = 0;
 
 	/**
-	@brief	背景を設定する。
+	@brief	
+	\~english	Specify a background.
+	\~japanese	背景を設定する。
 	*/
-	virtual void SetBackground(GLuint background) = 0;
+	virtual void SetBackground(GLuint background, bool hasMipmap = false) = 0;
 
 	/**
 	@brief	

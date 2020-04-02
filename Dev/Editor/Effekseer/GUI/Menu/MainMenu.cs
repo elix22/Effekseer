@@ -330,13 +330,16 @@ namespace Effekseer.GUI.Menu
 				setDockWindow(Resources.GetString("CameraSettings"), typeof(Dock.ViewPoint), Images.GetIcon("PanelViewPoint"));
 				setDockWindow(Resources.GetString("Recorder"), typeof(Dock.Recorder), Images.GetIcon("PanelRecorder"));
 				setDockWindow(Resources.GetString("Options"), typeof(Dock.Option), Images.GetIcon("PanelOption"));
-				setDockWindow(Resources.GetString("PostEffect"), typeof(Dock.PostEffect), Images.GetIcon("PanelPostEffect"));
+				setDockWindow(Resources.GetString("Environment_Name"), typeof(Dock.Environement), Images.GetIcon("PanelEnvironment"));
 				setDockWindow(Resources.GetString("Global"), typeof(Dock.GlobalValues), Images.GetIcon("PanelGlobal"));
 				setDockWindow(Resources.GetString("Behavior"), typeof(Dock.BehaviorValues), Images.GetIcon("PanelBehavior"));
 				setDockWindow(Resources.GetString("Culling"), typeof(Dock.Culling), Images.GetIcon("PanelCulling"));
                 setDockWindow(Resources.GetString("Network"), typeof(Dock.Network), Images.GetIcon("PanelNetwork"));
 				setDockWindow(Resources.GetString("FileViewer"), typeof(Dock.FileViewer), Images.GetIcon("PanelFileViewer"));
-				setDockWindow(Resources.GetString("DynamicParameter_Name"), typeof(Dock.Dynamic), Images.GetIcon("PanelFileViewer"));
+				setDockWindow(Resources.GetString("DynamicParameter_Name"), typeof(Dock.Dynamic), Images.GetIcon("PanelDynamicParameter"));
+#if __EFFEKSEER_BUILD_VERSION16__
+				setDockWindow(Resources.GetString("AlphaCrunch"), typeof(Dock.AlphaCrunchValues), Images.GetIcon("PanelAlphaCrunch"));
+#endif
 
 				this.Controls.Add(menu);
 			}
@@ -345,7 +348,7 @@ namespace Effekseer.GUI.Menu
 				var menu = new Menu(Resources.GetString("Help"));
 
 				menu.Controls.Add(create_menu_item_from_commands(Commands.ViewHelp));
-				menu.Controls.Add(create_menu_item_from_commands(Commands.OpenSample));
+				//menu.Controls.Add(create_menu_item_from_commands(Commands.OpenSample));
 
 				menu.Controls.Add(new MenuSeparator());
 
@@ -353,7 +356,36 @@ namespace Effekseer.GUI.Menu
 
 				this.Controls.Add(menu);
 			}
+
+#if DEBUG
+			{
+				{
+					var menu = new Menu("Lang(Debug)");
+
+					menu.Controls.Add(create_menu_item_from_commands(ChangeLanguageJapanese));
+					menu.Controls.Add(create_menu_item_from_commands(ChangeLanguageEnglish));
+					this.Controls.Add(menu);
+				}
+			}
+#endif
 		}
+#if DEBUG
+		[Name(value = "Jp")]
+		static public bool ChangeLanguageJapanese()
+		{
+			Core.Language = Language.Japanese;
+			return true;
+		}
+#endif
+
+#if DEBUG
+		[Name(value = "En")]
+		static public bool ChangeLanguageEnglish()
+		{
+			Core.Language = Language.Japanese;
+			return true;
+		}
+#endif
 
 		private void MainForm_Load(object sender, EventArgs e)
 		{

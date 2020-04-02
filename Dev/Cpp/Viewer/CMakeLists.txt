@@ -32,7 +32,6 @@ list(APPEND hs
 	3rdParty/nfd/nfd.h
 	3rdParty/nfd/nfd_common.h
 	3rdParty/Boxer/boxer.h
-	GUI/Platform/efk.Language.h
 )
 
 list(APPEND cpps
@@ -41,9 +40,7 @@ list(APPEND cpps
 	3rdParty/Boxer/boxer_win.cpp
 	3rdParty/imgui_platform/imgui_impl_glfw.cpp
 	3rdParty/imgui_platform/imgui_impl_opengl3.cpp
-	3rdParty/imgui_platform/imgui_impl_dx9.cpp
 	3rdParty/imgui_platform/imgui_impl_dx11.cpp
-	GUI/Platform/efk.Language_Other.cpp
 )
 
 elseif(APPLE)
@@ -52,7 +49,6 @@ list(APPEND hs
 	3rdParty/nfd/nfd.h
 	3rdParty/nfd/nfd_common.h
 	3rdParty/Boxer/boxer.h
-	GUI/Platform/efk.Language.h
 )
 
 list(APPEND cpps
@@ -61,7 +57,6 @@ list(APPEND cpps
 	3rdParty/Boxer/boxer_osx.mm
 	3rdParty/imgui_platform/imgui_impl_glfw.cpp
 	3rdParty/imgui_platform/imgui_impl_opengl3.cpp
-	GUI/Platform/efk.Language_osx.mm
 )
 
 else()
@@ -70,7 +65,6 @@ list(APPEND hs
 	3rdParty/nfd/nfd.h
 	3rdParty/nfd/nfd_common.h
 	3rdParty/Boxer/boxer.h
-	GUI/Platform/efk.Language.h
 )
 
 list(APPEND cpps
@@ -79,20 +73,17 @@ list(APPEND cpps
 	3rdParty/Boxer/boxer_linux.cpp
 	3rdParty/imgui_platform/imgui_impl_glfw.cpp
 	3rdParty/imgui_platform/imgui_impl_opengl3.cpp
-	GUI/Platform/efk.Language_Other.cpp
 )
 endif()
 
 # Graphics
 if (WIN32)
 FILE(GLOB hs_g
-	Graphics/Platform/DX9/*.h
 	Graphics/Platform/DX11/*.h
 	Graphics/Platform/GL/*.h
 )
 
 FILE(GLOB cpps_g
-	Graphics/Platform/DX9/*.cpp
 	Graphics/Platform/DX11/*.cpp
 	Graphics/Platform/GL/*.cpp
 )
@@ -111,48 +102,8 @@ list(APPEND hs ${hs_g})
 list(APPEND cpps ${cpps_g})
 
 
-
-
-foreach(FILE ${hs}) 
-    # Get the directory of the source file
-    get_filename_component(PARENT_DIR "${FILE}" DIRECTORY)
-
-    # Remove common directory prefix to make the group
-    string(REPLACE "${CMAKE_CURRENT_SOURCE_DIR}" "" GROUP "${PARENT_DIR}")
-
-    # Make sure we are using windows slashes
-    string(REPLACE "/" "\\" GROUP "${GROUP}")
-
-    # Group into "Source Files" and "Header Files"
-    if ("${FILE}" MATCHES ".*\\.cpp")
-       set(GROUP "Files/${GROUP}")
-    elseif("${FILE}" MATCHES ".*\\.h")
-       set(GROUP "Files/${GROUP}")
-    endif()
-
-    source_group("${GROUP}" FILES "${FILE}")
-endforeach()
-
-foreach(FILE ${cpps}) 
-    # Get the directory of the source file
-    get_filename_component(PARENT_DIR "${FILE}" DIRECTORY)
-
-    # Remove common directory prefix to make the group
-    string(REPLACE "${CMAKE_CURRENT_SOURCE_DIR}" "" GROUP "${PARENT_DIR}")
-
-    # Make sure we are using windows slashes
-    string(REPLACE "/" "\\" GROUP "${GROUP}")
-
-    # Group into "Source Files" and "Header Files"
-    if ("${FILE}" MATCHES ".*\\.cpp")
-       set(GROUP "Files/${GROUP}")
-    elseif("${FILE}" MATCHES ".*\\.h")
-       set(GROUP "Files/${GROUP}")
-    endif()
-
-    source_group("${GROUP}" FILES "${FILE}")
-endforeach()
-
+FilterFolder("${hs}")
+FilterFolder("${cpps}")
 
 # MSVC Flag
 if (MSVC)
@@ -186,121 +137,85 @@ include_directories(
 
 add_library(Viewer SHARED ${cpps} ${hs})
 target_link_directories(
-	Viewer
-	PRIVATE
-	${EFK_THIRDPARTY_LIBRARY_DIRECTORIES}
+    Viewer
+    PRIVATE
+    ${EFK_THIRDPARTY_LIBRARY_DIRECTORIES}
 )
 target_link_libraries(
-	Viewer
-	debug glfw3d
-	debug OpenSoundMixerd
-	optimized glfw3
-	optimized OpenSoundMixer
+    Viewer
+    PRIVATE
+    EditorCommon
+    debug "${GLFW3_LIB_DEBUG}"
+    optimized "${GLFW3_LIB_RELEASE}"
+    debug "${GD_LIB_DEBUG}"
+	optimized "${GD_LIB_RELEASE}"
+	debug "${LIBPNG_LIB_DEBUG}"
+	optimized "${LIBPNG_LIB_RELEASE}"
+	debug "${ZLIB_LIB_DEBUG}"
+	optimized "${ZLIB_LIB_RELEASE}"
 )
-add_dependencies(Viewer ExternalProject_zlib ExternalProject_libpng ExternalProject_libgd ExternalProject_glew ExternalProject_glfw ExternalProject_OpenSoundMixer)
 
-add_executable(ViewerTest ${cpps} ${hs} test.cpp)
-target_link_directories(
-	ViewerTest
-	PRIVATE
-	${EFK_THIRDPARTY_LIBRARY_DIRECTORIES}
-)
-target_link_libraries(
-	ViewerTest 
-	debug glfw3d
-	debug OpenSoundMixerd
-	optimized glfw3
-	optimized OpenSoundMixer
-)
-add_dependencies(ViewerTest ExternalProject_zlib ExternalProject_libpng ExternalProject_libgd ExternalProject_glew ExternalProject_glfw ExternalProject_OpenSoundMixer)
+add_dependencies(Viewer 
+	ExternalProject_zlib 
+	ExternalProject_libpng 
+	ExternalProject_libgd 
+	ExternalProject_glfw 
+	ExternalProject_OpenSoundMixer)
+
+if(NOT APPLE)
+    add_dependencies(Viewer ExternalProject_glew)
+endif()
 
 link_directories(
-	
     ${PROJECT_SOURCE_DIR}/../lib/
-
 )
 
 if (WIN32)
 
-target_link_libraries(
-	Viewer
-	effekseer
-	effekseer_renderer_dx9
-	effekseer_renderer_dx11
-	effekseer_renderer_gl
-	EffekseerSoundOSMixer
-	debug libgd_staticd
-	debug libglew32d
-	optimized libgd_static
-	optimized libglew32
-)
-target_link_libraries(
-	ViewerTest
-	effekseer
-	effekseer_renderer_dx9
-	effekseer_renderer_dx11
-	effekseer_renderer_gl
-	EffekseerSoundOSMixer
-	debug libgd_staticd
-	debug libglew32d
-	optimized libgd_static
-	optimized libglew32
-)
+    target_link_libraries(
+        Viewer
+        PRIVATE
+        Effekseer
+        EffekseerRendererDX9
+        EffekseerRendererDX11
+        EffekseerRendererGL
+        EffekseerSoundOSMixer
+        IPC
+        debug libglew32d
+        debug OpenSoundMixerd
+        optimized libglew32
+        optimized OpenSoundMixer
+    )
 
 elseif(APPLE)
 
-FIND_PACKAGE(OpenAL REQUIRED)
-FIND_PACKAGE(Threads REQUIRED)
-FIND_PACKAGE(OpenGL REQUIRED)
+    FIND_PACKAGE(OpenAL REQUIRED)
+    FIND_PACKAGE(Threads REQUIRED)
+    FIND_PACKAGE(OpenGL REQUIRED)
 
-# For Mac
-find_library(COCOA_FRAMEWORK Cocoa)
-find_library(COCOA_FRAMEWORK Cocoa)
-find_library(IOKIT_FRAMEWORK IOKit)
-find_library(CORE_FOUNDATION_FRAMEWORK CoreFoundation)
-find_library(CORE_VIDEO_FRAMEWORK CoreVideo)
+    # For Mac
+    find_library(COCOA_FRAMEWORK Cocoa)
+    find_library(IOKIT_FRAMEWORK IOKit)
+    find_library(CORE_FOUNDATION_FRAMEWORK CoreFoundation)
+    find_library(CORE_VIDEO_FRAMEWORK CoreVideo)
 
-target_link_libraries(
-	Viewer
-	effekseer
-	effekseer_renderer_gl
-	EffekseerSoundOSMixer
-	debug gdd
-	debug GLEWd
-	optimized gd
-	optimized GLEW
-	png
-	z
-	${OpenAL_LIBRARY}
-	"-framework OpenAL"
-	${CMAKE_THREAD_LIBS_INIT}
-	${COCOA_FRAMEWORK}
-	${OPENGL_gl_LIBRARY}
-	${OPENGL_glu_LIBRARY}
-	${IOKIT_FRAMEWORK}
-	${CORE_FOUNDATION_FRAMEWORK}
-	${CORE_VIDEO_FRAMEWORK})
-
-target_link_libraries(
-	ViewerTest
-	effekseer
-	effekseer_renderer_gl
-	EffekseerSoundOSMixer
-	debug gdd
-	debug GLEWd
-	optimized gd
-	optimized GLEW
-	png
-	z
-	${OpenAL_LIBRARY}
-	"-framework OpenAL"
-	${CMAKE_THREAD_LIBS_INIT}
-	${COCOA_FRAMEWORK}
-	${OPENGL_gl_LIBRARY}
-	${OPENGL_glu_LIBRARY}
-	${IOKIT_FRAMEWORK}
-	${CORE_FOUNDATION_FRAMEWORK}
-	${CORE_VIDEO_FRAMEWORK})
+    target_link_libraries(
+        Viewer
+        PRIVATE
+        Effekseer
+        EffekseerRendererGL
+        EffekseerSoundOSMixer
+        IPC
+        OpenSoundMixer
+        ${OpenAL_LIBRARY}
+        "-framework OpenAL"
+        ${CMAKE_THREAD_LIBS_INIT}
+        ${COCOA_FRAMEWORK}
+        ${OPENGL_gl_LIBRARY}
+        ${OPENGL_glu_LIBRARY}
+        ${IOKIT_FRAMEWORK}
+        ${CORE_FOUNDATION_FRAMEWORK}
+        ${CORE_VIDEO_FRAMEWORK})
 
 else()
 
@@ -325,13 +240,11 @@ add_definitions(${GTK3_CFLAGS_OTHER})
 
 target_link_libraries(
 	Viewer
-	effekseer
-	effekseer_renderer_gl
+	PRIVATE
+	Effekseer
+	EffekseerRendererGL
 	EffekseerSoundOSMixer
-	glfw3
-	gd
-	png16
-	z
+	IPC
 	dl
 	OpenSoundMixer
 	${OPENGL_LIBRARY}
@@ -339,34 +252,18 @@ target_link_libraries(
 	${PulseAudio_LIBRARY}
 	${GTK3_LIBRARIES}
 	${X11_LIBRARIES})
-
-target_link_libraries(
-	ViewerTest
-	effekseer
-	effekseer_renderer_gl
-	EffekseerSoundOSMixer
-	glfw3
-	gd
-	png16
-	z
-	dl
-	OpenSoundMixer
-	${OPENGL_LIBRARY}
-	${CMAKE_THREAD_LIBS_INIT}
-	${PulseAudio_LIBRARY}
-	${GTK3_LIBRARIES}
-	${X11_LIBRARIES})
-
 
 endif()
 
 add_definitions(-D__EFFEKSEER_VIEWER_BUILD_AS_CMAKE__)
 
 set_target_properties(Viewer PROPERTIES LINKER_LANGUAGE CXX)
-set_target_properties(ViewerTest PROPERTIES LINKER_LANGUAGE CXX)
 
-add_custom_command(TARGET Viewer POST_BUILD        # Adds a post-build event to MyTest
-    COMMAND ${CMAKE_COMMAND} -E copy  # which executes "cmake - E copy_if_different..."
-	$<TARGET_FILE:Viewer>
-	${CMAKE_SOURCE_DIR}/Dev/release/Viewer.dll )                 # <--this is out-file path
-		
+
+set_target_properties(Viewer PROPERTIES LIBRARY_OUTPUT_DIRECTORY  ${CMAKE_SOURCE_DIR}/Dev/release )
+set_target_properties(Viewer PROPERTIES LIBRARY_OUTPUT_DIRECTORY_DEBUG  ${CMAKE_SOURCE_DIR}/Dev/release )
+set_target_properties(Viewer PROPERTIES LIBRARY_OUTPUT_DIRECTORY_RELEASE  ${CMAKE_SOURCE_DIR}/Dev/release )
+
+set_target_properties(Viewer PROPERTIES RUNTIME_OUTPUT_DIRECTORY  ${CMAKE_SOURCE_DIR}/Dev/release )
+set_target_properties(Viewer PROPERTIES RUNTIME_OUTPUT_DIRECTORY_DEBUG  ${CMAKE_SOURCE_DIR}/Dev/release )
+set_target_properties(Viewer PROPERTIES RUNTIME_OUTPUT_DIRECTORY_RELEASE  ${CMAKE_SOURCE_DIR}/Dev/release )

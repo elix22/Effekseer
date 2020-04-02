@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using System.IO;
 using System.Reflection;
 using System.Runtime.ExceptionServices;
+using EfkN = Effekseer.swig.EffekseerNative;
 
 namespace Effekseer
 {
@@ -26,6 +27,7 @@ namespace Effekseer
 		{
 #if DEBUG
 			var test = new Effekseer.InternalScript.Tests();
+			Effekseer.IO.ChunkTest.Test();
 #endif
 			StartDirectory = System.IO.Directory.GetCurrentDirectory();
 
@@ -100,19 +102,35 @@ namespace Effekseer
 				}
 				catch (Exception e)
 				{
-					System.IO.File.WriteAllText("error.txt", e.ToString());
+					DateTime dt = DateTime.Now;
+					var filename = string.Format("error_{0:D4}_{1:D2}_{2:D2}_{3:D2}_{4:D2}_{5:D2}.txt", dt.Year, dt.Month, dt.Day, dt.Hour, dt.Minute, dt.Second);
+					System.IO.File.WriteAllText(filename, e.ToString());
 				}
 			}
 		}
 
 		static void Exec(bool gui, string input, string output, string export, string format, float magnification)
 		{
-			var languageIndex = swig.GUIManager.GetLanguage();
+			// Debug
+			bool isDebugMode = false;
+#if DEBUG
+			isDebugMode = true;
+#endif
+			if(System.IO.File.Exists("debug.txt") || isDebugMode)
+			{
+				swig.Native.SetFileLogger(Path.Combine(GUI.Manager.GetEntryDirectory(),"Effekseer.log.txt"));	
+			}
+
+			var systemLanguage = EfkN.GetSystemLanguage();
 			Language? language = null;
 
-			if(languageIndex >= 0)
+			if(systemLanguage != swig.SystemLanguage.Unknown)
 			{
-				language = (Language)languageIndex;
+				language = (Language)systemLanguage;
+			}
+			else
+			{
+				language = Language.English;
 			}
 
 			Core.OnOutputMessage += new Action<string>(Core_OnOutputMessage);
@@ -120,6 +138,12 @@ namespace Effekseer
 
 			if (gui)
 			{
+				ChangeLanguage();
+
+#if DEBUG
+				Core.OnLanguageChanged += (lang) => { ChangeLanguage(); };
+#endif
+
 				// Failed to compile script
 				if (Core.ExportScripts.Count == 0)
 				{
@@ -154,19 +178,8 @@ namespace Effekseer
                     Core.ExportScripts.Add(glbExporter);
                 }
 
-                {
-					var appDirectory = GUI.Manager.GetEntryDirectory();
-					if (Core.Language == Language.Japanese)
-					{
-						var fullPath = Path.Combine(appDirectory, "resources/lang_ja.txt");
-						Resources.LoadLanguageFile(fullPath);
-					}
-					if (Core.Language == Language.English)
-					{
-						var fullPath = Path.Combine(appDirectory, "resources/lang_en.txt");
-						Resources.LoadLanguageFile(fullPath);
-					}
-				}
+                
+
 
 				System.OperatingSystem os = System.Environment.OSVersion;
 				swig.DeviceType deviceType = swig.DeviceType.DirectX11;
@@ -240,9 +253,25 @@ namespace Effekseer
 				}
 
 				GUI.Manager.Terminate();
+				Process.MaterialEditor.Terminate();
 			}
 
 			Core.Dispose();
+		}
+
+		private static void ChangeLanguage()
+		{
+			var appDirectory = GUI.Manager.GetEntryDirectory();
+			if (Core.Language == Language.Japanese)
+			{
+				var fullPath = Path.Combine(appDirectory, "resources/languages/effekseer_ja.txt");
+				Resources.LoadLanguageFile(fullPath);
+			}
+			if (Core.Language == Language.English)
+			{
+				var fullPath = Path.Combine(appDirectory, "resources/languages/effekseer_en.txt");
+				Resources.LoadLanguageFile(fullPath);
+			}
 		}
 
 		static void Core_OnOutputMessage(string obj)
@@ -263,14 +292,21 @@ namespace Effekseer
 
 		public static Dictionary<string, swig.ImageResource> tempImages = new Dictionary<string, swig.ImageResource>();
 
-		public static swig.ImageResource Load(swig.Native native, string path)
+		public static swig.ImageResource Load(swig.Native native, string path, bool isRequiredToReload = false)
 		{
-			if(tempImages.ContainsKey(path))
+			if(tempImages.ContainsKey(path) && !isRequiredToReload)
 			{
 				return tempImages[path];
 			}
 			else
 			{
+				if (tempImages.ContainsKey(path))
+				{
+					tempImages[path].Invalidate();
+					tempImages[path].Validate();
+					return tempImages[path];
+				}
+
 				var img = native.LoadImageResource(path);
 				if(img != null)
 				{
@@ -295,6 +331,9 @@ namespace Effekseer
 			Step = LoadAppResource(native, "resources/Step.png");
 			BackStep = LoadAppResource(native, "resources/BackStep.png");
 
+			Icons["Copy"] = LoadAppResource(native, "resources/icons/Copy.png");
+			Icons["Paste"] = LoadAppResource(native, "resources/icons/Paste.png");
+
 			Icons["AppIcon"] = LoadAppResource(native, "resources/icon.png");
 			Icons["NodeEmpty"] = LoadAppResource(native, "resources/icons/NodeType_Empty.png");
 			Icons["NodeModel"] = LoadAppResource(native, "resources/icons/NodeType_Model.png");
@@ -317,7 +356,7 @@ namespace Effekseer
 			Icons["PanelNetwork"] = LoadAppResource(native, "resources/icons/Panel_Network.png");
 			Icons["PanelNodeTree"] = LoadAppResource(native, "resources/icons/Panel_NodeTree.png");
 			Icons["PanelOption"] = LoadAppResource(native, "resources/icons/Panel_Option.png");
-			Icons["PanelPostEffect"] = LoadAppResource(native, "resources/icons/Panel_PostEffect.png");
+			Icons["PanelEnvironment"] = LoadAppResource(native, "resources/icons/Panel_Environment.png");
 			Icons["PanelRecorder"] = LoadAppResource(native, "resources/icons/Panel_Recorder.png");
 			Icons["PanelRenderer"] = LoadAppResource(native, "resources/icons/Panel_Renderer.png");
 			Icons["PanelRendererCommon"] = LoadAppResource(native, "resources/icons/Panel_RendererCommon.png");
@@ -328,6 +367,7 @@ namespace Effekseer
 			Icons["PanelViewPoint"] = LoadAppResource(native, "resources/icons/Panel_ViewPoint.png");
 			Icons["PanelDepth"] = LoadAppResource(native, "resources/icons/Panel_Depth.png");
 			Icons["PanelGlobal"] = LoadAppResource(native, "resources/icons/Panel_Global.png");
+			Icons["PanelDynamicParameter"] = LoadAppResource(native, "resources/icons/Panel_DynamicParameter.png");
 
 			Icons["EnlargeAnchor"] = LoadAppResource(native, "resources/icons/EnlargeAnchor.png");
 			Icons["ShrinkAnchor"] = LoadAppResource(native, "resources/icons/ShrinkAnchor.png");

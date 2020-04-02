@@ -31,6 +31,21 @@
     <Filter Include="Effekseer\InternalScript">
       <UniqueIdentifier>{0382aadc-7e1c-4fb0-bb9b-ae5d4f3f2a87}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Effekseer\Material">
+      <UniqueIdentifier>{c3571b2e-6d99-469f-8e43-e8b0caa5909c}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Effekseer\Parameter">
+      <UniqueIdentifier>{dbd840c0-393d-4363-90fd-f45fa8427a90}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Effekseer\IO">
+      <UniqueIdentifier>{dc983779-2340-4bac-9552-df6c23322e9d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Effekseer\Parameter">
+      <UniqueIdentifier>{c87649d2-3c0a-4c54-8f18-0bf107519c34}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Effekseer\Utils">
+      <UniqueIdentifier>{bd265c75-ad30-4559-b273-095a68de4d22}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Effekseer\Effekseer.Base.h">
@@ -202,8 +217,30 @@
     <ClInclude Include="Effekseer\Effekseer.BinaryReader.h">
       <Filter>Effekseer\Utility</Filter>
     </ClInclude>
-    <ClInclude Include="Effekseer\Effekseer.CustomAllocator.h">
-      <Filter>Effekseer\Utility</Filter>
+    <ClInclude Include="Effekseer\Material\Effekseer.CompiledMaterial.h">
+      <Filter>Effekseer\Material</Filter>
+    </ClInclude>
+    <ClInclude Include="Effekseer\Material\Effekseer.Material.h">
+      <Filter>Effekseer\Material</Filter>
+    </ClInclude>
+    <ClInclude Include="Effekseer\Material\Effekseer.MaterialCompiler.h">
+      <Filter>Effekseer\Material</Filter>
+    </ClInclude>
+    <ClInclude Include="Effekseer.Internal.h" />
+    <ClInclude Include="Effekseer\Parameter\Effekseer.Parameters.h">
+      <Filter>Effekseer\Parameter</Filter>
+    </ClInclude>
+    <ClInclude Include="Effekseer\IO\Effekseer.EfkEfcFactory.h">
+      <Filter>Effekseer\IO</Filter>
+    </ClInclude>
+    <ClInclude Include="Effekseer\Effekseer.InstanceChunk.h">
+      <Filter>Effekseer\EffectInstance</Filter>
+    </ClInclude>
+    <ClInclude Include="Effekseer\Parameter\Effekseer.Parameters.h">
+      <Filter>Effekseer\Parameter</Filter>
+    </ClInclude>
+    <ClInclude Include="Effekseer\Utils\Effekseer.CustomAllocator.h">
+      <Filter>Effekseer\Utils</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -312,8 +349,29 @@
     <ClCompile Include="Effekseer\Effekseer.InternalScript.cpp">
       <Filter>Effekseer\InternalScript</Filter>
     </ClCompile>
-    <ClCompile Include="Effekseer\Effekseer.CustomAllocator.cpp">
-      <Filter>Effekseer\Utility</Filter>
+    <ClCompile Include="Effekseer\Material\Effekseer.Material.cpp">
+      <Filter>Effekseer\Material</Filter>
+    </ClCompile>
+    <ClCompile Include="Effekseer\Material\Effekseer.MaterialCompiler.cpp">
+      <Filter>Effekseer\Material</Filter>
+    </ClCompile>
+    <ClCompile Include="Effekseer\Material\Effekseer.CompiledMaterial.cpp">
+      <Filter>Effekseer\Material</Filter>
+    </ClCompile>
+    <ClCompile Include="Effekseer\Parameter\Effekseer.Parameters.cpp">
+      <Filter>Effekseer\Parameter</Filter>
+    </ClCompile>
+    <ClCompile Include="Effekseer\IO\Effekseer.EfkEfcFactory.cpp">
+      <Filter>Effekseer\IO</Filter>
+    </ClCompile>
+    <ClCompile Include="Effekseer\Effekseer.InstanceChunk.cpp">
+      <Filter>Effekseer\EffectInstance</Filter>
+    </ClCompile>
+    <ClCompile Include="Effekseer\Parameter\Effekseer.Parameters.cpp">
+      <Filter>Effekseer\Parameter</Filter>
+    </ClCompile>
+    <ClCompile Include="Effekseer\Utils\Effekseer.CustomAllocator.cpp">
+      <Filter>Effekseer\Utils</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>

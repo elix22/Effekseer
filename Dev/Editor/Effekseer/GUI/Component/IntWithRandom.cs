@@ -144,8 +144,8 @@ namespace Effekseer.GUI.Component
 			}
 			else
 			{
-				txt_r1 = Resources.GetString("Max");
-				txt_r2 = Resources.GetString("Min");
+				txt_r1 = Resources.GetString("Min");
+				txt_r2 = Resources.GetString("Max");
 
 				range_1_min = binding.ValueMin;
 				range_1_max = binding.ValueMax;
@@ -183,12 +183,14 @@ namespace Effekseer.GUI.Component
 			if (binding.IsDynamicEquationEnabled)
 			{
 				DynamicSelector.SelectMaxInComponent(id_d1, binding.DynamicEquationMax);
+
 				Popup();
 			}
 
 			if (binding.IsDynamicEquationEnabled)
 			{
 				DynamicSelector.SelectMinInComponent(id_d2, binding.DynamicEquationMin);
+
 				Popup();
 			}
 

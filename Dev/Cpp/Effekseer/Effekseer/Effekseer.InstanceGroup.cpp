@@ -9,7 +9,7 @@
 #include "Effekseer.Instance.h"
 #include "Effekseer.InstanceContainer.h"
 #include "Effekseer.InstanceGlobal.h"
-#include "Effekseer.CustomAllocator.h"
+#include "Utils/Effekseer.CustomAllocator.h"
 #include <assert.h>
 
 //----------------------------------------------------------------------------------
@@ -18,14 +18,6 @@
 namespace Effekseer
 {
 
-
-void* InstanceGroup::operator new(size_t size)
-{
-	assert(sizeof(InstanceGroup) == size);
-	return GetMallocFunc()(size);
-}
-
-void InstanceGroup::operator delete(void* p) { GetFreeFunc()(p, sizeof(InstanceGroup)); }
 
 //----------------------------------------------------------------------------------
 //
@@ -40,7 +32,7 @@ InstanceGroup::InstanceGroup( Manager* manager, EffectNode* effectNode, Instance
 	, NextUsedByInstance	( NULL )
 	, NextUsedByContainer	( NULL )
 {
-
+	parentMatrix_ = Mat43f::Identity;
 }
 
 //----------------------------------------------------------------------------------
@@ -54,63 +46,17 @@ InstanceGroup::~InstanceGroup()
 //----------------------------------------------------------------------------------
 //
 //----------------------------------------------------------------------------------
-void InstanceGroup::RemoveInvalidInstances()
-{
-	auto it = m_removingInstances.begin();
-
-	while( it != m_removingInstances.end() )
-	{
-		auto instance = *it;
-
-		if( instance->m_State == INSTANCE_STATE_ACTIVE )
-		{
-			assert(0);
-		}
-		else if( instance->m_State == INSTANCE_STATE_REMOVING )
-		{
-			// 削除中処理
-			instance->m_State = INSTANCE_STATE_REMOVED;
-			it++;
-		}
-		else if( instance->m_State == INSTANCE_STATE_REMOVED )
-		{
-			it = m_removingInstances.erase( it );
-
-			// 削除処理
-			if( instance->m_pEffectNode->GetType() == EFFECT_NODE_TYPE_ROOT )
-			{
-				delete instance;
-			}
-			else
-			{
-				instance->~Instance();
-				m_manager->PushInstance( instance );
-			}
-
-			m_global->DecInstanceCount();
-		}
-	}
-}
-//----------------------------------------------------------------------------------
-//
-//----------------------------------------------------------------------------------
 Instance* InstanceGroup::CreateInstance()
 {
 	Instance* instance = NULL;
 
-	if( m_effectNode->GetType() == EFFECT_NODE_TYPE_ROOT )
-	{
-		instance = new Instance( m_manager, m_effectNode, m_container );
-	}
-	else
-	{
-		Instance* buf = m_manager->PopInstance();
-		if( buf == NULL ) return NULL;
-		instance = new(buf)Instance( m_manager, m_effectNode, m_container );
-	}
+	instance = m_manager->CreateInstance( m_effectNode, m_container, this );
 	
-	m_instances.push_back( instance );
-	m_global->IncInstanceCount();
+	if( instance )
+	{
+		m_instances.push_back( instance );
+		m_global->IncInstanceCount();
+	}
 	return instance;
 }
 
@@ -137,39 +83,20 @@ int InstanceGroup::GetInstanceCount() const
 //----------------------------------------------------------------------------------
 //
 //----------------------------------------------------------------------------------
-int InstanceGroup::GetRemovingInstanceCount() const
+void InstanceGroup::Update(bool shown)
 {
-	return (int32_t)m_removingInstances.size();
-}
-
-//----------------------------------------------------------------------------------
-//
-//----------------------------------------------------------------------------------
-void InstanceGroup::Update( float deltaFrame, bool shown )
-{
-	RemoveInvalidInstances();
-
-	auto it = m_instances.begin();
-
-	while( it != m_instances.end() )
+	for (auto it = m_instances.begin(); it != m_instances.end();)
 	{
 		auto instance = *it;
 
-		if( instance->m_State == INSTANCE_STATE_ACTIVE )
+		if (instance->m_State != INSTANCE_STATE_ACTIVE)
 		{
-			// 更新処理
-			instance->Update( deltaFrame, shown );
-
-			// 破棄チェック
-			if( instance->m_State != INSTANCE_STATE_ACTIVE )
-			{
-				it = m_instances.erase( it );
-				m_removingInstances.push_back( instance );
-			}
-			else
-			{
-				it++;
-			}
+			it = m_instances.erase(it);
+			m_global->DecInstanceCount();
+		}
+		else
+		{
+			it++;
 		}
 	}
 
@@ -179,13 +106,81 @@ void InstanceGroup::Update( float deltaFrame, bool shown )
 //----------------------------------------------------------------------------------
 //
 //----------------------------------------------------------------------------------
-void InstanceGroup::SetBaseMatrix( const Matrix43& mat )
+void InstanceGroup::SetBaseMatrix( const Mat43f& mat )
 {
 	for (auto instance : m_instances)
 	{
 		if (instance->m_State == INSTANCE_STATE_ACTIVE)
 		{
-			Matrix43::Multiple(instance->m_GlobalMatrix43, instance->m_GlobalMatrix43, mat);
+			instance->m_GlobalMatrix43 *= mat;
+			assert(instance->m_GlobalMatrix43.IsValid());
+		}
+	}
+}
+
+void InstanceGroup::SetParentMatrix(const Mat43f& mat)
+{
+	BindType tType = m_effectNode->CommonValues.TranslationBindType;
+	BindType rType = m_effectNode->CommonValues.RotationBindType;
+	BindType sType = m_effectNode->CommonValues.ScalingBindType;
+
+	auto rootGroup = m_global->GetRootContainer()->GetFirstGroup();
+
+	if (tType == BindType::Always && rType == BindType::Always && sType == BindType::Always)
+	{
+		parentMatrix_ = mat;
+	}
+	else if (tType == BindType::NotBind_Root && rType == BindType::NotBind_Root && sType == BindType::NotBind_Root)
+	{
+		parentMatrix_ = rootGroup->GetParentMatrix();
+	}
+	else if (tType == BindType::WhenCreating && rType == BindType::WhenCreating && sType == BindType::WhenCreating)
+	{
+		// don't do anything
+	}
+	else
+	{
+		Vec3f s, t;
+		Mat43f r;
+		mat.GetSRT(s, r, t);
+
+		if (tType == BindType::Always)
+		{
+			parentTranslation_ = t;
+		}
+		else if (tType == BindType::NotBind_Root)
+		{
+			parentTranslation_ = rootGroup->GetParentTranslation();
+		}
+		else if (tType == BindType::NotBind)
+		{
+			parentTranslation_ = Vec3f(0.0f, 0.0f, 0.0f);
+		}
+
+		if (rType == BindType::Always)
+		{
+			parentRotation_ = r;
+		}
+		else if (rType == BindType::NotBind_Root)
+		{
+			parentRotation_ = rootGroup->GetParentRotation();
+		}
+		else if (rType == BindType::NotBind)
+		{
+			parentRotation_ = Mat43f::Identity;
+		}
+
+		if (sType == BindType::Always)
+		{
+			parentScale_ = s;
+		}
+		else if (sType == BindType::NotBind_Root)
+		{
+			parentScale_ = rootGroup->GetParentScale();
+		}
+		else if (sType == BindType::NotBind)
+		{
+			parentScale_ = Vec3f(1.0f, 1.0f, 1.0f);
 		}
 	}
 }
@@ -196,9 +191,6 @@ void InstanceGroup::SetBaseMatrix( const Matrix43& mat )
 void InstanceGroup::RemoveForcibly()
 {
 	KillAllInstances();
-
-	RemoveInvalidInstances();
-	RemoveInvalidInstances();
 }
 
 //----------------------------------------------------------------------------------
@@ -214,7 +206,6 @@ void InstanceGroup::KillAllInstances()
 		if (instance->GetState() == INSTANCE_STATE_ACTIVE)
 		{
 			instance->Kill();
-			m_removingInstances.push_back(instance);
 		}
 	}
 }

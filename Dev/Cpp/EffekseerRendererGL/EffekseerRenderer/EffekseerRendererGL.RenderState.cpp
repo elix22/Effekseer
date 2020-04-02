@@ -22,7 +22,7 @@ RenderState::RenderState( RendererImplemented* renderer )
 {
 	if (m_renderer->GetDeviceType() == OpenGLDeviceType::OpenGL3 || m_renderer->GetDeviceType() == OpenGLDeviceType::OpenGLES3)
 	{
-		GLExt::glGenSamplers(4, m_samplers);
+		GLExt::glGenSamplers(Effekseer::TextureSlotMax, m_samplers.data());
 	}
 
 	GLint frontFace = 0;
@@ -41,7 +41,7 @@ RenderState::~RenderState()
 {
 	if (m_renderer->GetDeviceType() == OpenGLDeviceType::OpenGL3 || m_renderer->GetDeviceType() == OpenGLDeviceType::OpenGLES3)
 	{
-		GLExt::glDeleteSamplers(4, m_samplers);
+		GLExt::glDeleteSamplers(Effekseer::TextureSlotMax, m_samplers.data());
 	}
 }
 
@@ -153,28 +153,49 @@ void RenderState::Update( bool forced )
 	GLCheckError();
 	
 	static const GLint glfilterMin[] = { GL_NEAREST, GL_LINEAR_MIPMAP_LINEAR };
+	static const GLint glfilterMin_NoneMipmap[] = {GL_NEAREST, GL_LINEAR};
 	static const GLint glfilterMag[] = { GL_NEAREST, GL_LINEAR };
 	static const GLint glwrap[] = { GL_REPEAT, GL_CLAMP_TO_EDGE };
 
 	if (m_renderer->GetDeviceType() == OpenGLDeviceType::OpenGL3 || m_renderer->GetDeviceType() == OpenGLDeviceType::OpenGLES3)
 	{
-		for (int32_t i = 0; i < 4; i++)
+		for (int32_t i = 0; i < (int32_t)m_renderer->GetCurrentTextures().size(); i++)
 		{
-			if (m_active.TextureFilterTypes[i] != m_next.TextureFilterTypes[i] || forced)
+			// If a texture is not assigned, skip it.
+			if (m_renderer->GetCurrentTextures()[i].UserID == 0)
+				continue;
+
+			if (m_active.TextureFilterTypes[i] != m_next.TextureFilterTypes[i] || forced || m_active.TextureIDs[i] != m_next.TextureIDs[i])
 			{
 				GLExt::glActiveTexture(GL_TEXTURE0 + i);
+
+				// for webngl
+#ifndef NDEBUG
+				//GLint bound = 0;
+				//glGetIntegerv(GL_TEXTURE_BINDING_2D, &bound);
+				//assert(bound > 0);
+#endif
 
 				int32_t filter_ = (int32_t) m_next.TextureFilterTypes[i];
 
 				GLExt::glSamplerParameteri(m_samplers[i], GL_TEXTURE_MAG_FILTER, glfilterMag[filter_]);
-				GLExt::glSamplerParameteri(m_samplers[i], GL_TEXTURE_MIN_FILTER, glfilterMin[filter_]);
+
+				if (m_renderer->GetCurrentTextures()[i].HasMipmap)
+				{
+					GLExt::glSamplerParameteri(m_samplers[i], GL_TEXTURE_MIN_FILTER, glfilterMin[filter_]);
+				}
+				else
+				{
+					GLExt::glSamplerParameteri(m_samplers[i], GL_TEXTURE_MIN_FILTER, glfilterMin_NoneMipmap[filter_]);
+				}
+				
 				//glSamplerParameteri( m_samplers[i],  GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
 				//glSamplerParameteri( m_samplers[i],  GL_TEXTURE_MAG_FILTER, GL_LINEAR_MIPMAP_LINEAR);
 
 				GLExt::glBindSampler(i, m_samplers[i]);
 			}
 
-			if (m_active.TextureWrapTypes[i] != m_next.TextureWrapTypes[i] || forced)
+			if (m_active.TextureWrapTypes[i] != m_next.TextureWrapTypes[i] || forced || m_active.TextureIDs[i] != m_next.TextureIDs[i])
 			{
 				GLExt::glActiveTexture(GL_TEXTURE0 + i);
 
@@ -192,7 +213,7 @@ void RenderState::Update( bool forced )
 		for (int32_t i = 0; i < (int32_t)m_renderer->GetCurrentTextures().size(); i++)
 		{
 			// If a texture is not assigned, skip it.
-			if (m_renderer->GetCurrentTextures()[i] == 0) continue;
+			if (m_renderer->GetCurrentTextures()[i].UserID == 0) continue;
 
 			// always changes because a flag is assigned into a texture
 			// if (m_active.TextureFilterTypes[i] != m_next.TextureFilterTypes[i] || forced)
@@ -200,13 +221,26 @@ void RenderState::Update( bool forced )
 				GLExt::glActiveTexture(GL_TEXTURE0 + i);
 				GLCheckError();
 
+				// for webngl
+#ifndef NDEBUG
+				GLint bound = 0;
+				glGetIntegerv(GL_TEXTURE_BINDING_2D, &bound);
+				assert(bound > 0);
+#endif
+
 				int32_t filter_ = (int32_t) m_next.TextureFilterTypes[i];
 
 				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, glfilterMag[filter_]);
 				GLCheckError();
 
-				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, glfilterMin[filter_]);
-				GLCheckError();
+				if (m_renderer->GetCurrentTextures()[i].HasMipmap)
+				{
+					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, glfilterMin[filter_]);
+				}
+				else
+				{
+					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, glfilterMin_NoneMipmap[filter_]);
+				}
 			}
 
 			// always changes because a flag is assigned into a texture

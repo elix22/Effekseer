@@ -4,6 +4,8 @@
 
 #include <algorithm>
 #include "efk.PostEffectsDX11.h"
+#include <spdlog/sinks/basic_file_sink.h>
+#include <spdlog/spdlog.h>
 
 namespace efk
 {
@@ -23,6 +25,12 @@ namespace efk
 	{
 		static
 #include "Shader/efk.GraphicsDX11.PostFX_Extract_PS.h"
+	}
+
+	namespace PostFX_Downsample_PS
+	{
+		static
+#include "Shader/efk.GraphicsDX11.PostFX_Downsample_PS.h"
 	}
 
 	namespace PostFX_Blend_PS
@@ -48,6 +56,12 @@ namespace efk
 		static
 #include "Shader/efk.GraphicsDX11.PostFX_Tonemap_PS.h"
 	}
+
+	namespace PostFX_LinearToSRGB_PS
+	{
+	static
+#include "Shader/efk.GraphicsDX11.PostFX_LinearToSRGB_PS.h"
+	} // namespace PostFX_Tonemap_PS
 
 	// Position(2) UV(2)
 	static const D3D11_INPUT_ELEMENT_DESC PostFx_ShaderDecl[] = {
@@ -113,6 +127,8 @@ namespace efk
 		state.DepthWrite = false;
 		state.DepthTest = false;
 		state.CullingType = CullingType::Double;
+		state.TextureFilterTypes[0] = TextureFilterType::Linear;
+		state.TextureWrapTypes[0] = TextureWrapType::Clamp;
 		renderer->GetRenderState()->Update(false);
 		renderer->SetRenderMode(RenderMode::Normal);
 
@@ -161,14 +177,22 @@ namespace efk
 			PostFX_Basic_VS::g_VS, sizeof(PostFX_Basic_VS::g_VS),
 			PostFX_Extract_PS::g_PS, sizeof(PostFX_Extract_PS::g_PS),
 			"Bloom extract", PostFx_ShaderDecl, 2));
-		shaderExtract->SetPixelConstantBufferSize(sizeof(float) * 8);
-		shaderExtract->SetPixelRegisterCount(1);
 
-		// Copy shader
-		shaderCopy.reset(Shader::Create(renderer,
+		if (shaderExtract != nullptr)
+		{
+			shaderExtract->SetPixelConstantBufferSize(sizeof(float) * 8);
+			shaderExtract->SetPixelRegisterCount(2);		
+		}
+		else
+		{
+			spdlog::trace("FAIL Create shaderExtract");
+		}
+
+		// Downsample shader
+		shaderDownsample.reset(Shader::Create(renderer,
 			PostFX_Basic_VS::g_VS, sizeof(PostFX_Basic_VS::g_VS),
-			PostFX_Copy_PS::g_PS, sizeof(PostFX_Copy_PS::g_PS),
-			"Bloom copy", PostFx_ShaderDecl, 2));
+			PostFX_Downsample_PS::g_PS, sizeof(PostFX_Downsample_PS::g_PS),
+			"Bloom downsample", PostFx_ShaderDecl, 2));
 
 		// Blend shader
 		shaderBlend.reset(Shader::Create(renderer,
@@ -232,8 +256,8 @@ namespace efk
 			ID3D11ShaderResourceView* textures[1];
 			textures[0] = (i == 0) ?
 				(ID3D11ShaderResourceView*)extractBuffer->GetViewID() : 
-				(ID3D11ShaderResourceView*)lowresBuffers[0][i - i]->GetViewID();
-			blitter.Blit(shaderCopy.get(), 1, textures, nullptr, 0, lowresBuffers[0][i].get());
+				(ID3D11ShaderResourceView*)lowresBuffers[0][i - 1]->GetViewID();
+			blitter.Blit(shaderDownsample.get(), 1, textures, nullptr, 0, lowresBuffers[0][i].get());
 		}
 
 		// Horizontal gaussian blur pass
@@ -281,21 +305,37 @@ namespace efk
 
 		// Create high brightness extraction buffer
 		{
-			int32_t bufferWidth  = std::max(1, (width  + 1) / 2);
-			int32_t bufferHeight = std::max(1, (height + 1) / 2);
+			int32_t bufferWidth  = width;
+			int32_t bufferHeight = height;
 			extractBuffer.reset(RenderTexture::Create(graphics));
-			extractBuffer->Initialize(bufferWidth, bufferHeight, TextureFormat::RGBA16F);
+
+			if (extractBuffer != nullptr)
+			{
+				extractBuffer->Initialize(bufferWidth, bufferHeight, TextureFormat::RGBA16F);			
+			}
+			else
+			{
+				spdlog::trace("FAIL Create extractBuffer");
+			}
 		}
 
 		// Create low-resolution buffers
 		for (int i = 0; i < BlurBuffers; i++) {
-			int32_t bufferWidth  = std::max(1, (width  + 1) / 2);
-			int32_t bufferHeight = std::max(1, (height + 1) / 2);
+			int32_t bufferWidth  = width;
+			int32_t bufferHeight = height;
 			for (int j = 0; j < BlurIterations; j++) {
 				bufferWidth  = std::max(1, (bufferWidth  + 1) / 2);
 				bufferHeight = std::max(1, (bufferHeight + 1) / 2);
 				lowresBuffers[i][j].reset(RenderTexture::Create(graphics));
-				lowresBuffers[i][j]->Initialize(bufferWidth, bufferHeight, TextureFormat::RGBA16F);
+
+				if (lowresBuffers[i][j] != nullptr)
+				{
+					lowresBuffers[i][j]->Initialize(bufferWidth, bufferHeight, TextureFormat::RGBA16F);				
+				}
+				else
+				{
+					spdlog::trace("FAIL Create lowresBuffers[i][j]");
+				}
 			}
 		}
 	}
@@ -332,9 +372,16 @@ namespace efk
 			PostFX_Basic_VS::g_VS, sizeof(PostFX_Basic_VS::g_VS),
 			PostFX_Tonemap_PS::g_PS, sizeof(PostFX_Tonemap_PS::g_PS),
 			"Tonemap Reinhard", PostFx_ShaderDecl, 2));
-		shaderReinhard->SetPixelConstantBufferSize(sizeof(float) * 4);
-		shaderReinhard->SetPixelRegisterCount(1);
 
+		if (shaderReinhard != nullptr)
+		{
+			shaderReinhard->SetPixelConstantBufferSize(sizeof(float) * 4);
+			shaderReinhard->SetPixelRegisterCount(1);
+		}
+		else
+		{
+			spdlog::trace("FAIL Create shaderReinhard");
+		}
 	}
 
 	TonemapEffectDX11::~TonemapEffectDX11()
@@ -358,5 +405,47 @@ namespace efk
 			const float constantData[4] = {exposure, 16.0f * 16.0f};
 			blitter.Blit(shaderReinhard.get(), 1, textures, constantData, sizeof(constantData), dest);
 		}
+	}
+
+	LinearToSRGBEffectDX11::LinearToSRGBEffectDX11(Graphics* graphics) : LinearToSRGBEffect(graphics), blitter_(graphics)
+	{
+		using namespace Effekseer;
+		using namespace EffekseerRendererDX11;
+
+		auto renderer = (RendererImplemented*)graphics->GetRenderer();
+
+		// Copy shader
+		shader_.reset(Shader::Create(renderer,
+										PostFX_Basic_VS::g_VS,
+										sizeof(PostFX_Basic_VS::g_VS),
+									 PostFX_LinearToSRGB_PS::g_PS,
+									 sizeof(PostFX_LinearToSRGB_PS::g_PS),
+										"LinearToSRGB",
+										PostFx_ShaderDecl,
+										2));
+
+		if (shader_ != nullptr)
+		{
+		}
+		else
+		{
+			spdlog::trace("FAIL Create shaderLinearToSRGB");
+		}
+	}
+
+	LinearToSRGBEffectDX11::~LinearToSRGBEffectDX11() {}
+
+	void LinearToSRGBEffectDX11::Render(RenderTexture* src, RenderTexture* dest)
+	{
+		using namespace Effekseer;
+		using namespace EffekseerRendererDX11;
+
+		auto renderer = (RendererImplemented*)graphics->GetRenderer();
+
+		// LinearToSRGB pass
+		ID3D11ShaderResourceView* textures[1] = {(ID3D11ShaderResourceView*)src->GetViewID()};
+
+		blitter_.Blit(shader_.get(), 1, textures, nullptr, 0, dest);
+
 	}
 }

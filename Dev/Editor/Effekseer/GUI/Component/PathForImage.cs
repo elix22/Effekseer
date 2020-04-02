@@ -12,7 +12,8 @@ namespace Effekseer.GUI.Component
 	{
 		string id1 = "";
 		string id2 = "";
-
+		string id_c = "";
+		string id_reset = "";
 		public string Label { get; set; } = string.Empty;
 
 		public string Description { get; set; } = string.Empty;
@@ -23,8 +24,9 @@ namespace Effekseer.GUI.Component
 		string infoText = string.Empty;
 		bool isHovered = false;
 
-		swig.ImageResource image = null;
+		bool isPopupShown = false;
 
+		Thumbnail thumbnail = null;
 		public bool EnableUndo { get; set; } = true;
 
 		public Data.Value.PathForImage Binding
@@ -67,6 +69,8 @@ namespace Effekseer.GUI.Component
 
 			id1 = "###" + Manager.GetUniqueID().ToString();
 			id2 = "###" + Manager.GetUniqueID().ToString();
+			id_c = "###" + Manager.GetUniqueID().ToString();
+			id_reset = "###" + Manager.GetUniqueID().ToString();
 		}
 
 		public void SetBinding(object o)
@@ -109,6 +113,7 @@ namespace Effekseer.GUI.Component
 		public override void Update()
 		{
 			isHovered = false;
+			isPopupShown = false;
 
 			if (binding == null) return;
 
@@ -120,6 +125,8 @@ namespace Effekseer.GUI.Component
 			{
 				btn_load_Click();
 			}
+
+			Popup();
 
 			if (dd == null) dd = DragAndDrops.UpdateImageDst();
 
@@ -138,12 +145,14 @@ namespace Effekseer.GUI.Component
 
 			isHovered = isHovered || Manager.NativeManager.IsItemHovered();
 			
-			if(image != null)
+			if(thumbnail != null)
 			{
 				if (Manager.NativeManager.Button(Resources.GetString("Delete") + id2, buttonSizeX))
 				{
 					btn_delete_Click();
 				}
+
+				Popup();
 				
 				if (dd == null) dd = DragAndDrops.UpdateImageDst();
 
@@ -153,12 +162,15 @@ namespace Effekseer.GUI.Component
 
 				Manager.NativeManager.Text(infoText);
 
+				Popup();
+
 				if (dd == null) dd = DragAndDrops.UpdateImageDst();
 
 				isHovered = isHovered || Manager.NativeManager.IsItemHovered();
 				
-				if(image != null)
+				if(thumbnail != null)
 				{
+					var image = thumbnail.Image;
 					float imageSizeX = image.GetWidth();
 					float imageSizeY = image.GetHeight();
 					if (imageSizeX < imageSizeY)
@@ -173,6 +185,8 @@ namespace Effekseer.GUI.Component
 					{
 						Manager.NativeManager.Image(image, 128, 128);
 					}
+
+					Popup();
 				}
 
 				if (dd == null) dd = DragAndDrops.UpdateImageDst();
@@ -255,18 +269,19 @@ namespace Effekseer.GUI.Component
 
 			if(System.IO.File.Exists(path))
 			{
-				image = Images.Load(Manager.Native, path);
-				if (image == null)
+				thumbnail = ThumbnailManager.Load(path);
+				if (thumbnail == null)
 				{
 					infoText = "";
 					return;
 				}
 
+				var image = thumbnail.Image;
 				infoText = "" + image.GetWidth() + "x" + image.GetHeight();
 			}
 			else
 			{
-				image = null;
+				thumbnail = null;
 				infoText = "";
 			}
 		}
@@ -275,6 +290,20 @@ namespace Effekseer.GUI.Component
 		{
 			var filters = binding.Filter.Split(',');
 			return filters.Any(_ => "." + _ == System.IO.Path.GetExtension(path).ToLower());
+		}
+
+		void Popup()
+		{
+			if (isPopupShown) return;
+
+			if (Manager.NativeManager.BeginPopupContextItem(id_c))
+			{
+				Functions.ShowReset(binding, id_reset);
+
+				Manager.NativeManager.EndPopup();
+
+				isPopupShown = true;
+			}
 		}
 	}
 }

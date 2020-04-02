@@ -8,6 +8,8 @@
 #include "Effekseer.Base.h"
 #include "Effekseer.IntrusiveList.h"
 #include "Effekseer.EffectNodeTrack.h"
+#include "SIMD/Effekseer.Vec3f.h"
+#include "SIMD/Effekseer.Mat43f.h"
 
 //----------------------------------------------------------------------------------
 //
@@ -26,6 +28,7 @@ namespace Effekseer
 class InstanceGroup
 {
 friend class InstanceContainer;
+friend class ManagerImplemented;
 
 private:
 	ManagerImplemented*		m_manager;
@@ -34,21 +37,18 @@ private:
 	InstanceGlobal*		m_global;
 	int32_t				m_time;
 
+	Mat43f parentMatrix_;
+	Mat43f parentRotation_;
+	Vec3f parentTranslation_;
+	Vec3f parentScale_;
+
 	// インスタンスの実体
 	IntrusiveList<Instance> m_instances;
 	IntrusiveList<Instance> m_removingInstances;
 
-		//! placement new
-	static void* operator new(size_t size);
-
-	//! placement delete
-	static void operator delete(void* p);
-
 	InstanceGroup( Manager* manager, EffectNode* effectNode, InstanceContainer* container, InstanceGlobal* global );
 
 	~InstanceGroup();
-
-	void RemoveInvalidInstances();
 
 public:
 
@@ -69,11 +69,11 @@ public:
 
 	int GetInstanceCount() const;
 
-	int GetRemovingInstanceCount() const;
+	void Update(bool shown);
 
-	void Update( float deltaFrame, bool shown );
+	void SetBaseMatrix( const Mat43f& mat );
 
-	void SetBaseMatrix( const Matrix43& mat );
+	void SetParentMatrix( const Mat43f& mat );
 
 	void RemoveForcibly();
 
@@ -96,8 +96,12 @@ public:
 	*/
 	InstanceGroup*	NextUsedByContainer;
 
-	InstanceGlobal* GetInstanceGlobal() const { return m_global; }
+	InstanceGlobal* GetRootInstance() const { return m_global; }
 
+	const Mat43f& GetParentMatrix() const { return parentMatrix_; }
+	const Vec3f& GetParentTranslation() const { return parentTranslation_; }
+	const Mat43f& GetParentRotation() const { return parentRotation_; }
+	const Vec3f& GetParentScale() const { return parentScale_; }
 };
 //----------------------------------------------------------------------------------
 //

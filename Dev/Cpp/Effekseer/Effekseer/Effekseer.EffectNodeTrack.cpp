@@ -7,6 +7,7 @@
 #include "Effekseer.Effect.h"
 #include "Effekseer.EffectNode.h"
 #include "Effekseer.Vector3D.h"
+#include "SIMD/Effekseer.SIMDUtils.h"
 
 #include "Effekseer.Instance.h"
 #include "Effekseer.InstanceContainer.h"
@@ -32,6 +33,11 @@ void EffectNodeTrack::LoadRendererParameter(unsigned char*& pos, Setting* settin
 	pos += sizeof(int);
 	assert(type == GetType());
 	EffekseerPrintDebug("Renderer : Track\n");
+
+	if (m_effect->GetVersion() >= 15)
+	{
+		TextureUVType.Load(pos, m_effect->GetVersion());
+	}
 
 	LoadValues(TrackSizeFor, pos);
 	LoadValues(TrackSizeMiddle, pos);
@@ -84,20 +90,18 @@ void EffectNodeTrack::BeginRendering(int32_t count, Manager* manager)
 	TrackRenderer* renderer = manager->GetTrackRenderer();
 	if (renderer != NULL)
 	{
-		m_nodeParameter.AlphaBlend = AlphaBlend;
-		m_nodeParameter.TextureFilter = RendererCommon.FilterType;
-		m_nodeParameter.TextureWrap = RendererCommon.WrapType;
+		//m_nodeParameter.TextureFilter = RendererCommon.FilterType;
+		//m_nodeParameter.TextureWrap = RendererCommon.WrapType;
 		m_nodeParameter.ZTest = RendererCommon.ZTest;
 		m_nodeParameter.ZWrite = RendererCommon.ZWrite;
-		m_nodeParameter.ColorTextureIndex = TrackTexture;
 		m_nodeParameter.EffectPointer = GetEffect();
 
-		m_nodeParameter.Distortion = RendererCommon.Distortion;
-		m_nodeParameter.DistortionIntensity = RendererCommon.DistortionIntensity;
 		m_nodeParameter.DepthParameterPtr = &DepthValues.DepthParameter;
 
 		m_nodeParameter.SplineDivision = SplineDivision;
-
+		m_nodeParameter.BasicParameterPtr = &RendererCommon.BasicParameter;
+		m_nodeParameter.TextureUVTypeParameterPtr = &TextureUVType;
+		m_nodeParameter.IsRightHand = manager->GetCoordinateSystem() == CoordinateSystem::RH;
 		renderer->BeginRendering(m_nodeParameter, count, m_userData);
 	}
 }
@@ -114,25 +118,22 @@ void EffectNodeTrack::BeginRenderingGroup(InstanceGroup* group, Manager* manager
 
 		m_instanceParameter.InstanceCount = group->GetInstanceCount();
 		m_instanceParameter.InstanceIndex = 0;
-
+		
 		if (group->GetFirst() != nullptr)
 		{
+#ifdef __EFFEKSEER_BUILD_VERSION16__
+			m_instanceParameter.UV = group->GetFirst()->GetUV(0);
+			m_instanceParameter.AlphaUV = group->GetFirst()->GetUV(1);
+
+			m_instanceParameter.FlipbookIndexAndNextRate = group->GetFirst()->m_flipbookIndexAndNextRate;
+
+			m_instanceParameter.AlphaThreshold = group->GetFirst()->m_AlphaThreshold;
+#else
 			m_instanceParameter.UV = group->GetFirst()->GetUV();
+#endif
+			CalcCustomData(group->GetFirst(), m_instanceParameter.CustomData1, m_instanceParameter.CustomData2);
 		}
 
-		/*
-		SetValues( m_instanceParameter.ColorLeft, instValues.ColorLeft, TrackColorLeft, group->GetTime() );
-		SetValues( m_instanceParameter.ColorCenter,instValues.ColorCenter, TrackColorCenter, group->GetTime() );
-		SetValues( m_instanceParameter.ColorRight,instValues.ColorRight, TrackColorRight, group->GetTime() );
-
-		SetValues( m_instanceParameter.ColorLeftMiddle,instValues.ColorLeftMiddle, TrackColorLeftMiddle, group->GetTime() );
-		SetValues( m_instanceParameter.ColorCenterMiddle,instValues.ColorCenterMiddle, TrackColorCenterMiddle, group->GetTime() );
-		SetValues( m_instanceParameter.ColorRightMiddle,instValues.ColorRightMiddle, TrackColorRightMiddle, group->GetTime() );
-
-		SetValues( m_instanceParameter.SizeFor, instValues.SizeFor, TrackSizeFor, group->GetTime() );
-		SetValues( m_instanceParameter.SizeMiddle, instValues.SizeMiddle, TrackSizeMiddle, group->GetTime() );
-		SetValues( m_instanceParameter.SizeBack, instValues.SizeBack, TrackSizeBack, group->GetTime() );
-		*/
 		renderer->BeginRenderingGroup(m_nodeParameter, group->GetInstanceCount(), m_userData);
 	}
 }
@@ -192,7 +193,7 @@ void EffectNodeTrack::EndRendering(Manager* manager)
 void EffectNodeTrack::InitializeRenderedInstanceGroup(InstanceGroup& instanceGroup, Manager* manager)
 {
 	InstanceGroupValues& instValues = instanceGroup.rendererValues.track;
-	auto instanceGlobal = instanceGroup.GetInstanceGlobal();
+	auto instanceGlobal = instanceGroup.GetRootInstance();
 
 	InitializeValues(instValues.ColorLeft, TrackColorLeft, instanceGlobal);
 	InitializeValues(instValues.ColorCenter, TrackColorCenter, instanceGlobal);
@@ -262,10 +263,7 @@ void EffectNodeTrack::InitializeValues(InstanceGroupValues::Color& value, Standa
 	}
 	else if (param.type == StandardColorParameter::FCurve_RGBA)
 	{
-		value.color.fcurve_rgba.offset[0] = param.fcurve_rgba.FCurve->R.GetOffset(*instanceGlobal);
-		value.color.fcurve_rgba.offset[1] = param.fcurve_rgba.FCurve->G.GetOffset(*instanceGlobal);
-		value.color.fcurve_rgba.offset[2] = param.fcurve_rgba.FCurve->B.GetOffset(*instanceGlobal);
-		value.color.fcurve_rgba.offset[3] = param.fcurve_rgba.FCurve->A.GetOffset(*instanceGlobal);
+		value.color.fcurve_rgba.offset = param.fcurve_rgba.FCurve->GetOffsets(*instanceGlobal);
 	}
 }
 
@@ -304,10 +302,11 @@ void EffectNodeTrack::SetValues(Color& c, const Instance& instance, InstanceGrou
 	}
 	else if (param.type == StandardColorParameter::FCurve_RGBA)
 	{
-		c.R = (uint8_t)Clamp((value.color.fcurve_rgba.offset[0] + param.fcurve_rgba.FCurve->R.GetValue((int32_t)time)), 255, 0);
-		c.G = (uint8_t)Clamp((value.color.fcurve_rgba.offset[1] + param.fcurve_rgba.FCurve->G.GetValue((int32_t)time)), 255, 0);
-		c.B = (uint8_t)Clamp((value.color.fcurve_rgba.offset[2] + param.fcurve_rgba.FCurve->B.GetValue((int32_t)time)), 255, 0);
-		c.A = (uint8_t)Clamp((value.color.fcurve_rgba.offset[3] + param.fcurve_rgba.FCurve->A.GetValue((int32_t)time)), 255, 0);
+		auto fcurveColors = param.fcurve_rgba.FCurve->GetValues(time, livedTime);
+		c.R = (uint8_t)Clamp((value.color.fcurve_rgba.offset[0] + fcurveColors[0]), 255, 0);
+		c.G = (uint8_t)Clamp((value.color.fcurve_rgba.offset[1] + fcurveColors[1]), 255, 0);
+		c.B = (uint8_t)Clamp((value.color.fcurve_rgba.offset[2] + fcurveColors[2]), 255, 0);
+		c.A = (uint8_t)Clamp((value.color.fcurve_rgba.offset[3] + fcurveColors[3]), 255, 0);
 	}
 
 	if (RendererCommon.ColorBindType == BindType::Always || RendererCommon.ColorBindType == BindType::WhenCreating)

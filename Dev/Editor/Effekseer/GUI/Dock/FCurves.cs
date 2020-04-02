@@ -7,6 +7,29 @@ using Effekseer.Data.Value;
 
 namespace Effekseer.GUI.Dock
 {
+	public class FCurveCopiedData
+	{
+		public class Point
+		{
+			public float Key;
+			public float Value;
+			public float LeftKey;
+			public float LeftValue;
+			public float RightKey;
+			public float RightValue;
+			public int Interpolation;
+		}
+
+		public class Curve
+		{
+			public int Index;
+			public int ID;
+			public List<Point> Points = new List<Point>();
+		}
+
+		public List<Curve> Curves = new List<Curve>();
+	}
+
 	class FCurves : DockPanel
 	{
 
@@ -19,12 +42,15 @@ namespace Effekseer.GUI.Dock
 		string left_text = Resources.GetString("Left");
 		string right_text = Resources.GetString("Right");
 		string offset_text = Resources.GetString("Offset");
+		string timelineMode_Name = Resources.GetString("FCurve_TimelineMode_Name");
+		string timelineMode_Desc = Resources.GetString("FCurve_TimelineMode_Desc");
 		string offset_min_text = Resources.GetString("Min");
 		string offset_max_text = Resources.GetString("Max");
 
 		Utl.ParameterTreeNode paramaterTreeNode = null;
 
 		TreeNode treeNodes = null;
+		List<FCurve> flattenFcurves = new List<FCurve>();
 
 		bool loading = false;
 
@@ -35,6 +61,7 @@ namespace Effekseer.GUI.Dock
 		Component.Enum startCurve = new Component.Enum();
 		Component.Enum endCurve = new Component.Enum();
 		Component.Enum type = new Component.Enum();
+		Component.Enum timeline = new Component.Enum();
 
 		bool isAutoZoomMode = false;
 		float autoZoomRangeMin = float.MaxValue;
@@ -54,19 +81,24 @@ namespace Effekseer.GUI.Dock
 			Core.OnAfterLoad += OnAfterLoad;
 
 			startCurve.Initialize(typeof(Data.Value.FCurveEdge));
-			startCurve.Label = start_text + "##Start";
+			startCurve.InternalLabel = start_text + "##Start";
 
 			endCurve.Initialize(typeof(Data.Value.FCurveEdge));
-			endCurve.Label = end_text + "##End";
+			endCurve.InternalLabel = end_text + "##End";
 
 			type.Initialize(typeof(Data.Value.FCurveInterpolation));
-			type.Label = type_text + "##Type";
+			type.InternalLabel = type_text + "##Type";
+
+			timeline.Initialize(typeof(Data.Value.FCurveTimelineMode));
+			timeline.InternalLabel = timelineMode_Name + "##Timeline";
 
 			OnChanged();
 
 			Icon = Images.GetIcon("PanelFCurve");
-			IconSize = new swig.Vec2(24, 24);
 			TabToolTip = Resources.GetString("FCurves");
+
+			//NoPadding = true;
+			NoScrollBar = true;
 
 			// auto zoom event
 			moved += (x, y) =>
@@ -93,217 +125,27 @@ namespace Effekseer.GUI.Dock
 		protected override void UpdateInternal()
 		{
 			canControl = true;
+			float dpiScale = Manager.DpiScale;
+			var contentSize = Manager.NativeManager.GetContentRegionAvail();
 
-			var selected = GetSelectedFCurve();
-
-			var invalidValue = "/";
-			var selectedInd = selected.Item1 != null ? selected.Item2.GetSelectedIndex() : -1;
-
-			// line 1
-			Manager.NativeManager.Columns(5);
-
-			if (selectedInd >= 0)
+			if (Component.Functions.CanShowTip())
 			{
-				var frameKey = new int[] { (int)selected.Item2.Keys[selectedInd] };
-				if (Manager.NativeManager.DragInt(frame_text, frameKey))
-				{
-					var diff = frameKey[0] - selected.Item2.Keys[selectedInd];
-
-					selected.Item2.Keys[selectedInd] = (int)frameKey[0];
-					selected.Item2.LeftKeys[selectedInd] += diff;
-					selected.Item2.RightKeys[selectedInd] += diff;
-					selected.Item2.IsDirtied = true;
-					selected.Item2.SolveContradiction();
-				}
-
-				if (Manager.NativeManager.IsItemActive()) canControl = false;
-			}
-			else
-			{
-				Manager.NativeManager.InputText(frame_text, invalidValue, swig.InputTextFlags.ReadOnly);
+				Manager.NativeManager.SetTooltip(Resources.GetString("FCurve_TimelineMode_Desc"));
 			}
 
-			Manager.NativeManager.NextColumn();
+			Manager.NativeManager.Columns(3);
 
-			if (selectedInd >= 0)
+			if (isFirstUpdate)
 			{
-				var frameValue = new float[] { selected.Item2.Values[selectedInd] };
-				if (Manager.NativeManager.DragFloat(value_text, frameValue))
-				{
-					var diff = frameValue[0] - selected.Item2.Values[selectedInd];
-
-					selected.Item2.Values[selectedInd] = frameValue[0];
-					selected.Item2.LeftValues[selectedInd] += diff;
-					selected.Item2.RightValues[selectedInd] += diff;
-					selected.Item2.IsDirtied = true;
-				}
-
-				if (Manager.NativeManager.IsItemActive()) canControl = false;
-			}
-			else
-			{
-				Manager.NativeManager.InputText(value_text, invalidValue, swig.InputTextFlags.ReadOnly);
-			}
-
-			Manager.NativeManager.NextColumn();
-
-			// Left key
-			if (selectedInd >= 0)
-			{
-				var leftValues = new float[] { selected.Item2.LeftKeys[selectedInd], selected.Item2.LeftValues[selectedInd] };
-				if (Manager.NativeManager.DragFloat2(left_text, leftValues))
-				{
-					selected.Item2.LeftKeys[selectedInd] = leftValues[0];
-					selected.Item2.LeftValues[selectedInd] = leftValues[1];
-					selected.Item2.Clip(selectedInd);
-					selected.Item2.IsDirtied = true;
-				}
-
-				if (Manager.NativeManager.IsItemActive()) canControl = false;
-			}
-			else
-			{
-				Manager.NativeManager.InputText(left_text, invalidValue, swig.InputTextFlags.ReadOnly);
-			}
-
-			Manager.NativeManager.NextColumn();
-
-			// Right key
-			if (selectedInd >= 0)
-			{
-				var rightValues = new float[] { selected.Item2.RightKeys[selectedInd], selected.Item2.RightValues[selectedInd] };
-				if (Manager.NativeManager.DragFloat2(right_text, rightValues))
-				{
-					selected.Item2.RightKeys[selectedInd] = rightValues[0];
-					selected.Item2.RightValues[selectedInd] = rightValues[1];
-					selected.Item2.Clip(selectedInd);
-					selected.Item2.IsDirtied = true;
-				}
-
-				if (Manager.NativeManager.IsItemActive()) canControl = false;
-			}
-			else
-			{
-				Manager.NativeManager.InputText(right_text, invalidValue, swig.InputTextFlags.ReadOnly);
-			}
-
-			Manager.NativeManager.NextColumn();
-
-			if (selectedInd >= 0)
-			{
-				if (Manager.NativeManager.BeginCombo(type.Label, type.FieldNames[selected.Item2.Interpolations[selectedInd]], swig.ComboFlags.None))
-				{
-					for (int i = 0; i < type.FieldNames.Count; i++)
-					{
-						bool is_selected = (type.FieldNames[(int)selected.Item2.Interpolations[selectedInd]] == type.FieldNames[i]);
-
-						if (Manager.NativeManager.Selectable(type.FieldNames[i], is_selected, swig.SelectableFlags.None))
-						{
-							selected.Item2.Interpolations[selectedInd] = i;
-							selected.Item2.IsDirtied = true;
-						}
-
-						if (is_selected)
-						{
-							Manager.NativeManager.SetItemDefaultFocus();
-						}
-					}
-
-					Manager.NativeManager.EndCombo();
-				}
-
-				if (Manager.NativeManager.IsItemActive()) canControl = false;
-			}
-			else
-			{
-				Manager.NativeManager.InputText(type_text, invalidValue, swig.InputTextFlags.ReadOnly);
-			}
-
-			Manager.NativeManager.Columns(1);
-				
-			Manager.NativeManager.Columns(4);
-
-			// Start curve
-			if(selected.Item1 != null)
-			{
-				startCurve.SetBinding(selected.Item1.StartType);
-				startCurve.Update();
-				selected.Item2.StartEdge = (Data.Value.FCurveEdge)selected.Item1.StartType;
-
-				if (Manager.NativeManager.IsItemActive()) canControl = false;
-			}
-			else
-			{
-				Manager.NativeManager.InputText(start_text, invalidValue, swig.InputTextFlags.ReadOnly);
-			}
-
-			Manager.NativeManager.NextColumn();
-
-			// End curve
-
-			if (selected.Item1 != null)
-			{
-				endCurve.SetBinding(selected.Item1.EndType);
-				endCurve.Update();
-				selected.Item2.EndEdge = (Data.Value.FCurveEdge)selected.Item1.EndType;
-
-				if (Manager.NativeManager.IsItemActive()) canControl = false;
-			}
-			else
-			{
-				Manager.NativeManager.InputText(end_text, invalidValue, swig.InputTextFlags.ReadOnly);
-			}
-
-			Manager.NativeManager.NextColumn();
-
-			// Sampling
-			if (selected.Item1 != null)
-			{
-				var sampling = new int[] { selected.Item1.Sampling };
-
-				if (Manager.NativeManager.InputInt(sampling_text + "##SamplingText", sampling))
-				{
-					selected.Item1.Sampling.SetValue(sampling[0]);
-				}
-
-				if (Manager.NativeManager.IsItemActive()) canControl = false;
-			}
-			else
-			{
-				Manager.NativeManager.InputText(sampling_text + "##SamplingText", invalidValue, swig.InputTextFlags.ReadOnly);
-			}
-
-			Manager.NativeManager.NextColumn();
-
-			// Offset label
-			if (selected.Item1 != null)
-			{
-				var offset_id = offset_text + "##OffsetMinMax";
-				var offsets = new float[] { selected.Item1.OffsetMin, selected.Item1.OffsetMax };
-
-				if (Manager.NativeManager.DragFloat2(offset_id, offsets))
-				{
-					selected.Item1.OffsetMin.SetValue(offsets[0]);
-					selected.Item1.OffsetMax.SetValue(offsets[1]);
-				}
-
-				if (Manager.NativeManager.IsItemActive()) canControl = false;
-			}
-			else
-			{
-				Manager.NativeManager.InputText(offset_text + "##OffsetMinMax", invalidValue, swig.InputTextFlags.ReadOnly);
-			}
-
-			Manager.NativeManager.Columns(1);
-			
-			if(selected.Item1 == null)
-			{
-				startCurve.SetBinding(null);
-				endCurve.SetBinding(null);
+				Manager.NativeManager.SetColumnWidth(0, contentSize.X * 0.24f);
+				Manager.NativeManager.SetColumnWidth(1, contentSize.X * 0.5f);
+				Manager.NativeManager.SetColumnWidth(2, contentSize.X * 0.26f);
 			}
 
 			{
-				if (Manager.NativeManager.ImageButton(Images.GetIcon("EnlargeAnchor"), 24, 24))
+				swig.Vec2 size = new swig.Vec2(24 * dpiScale, 24 * dpiScale);
+
+				if (Manager.NativeManager.ImageButton(Images.GetIcon("EnlargeAnchor"), size.X, size.Y))
 				{
 					EnlargeAnchors();
 				}
@@ -315,7 +157,7 @@ namespace Effekseer.GUI.Dock
 
 				Manager.NativeManager.SameLine();
 
-				if (Manager.NativeManager.ImageButton(Images.GetIcon("ShrinkAnchor"), 24, 24))
+				if (Manager.NativeManager.ImageButton(Images.GetIcon("ShrinkAnchor"), size.X, size.Y))
 				{
 					ShrinkAnchors();
 				}
@@ -324,40 +166,63 @@ namespace Effekseer.GUI.Dock
 				{
 					Manager.NativeManager.SetTooltip(Resources.GetString("ShrinkAnchor") + "\n" + Resources.GetString("ShrinkAnchor_Desc"));
 				}
+
+				Manager.NativeManager.SameLine();
+
+				if (Manager.NativeManager.ImageButton(Images.Icons["Copy"], size.X, size.Y))
+				{
+					Copy();
+				}
+
+				if (Component.Functions.CanShowTip())
+				{
+					Manager.NativeManager.SetTooltip(Resources.GetString("FCurve_Copy_Desc"));
+				}
+
+				Manager.NativeManager.SameLine();
+
+				if (Manager.NativeManager.ImageButton(Images.Icons["Paste"], size.X, size.Y))
+				{
+					Paste();
+				}
+
+				if (Component.Functions.CanShowTip())
+				{
+					Manager.NativeManager.SetTooltip(Resources.GetString("FCurve_Paste_Desc"));
+				}
+
+				Manager.NativeManager.SameLine();
+
+				Manager.NativeManager.Button("?");
+				
+				// if (Component.Functions.CanShowTip())
+				if (Manager.NativeManager.IsItemHovered())
+				{
+					Manager.NativeManager.SetTooltip(Resources.GetString("FCurveCtrl_Desc"));
+				}
 			}
-
-			//Manager.NativeManager.BeginGroup();
-
-			Manager.NativeManager.Columns(2);
 
 			// hot key
 			if (IsDockActive() && canControl)
 			{
 				int delete_num = 261;
 
+				// Delete points
 				if(Manager.NativeManager.IsKeyDown(delete_num))
 				{
-					// todo canControl = false;
+					DeleteSelectedPoints();
+					canControl = false;
 				}
 			}
 
-
-			if (isFirstUpdate)
-			{
-				Manager.NativeManager.SetColumnWidth(0, 200);
-			}
-			//Manager.NativeManager.BeginChild("##FCurveGroup_Tree");
-
+			Manager.NativeManager.BeginChild("##FCurveTree", new swig.Vec2());
 			if (treeNodes != null)
 			{
 				UpdateTreeNode(treeNodes);
 			}
-
-			//Manager.NativeManager.EndChild();
+			Manager.NativeManager.EndChild();
 
 			Manager.NativeManager.NextColumn();
-
-			//Manager.NativeManager.BeginChild("##FCurveGroup_Graph");
 
 			if(isAutoZoomMode)
 			{
@@ -379,7 +244,6 @@ namespace Effekseer.GUI.Dock
 			var graphSize = Manager.NativeManager.GetContentRegionAvail();
 			graphSize.X = Math.Max(graphSize.X, 32);
 			graphSize.Y = Math.Max(graphSize.Y, 32);
-			graphSize.Y -= 28;
 
 			var scale = new swig.Vec2(12, 4);
 
@@ -392,39 +256,16 @@ namespace Effekseer.GUI.Dock
 			autoZoomRangeMin = float.MaxValue;
 			autoZoomRangeMax = float.MinValue;
 
+			if(canControl)
+			{
+				Manager.NativeManager.StartSelectingAreaFCurve();
+			}
+
 			Manager.NativeManager.EndFCurve();
 
-			//Manager.NativeManager.EndChild();
+			Manager.NativeManager.NextColumn();
 
-			//Manager.NativeManager.EndGroup();
-
-			Manager.NativeManager.Columns(1);
-
-			/*
-			if (isAutoZoomMode)
-			{
-				if (Manager.NativeManager.ImageButton(Images.GetIcon("AutoZoom_On"), 24, 24))
-				{
-					isAutoZoomMode = false;
-				}
-			}
-			else
-			{
-				if (Manager.NativeManager.ImageButton(Images.GetIcon("AutoZoom_Off"), 24, 24))
-				{
-					isAutoZoomMode = true;
-				}
-			}
-			*/
-
-			//if (Manager.NativeManager.IsItemHovered())
-			//{
-			//	Manager.NativeManager.SetTooltip(Resources.GetString("AutoZoom") + "\n" + Resources.GetString("AutoZoom_Desc"));
-			//}
-
-			//Manager.NativeManager.SameLine();
-
-			Manager.NativeManager.Text(Resources.GetString("FCurveCtrl_Desc"));
+			UpdateDetails();
 
 			isFirstUpdate = false;
 		}
@@ -459,11 +300,12 @@ namespace Effekseer.GUI.Dock
 		{
 			var flag = swig.TreeNodeFlags.OpenOnArrow | swig.TreeNodeFlags.OpenOnDoubleClick | swig.TreeNodeFlags.DefaultOpen;
 
-			if (Manager.NativeManager.TreeNodeEx(treeNode.ParamTreeNode.Node.Name.Value + treeNode.ID, flag))
+			string nodeName = treeNode.ParamTreeNode.Node.Name.Value;
+			if (Manager.NativeManager.TreeNodeEx(nodeName + treeNode.ID, flag))
 			{
 				foreach (var fcurve in treeNode.FCurves)
 				{
-					fcurve.UpdateTree();
+					fcurve.UpdateTree(nodeName);
 				}
 
 				for (int i = 0; i < treeNode.Children.Count; i++)
@@ -528,6 +370,215 @@ namespace Effekseer.GUI.Dock
 			}
 
 			canCurveControl = canControl;
+		}
+
+		void UpdateDetails()
+		{
+			var selected = GetSelectedFCurve();
+
+			var invalidValue = "/";
+			var selectedInd = selected.Item1 != null ? selected.Item2.GetSelectedIndex() : -1;
+
+			Manager.NativeManager.BeginChild("##FCurveDetails", new swig.Vec2());
+			Manager.NativeManager.PushItemWidth(80 * Manager.DpiScale);
+
+			if (selectedInd >= 0)
+			{
+				var frameKey = new int[] { (int)selected.Item2.Keys[selectedInd] };
+				if (Manager.NativeManager.DragInt(frame_text, frameKey))
+				{
+					var diff = frameKey[0] - selected.Item2.Keys[selectedInd];
+
+					selected.Item2.Keys[selectedInd] = (int)frameKey[0];
+					selected.Item2.LeftKeys[selectedInd] += diff;
+					selected.Item2.RightKeys[selectedInd] += diff;
+					selected.Item2.IsDirtied = true;
+					selected.Item2.SolveContradiction();
+				}
+
+				if (Manager.NativeManager.IsItemActive()) canControl = false;
+			}
+			else
+			{
+				Manager.NativeManager.InputText(frame_text, invalidValue, swig.InputTextFlags.ReadOnly);
+			}
+
+			if (selectedInd >= 0)
+			{
+				var frameValue = new float[] { selected.Item2.Values[selectedInd] };
+				if (Manager.NativeManager.DragFloat(value_text, frameValue))
+				{
+					var diff = frameValue[0] - selected.Item2.Values[selectedInd];
+
+					selected.Item2.Values[selectedInd] = frameValue[0];
+					selected.Item2.LeftValues[selectedInd] += diff;
+					selected.Item2.RightValues[selectedInd] += diff;
+					selected.Item2.IsDirtied = true;
+				}
+
+				if (Manager.NativeManager.IsItemActive()) canControl = false;
+			}
+			else
+			{
+				Manager.NativeManager.InputText(value_text, invalidValue, swig.InputTextFlags.ReadOnly);
+			}
+
+			// Left key
+			if (selectedInd >= 0)
+			{
+				var leftValues = new float[] { selected.Item2.LeftKeys[selectedInd], selected.Item2.LeftValues[selectedInd] };
+				if (Manager.NativeManager.DragFloat2(left_text, leftValues))
+				{
+					selected.Item2.LeftKeys[selectedInd] = leftValues[0];
+					selected.Item2.LeftValues[selectedInd] = leftValues[1];
+					selected.Item2.Clip(selectedInd);
+					selected.Item2.IsDirtied = true;
+				}
+
+				if (Manager.NativeManager.IsItemActive()) canControl = false;
+			}
+			else
+			{
+				Manager.NativeManager.InputText(left_text, invalidValue, swig.InputTextFlags.ReadOnly);
+			}
+
+			// Right key
+			if (selectedInd >= 0)
+			{
+				var rightValues = new float[] { selected.Item2.RightKeys[selectedInd], selected.Item2.RightValues[selectedInd] };
+				if (Manager.NativeManager.DragFloat2(right_text, rightValues))
+				{
+					selected.Item2.RightKeys[selectedInd] = rightValues[0];
+					selected.Item2.RightValues[selectedInd] = rightValues[1];
+					selected.Item2.Clip(selectedInd);
+					selected.Item2.IsDirtied = true;
+				}
+
+				if (Manager.NativeManager.IsItemActive()) canControl = false;
+			}
+			else
+			{
+				Manager.NativeManager.InputText(right_text, invalidValue, swig.InputTextFlags.ReadOnly);
+			}
+
+			if (selectedInd >= 0)
+			{
+				if (Manager.NativeManager.BeginCombo(type_text, type.FieldNames[selected.Item2.Interpolations[selectedInd]], swig.ComboFlags.None))
+				{
+					for (int i = 0; i < type.FieldNames.Count; i++)
+					{
+						bool is_selected = (type.FieldNames[(int)selected.Item2.Interpolations[selectedInd]] == type.FieldNames[i]);
+
+						if (Manager.NativeManager.Selectable(type.FieldNames[i], is_selected, swig.SelectableFlags.None))
+						{
+							selected.Item2.Interpolations[selectedInd] = i;
+							selected.Item2.IsDirtied = true;
+						}
+
+						if (is_selected)
+						{
+							Manager.NativeManager.SetItemDefaultFocus();
+						}
+					}
+
+					Manager.NativeManager.EndCombo();
+				}
+
+				if (Manager.NativeManager.IsItemActive()) canControl = false;
+			}
+			else
+			{
+				Manager.NativeManager.InputText(type_text, invalidValue, swig.InputTextFlags.ReadOnly);
+			}
+
+			Manager.NativeManager.Separator();
+
+			// Start curve
+			if (selected.Item1 != null)
+			{
+				startCurve.SetBinding(selected.Item1.StartType);
+				startCurve.Update();
+				selected.Item2.StartEdge = (Data.Value.FCurveEdge)selected.Item1.StartType;
+
+				if (Manager.NativeManager.IsItemActive()) canControl = false;
+			}
+			else
+			{
+				Manager.NativeManager.InputText(start_text, invalidValue, swig.InputTextFlags.ReadOnly);
+			}
+
+			// End curve
+			if (selected.Item1 != null)
+			{
+				endCurve.SetBinding(selected.Item1.EndType);
+				endCurve.Update();
+				selected.Item2.EndEdge = (Data.Value.FCurveEdge)selected.Item1.EndType;
+
+				if (Manager.NativeManager.IsItemActive()) canControl = false;
+			}
+			else
+			{
+				Manager.NativeManager.InputText(end_text, invalidValue, swig.InputTextFlags.ReadOnly);
+			}
+
+			// Sampling
+			if (selected.Item1 != null)
+			{
+				var sampling = new int[] { selected.Item1.Sampling };
+
+				if (Manager.NativeManager.InputInt(sampling_text + "##SamplingText", sampling))
+				{
+					selected.Item1.Sampling.SetValue(sampling[0]);
+				}
+
+				if (Manager.NativeManager.IsItemActive()) canControl = false;
+			}
+			else
+			{
+				Manager.NativeManager.InputText(sampling_text + "##SamplingText", invalidValue, swig.InputTextFlags.ReadOnly);
+			}
+
+			// Offset label
+			if (selected.Item1 != null)
+			{
+				var offset_id = offset_text + "##OffsetMinMax";
+				var offsets = new float[] { selected.Item1.OffsetMin, selected.Item1.OffsetMax };
+
+				if (Manager.NativeManager.DragFloat2(offset_id, offsets))
+				{
+					selected.Item1.OffsetMin.SetValue(offsets[0]);
+					selected.Item1.OffsetMax.SetValue(offsets[1]);
+				}
+
+				if (Manager.NativeManager.IsItemActive()) canControl = false;
+			}
+			else
+			{
+				Manager.NativeManager.InputText(offset_text + "##OffsetMinMax", invalidValue, swig.InputTextFlags.ReadOnly);
+			}
+
+			if (selected.Item1 == null)
+			{
+				startCurve.SetBinding(null);
+				endCurve.SetBinding(null);
+			}
+
+			var fcurveGroups = flattenFcurves.Where(_ => _.Properties.Any(__ => __.IsShown)).ToArray();
+
+			if (fcurveGroups.Any())
+			{
+				// TODO : implement multi select
+				timeline.SetBinding(fcurveGroups.First().GetTimeLineType());
+				timeline.Update();
+			}
+			else
+			{
+				Manager.NativeManager.InputText(timelineMode_Name + "##Timeline", invalidValue, swig.InputTextFlags.ReadOnly);
+				timeline.SetBinding(null);
+			}
+
+			Manager.NativeManager.PopItemWidth();
+			Manager.NativeManager.EndChild();
 		}
 
 		void GetRange(TreeNode treeNode, out float min_value, out float max_value)
@@ -602,6 +653,8 @@ namespace Effekseer.GUI.Dock
 
 		void SetParameters(Utl.ParameterTreeNode paramTreeNodes)
 		{
+			flattenFcurves.Clear();
+
 			List<FCurve> befores = new List<FCurve>();
 			List<FCurve> afters = new List<FCurve>();
 
@@ -775,6 +828,53 @@ namespace Effekseer.GUI.Dock
 			}
 
 			paramaterTreeNode = paramTreeNodes;
+
+			// collect fcurves
+			{
+				Action<TreeNode> recurse = null;
+
+				recurse = (t) =>
+				{
+					foreach (var fcurve in t.FCurves)
+					{
+						flattenFcurves.Add(fcurve);
+					}
+
+					foreach (var c in t.Children)
+					{
+						recurse(c);
+					}
+				};
+
+				recurse(treeNodes);
+			}
+		}
+
+		public void SelectFCurve(object o)
+		{
+			Action<TreeNode> recurse = null;
+
+			recurse = (t) =>
+			{
+				foreach (var fcurve in t.FCurves)
+				{
+					if(o == fcurve.GetValueAsObject())
+					{
+						foreach(var prop in fcurve.Properties)
+						{
+							prop.Selected = true;
+							prop.IsShown = true;
+						}
+					}
+				}
+
+				foreach (var c in t.Children)
+				{
+					recurse(c);
+				}
+			};
+
+			recurse(treeNodes);
 		}
 
 		public void UnselectAll()
@@ -817,6 +917,25 @@ namespace Effekseer.GUI.Dock
 			recurse(treeNodes);
 		}
 
+		public void DeleteSelectedPoints()
+		{
+			Action<TreeNode> recurse = null;
+
+			recurse = (t) =>
+			{
+				foreach (var fcurve in t.FCurves)
+				{
+					fcurve.DeleteSelectedPoints();
+				}
+
+				foreach (var c in t.Children)
+				{
+					recurse(c);
+				}
+			};
+
+			recurse(treeNodes);
+		}
 		public void ShrinkAnchors()
 		{
 			Action<TreeNode> recurse = null;
@@ -879,6 +998,144 @@ namespace Effekseer.GUI.Dock
 			if(moved != null)
 			{
 				moved(x, y);
+			}
+		}
+
+		public void Copy()
+		{
+			var copiedData = CopyAsClass();
+			if (copiedData == null)
+			{
+				return;
+			}
+
+			System.Xml.Serialization.XmlSerializer serializer = new System.Xml.Serialization.XmlSerializer(typeof(FCurveCopiedData));
+			System.IO.StringWriter writer = new System.IO.StringWriter();
+			serializer.Serialize(writer, copiedData);
+			Manager.NativeManager.SetClipboardText(writer.ToString());
+		}
+
+		public FCurveCopiedData CopyAsClass()
+		{
+			FCurveCopiedData data = new FCurveCopiedData();
+
+			var flatten = flattenFcurves;
+
+			foreach(var curve in flatten)
+			{
+				for(int ind = 0; ind < curve.Properties.Length; ind++)
+				{
+					var prop = curve.Properties[ind];
+
+					if(!prop.KVSelected.Any(_=>_ > 0))
+					{
+						continue;
+					}
+
+					FCurveCopiedData.Curve copiedCurve = new FCurveCopiedData.Curve();
+
+					copiedCurve.Index = ind;
+					copiedCurve.ID = curve.ID;
+					
+					for(int i = 0; i < prop.KVSelected.Length; i++)
+					{
+						if(prop.KVSelected[i] > 0)
+						{
+							var p = new FCurveCopiedData.Point();
+							p.Key = prop.Keys[i];
+							p.Value = prop.Values[i];
+							p.LeftKey = prop.LeftKeys[i];
+							p.LeftValue = prop.LeftValues[i];
+							p.RightKey = prop.RightKeys[i];
+							p.RightValue = prop.RightValues[i];
+							p.Interpolation = prop.Interpolations[i];
+							copiedCurve.Points.Add(p);
+						}
+					}
+
+					data.Curves.Add(copiedCurve);
+				}
+			}
+
+			if (data.Curves.Count == 0)
+			{
+				return null;
+			}
+
+			var xmin = data.Curves.SelectMany(_ => _.Points).Min(_ => _.Key);
+
+			foreach(var curve in data.Curves)
+			{
+				foreach(var p in curve.Points)
+				{
+					p.Key -= xmin;
+					p.LeftKey -= xmin;
+					p.RightKey -= xmin;
+				}
+			}
+
+			return data;
+		}
+
+		public void Paste()
+		{
+			try
+			{
+				System.Xml.Serialization.XmlSerializer serializer = new System.Xml.Serialization.XmlSerializer(typeof(FCurveCopiedData));
+				FCurveCopiedData data = serializer.Deserialize(new System.IO.StringReader(Manager.NativeManager.GetClipboardText())) as FCurveCopiedData;
+				Paste(data);
+			}
+			catch
+			{
+				return;
+			}
+		}
+
+		public void Paste(FCurveCopiedData data)
+		{
+			var flatten = flattenFcurves.ToArray();
+			var offsetTime = Manager.Viewer.Current;
+
+			foreach (var curve in flatten)
+			{
+				for (int ind = 0; ind < curve.Properties.Length; ind++)
+				{
+					var prop = curve.Properties[ind];
+
+					if (!prop.IsShown) continue;
+					if (!prop.Selected) continue;
+
+					var candidates = data.Curves.Where(_ => _.Index == ind);
+
+					var copiedCurve = candidates.FirstOrDefault(_ => _.ID == curve.ID);
+
+					if(copiedCurve == null)
+					{
+						copiedCurve = data.Curves.FirstOrDefault(_ => _.Index == ind);
+					}
+
+					if (copiedCurve != null)
+					{
+						
+						for(int i = 0; i < copiedCurve.Points.Count; i++)
+						{
+							prop.KVSelected = new byte[] { 0 }.Concat(prop.KVSelected).ToArray();
+						}
+
+						prop.Keys = copiedCurve.Points.Select(_ => _.Key + offsetTime).Concat(prop.Keys).ToArray();
+						prop.Values = copiedCurve.Points.Select(_ => _.Value).Concat(prop.Values).ToArray();
+						prop.LeftKeys = copiedCurve.Points.Select(_ => _.LeftKey + offsetTime).Concat(prop.LeftKeys).ToArray();
+						prop.LeftValues = copiedCurve.Points.Select(_ => _.LeftValue).Concat(prop.LeftValues).ToArray();
+						prop.RightKeys = copiedCurve.Points.Select(_ => _.RightKey + offsetTime).Concat(prop.RightKeys).ToArray();
+						prop.RightValues = copiedCurve.Points.Select(_ => _.RightValue).Concat(prop.RightValues).ToArray();
+						prop.Interpolations = copiedCurve.Points.Select(_ => _.Interpolation).Concat(prop.Interpolations).ToArray();
+
+						prop.SolveContradiction();
+						prop.IsDirtied = true;
+					}
+				}
+
+				curve.Commit();
 			}
 		}
 
@@ -954,127 +1211,170 @@ namespace Effekseer.GUI.Dock
 			}
 		}
 
-		abstract class FCurve
+
+		interface IFCurveConverter
 		{
+			IFCurveKey CreateKey(int key, float value, float leftKey, float leftValue, float rightKey, float rightValue);
+
+			void SetKeys(IFCurve fcurve, IFCurveKey[] keys);
+		}
+
+		class FloatFCurveConverter : IFCurveConverter
+		{
+			public IFCurveKey CreateKey(int key, float value, float leftKey, float leftValue, float rightKey, float rightValue)
+			{
+				var fcurveKey = new FCurveKey<float>(key, value);
+				fcurveKey.SetLeftDirectly(leftKey, leftValue);
+				fcurveKey.SetRightDirectly(rightKey, rightValue);
+				return fcurveKey;
+			}
+
+			public void SetKeys(IFCurve fcurve, IFCurveKey[] keys)
+			{
+				var fc = fcurve as FCurve<float>;
+				fc.SetKeys(keys.OfType<FCurveKey<float>>().ToArray());
+			}
+		}
+
+		class IntFCurveConverter : IFCurveConverter
+		{
+			public IFCurveKey CreateKey(int key, float value, float leftKey, float leftValue, float rightKey, float rightValue)
+			{
+				var fcurveKey = new FCurveKey<int>(key, (int)value);
+				fcurveKey.SetLeftDirectly(leftKey, leftValue);
+				fcurveKey.SetRightDirectly(rightKey, rightValue);
+				return fcurveKey;
+			}
+
+			public void SetKeys(IFCurve fcurve, IFCurveKey[] keys)
+			{
+				var fc = fcurve as FCurve<int>;
+				fc.SetKeys(keys.OfType<FCurveKey<int>>().ToArray());
+			}
+		}
+
+		class FCurve
+		{
+			/// <summary>
+			/// next id for copy and paste
+			/// </summary>
+			static int nextID = 0;
+
+			/// <summary>
+			/// for copy and paste
+			/// </summary>
+			public int ID { get; private set; }
 			protected int LEFT_SHIFT = 340;
 			protected int RIGHT_SHIFT = 344;
+			protected int LEFT_ALT = 342;
+			protected int RIGHT_ALT = 346;
+
+			protected FCurveProperty[] properties = null;
 
 			public TreeNode ParentNode { get; set; }
 
 			public string Name { get; protected set; }
 
-			public abstract object GetValueAsObject();
-
-			public virtual Tuple35<Data.Value.IFCurve, FCurveProperty> GetSelectedFCurve() { return new Tuple35<Data.Value.IFCurve, FCurveProperty>(null, null); }
+			public FCurveProperty[] Properties { get { return properties; } }
 
 			static public FCurve Create(Tuple35<string, object> v, FCurves window)
 			{
-				if (v.Item2 is Data.Value.FCurveVector2D)
+#if __EFFEKSEER_BUILD_VERSION16__
+				if (v.Item2 is Data.Value.FCurveScalar)
 				{
-					Func<float, float> converter = (float pre) => { return pre; };
-
-					var v_ = (Data.Value.FCurveVector2D)v.Item2;
-					return new FCurveTemplate<float>(
-						2,
-						new[] { v_.X, v_.Y },
-						new[] { 0xff0000ff, 0xff00ff00 },
-						new string[] { "X", "Y", "Z" },
+					var v_ = (Data.Value.FCurveScalar)v.Item2;
+					return new FCurve(
+						1,
+						new[] { v_.S },
+						new[] { 0xffffffff },
+						new string[] { "S" },
 						0,
 						v_,
 						v.Item1,
 						window,
-						converter,
+						new FloatFCurveConverter(),
+						v_.S.DefaultValueRangeMin,
+						v_.S.DefaultValueRangeMax,
+						v_.Timeline);
+				}
+				else
+#endif
+				if (v.Item2 is Data.Value.FCurveVector2D)
+				{
+					var v_ = (Data.Value.FCurveVector2D)v.Item2;
+					return new FCurve(
+						2,
+						new[] { v_.X, v_.Y },
+						new[] { 0xff5234ff, 0xff00e682 },
+						new string[] { "X", "Y" },
+						0,
+						v_,
+						v.Item1,
+						window,
+						new FloatFCurveConverter(),
 						float.MinValue,
-						float.MaxValue);
+						float.MaxValue,
+						v_.Timeline);
 				}
 				else if (v.Item2 is Data.Value.FCurveVector3D)
 				{
 					Func<float, float> converter = (float pre) => { return pre; };
 
 					var v_ = (Data.Value.FCurveVector3D)v.Item2;
-					return new FCurveTemplate<float>(
-						3, 
-						new[] { v_.X, v_.Y, v_.Z}, 
-						new[] { 0xff0000ff, 0xff00ff00, 0xffff0000 },
+					return new FCurve(
+						3,
+						new[] { v_.X, v_.Y, v_.Z },
+						new[] { 0xff5234ff, 0xff00e682, 0xffff9028 },
 						new string[] { "X", "Y", "Z" },
 						0,
 						v_,
-						v.Item1, 
+						v.Item1,
 						window,
-						converter,
+						new FloatFCurveConverter(),
 						float.MinValue,
-						float.MaxValue);
+						float.MaxValue,
+						v_.Timeline);
 				}
 				else if (v.Item2 is Data.Value.FCurveColorRGBA)
 				{
-					Func<float, byte> converter = (float pre) => {
-						return (byte)Math.Min(255, Math.Max(0, pre));
-					};
-
 					var v_ = (Data.Value.FCurveColorRGBA)v.Item2;
-					return new FCurveTemplate<byte>(
+					return new FCurve(
 						4,
 						new[] { v_.R, v_.G, v_.B, v_.A },
-						new[] { 0xff0000ff, 0xff00ff00, 0xffff0000, 0xffaaaaaa },
+						new[] { 0xff5234ff, 0xff00e682, 0xffff9028, 0xffc0c0c0 },
 						new string[] { "R", "G", "B", "A" },
 						255.0f,
 						v_,
 						v.Item1,
 						window,
-						converter,
+						new IntFCurveConverter(),
 						0,
-						255);
+						int.MaxValue,
+						v_.Timeline);
 				}
-				
+
 				return null;
 			}
 
-			public FCurve()
-			{
-			}
 
-			public abstract void GetRange(out float value_min, out float value_max);
-
-			public virtual void OnAdded() {}
-
-			public virtual void OnRemoved() {}
-
-			public virtual void Move(float x, float y, int changedType, Data.Value.IFCurve except) { }
-
-			public virtual void ShrinkAnchors() { }
-
-			public virtual void EnlargeAnchors() { }
-
-			public virtual void Unselect() { }
-
-			public virtual void UpdateTree() { }
-
-			public virtual void UpdateGraph(ref bool canControl) { }
-
-			public virtual void Hide() { }
-
-			public virtual void Commit() { }
-
-			public virtual bool IsDirtied() { return false; }
-		}
-
-		class FCurveTemplate<T> : FCurve where T : struct, IComparable<T>, IEquatable<T>
-		{
-			FCurveProperty[] properties = new FCurveProperty[3];
-			Data.Value.FCurve<T>[] fcurves = new Data.Value.FCurve<T>[3];
+			Data.Value.IFCurve[] fcurves = null;
 			int[] ids = new int[3];
 			string[] names = null;
+			Data.Value.Enum<FCurveTimelineMode> timelineType = null;
 
 			FCurves window = null;
-			Func<float, T> converter = null;
+			IFCurveConverter converter = null;
 			float v_min;
 			float v_max;
 			float defaultValue = 0;
 
 			public object Value { get; private set; }
 
-			public FCurveTemplate(int length, FCurve<T>[] fcurves, uint[] colors, string[] names, float defaultValue, object value, string name, FCurves window, Func<float, T> converter, float v_min, float v_max)
+			public FCurve(int length, IFCurve[] fcurves, uint[] colors, string[] names, float defaultValue, object value, string name, FCurves window, IFCurveConverter converter, float v_min, float v_max, Data.Value.Enum<FCurveTimelineMode> timelineType)
 			{
+				ID = nextID;
+				nextID++;
+
 				Name = name;
 				Value = value;
 				this.defaultValue = defaultValue;
@@ -1082,6 +1382,7 @@ namespace Effekseer.GUI.Dock
 				this.converter = converter;
 				this.v_max = v_max;
 				this.v_min = v_min;
+				this.timelineType = timelineType;
 
 				properties = new FCurveProperty[length];
 				ids = new int[length];
@@ -1097,7 +1398,7 @@ namespace Effekseer.GUI.Dock
 				this.fcurves = fcurves;
 			}
 
-			public override void GetRange(out float value_min, out float value_max)
+			public void GetRange(out float value_min, out float value_max)
 			{
 				value_min = float.MaxValue;
 				value_max = float.MinValue;
@@ -1135,12 +1436,12 @@ namespace Effekseer.GUI.Dock
 				*/
 			}
 
-			public override object GetValueAsObject()
+			public object GetValueAsObject()
 			{
 				return Value;
 			}
 
-			public override Tuple35<Data.Value.IFCurve, FCurveProperty> GetSelectedFCurve()
+			public Tuple35<Data.Value.IFCurve, FCurveProperty> GetSelectedFCurve()
 			{
 				int count = properties.Count(_ => _.Selected);
 				if (count != 1) return new Tuple35<Data.Value.IFCurve, FCurveProperty>(null, null);
@@ -1156,14 +1457,16 @@ namespace Effekseer.GUI.Dock
 				return new Tuple35<Data.Value.IFCurve, FCurveProperty>(null, null);
 			}
 
-			public override void UpdateTree()
+			public void UpdateTree(string nodeName)
 			{
 
 				for(int i = 0; i < properties.Length; i++)
 				{
 					var value = this.fcurves[i].GetValue(Manager.Viewer.Current);
 
-					if (Manager.NativeManager.Selectable(Name + " : " + names[i] + " (" + value + ")", properties[i].IsShown, swig.SelectableFlags.AllowDoubleClick))
+					string labelName = Name + " : " + names[i] + " (" + value + ")";
+					string labelID = "###FCurveLabel_" + nodeName + "_" + Name + "_" + names[i];
+					if (Manager.NativeManager.Selectable(labelName + labelID, properties[i].IsShown, swig.SelectableFlags.AllowDoubleClick))
 					{
 						if(Manager.NativeManager.IsMouseDoubleClicked(0))
 						{
@@ -1198,7 +1501,7 @@ namespace Effekseer.GUI.Dock
 				}
 			}
 
-			public override void UpdateGraph(ref bool canControl)
+			public void UpdateGraph(ref bool canControl)
 			{
 				for(int i = 0; i < properties.Length; i++)
 				{
@@ -1254,6 +1557,10 @@ namespace Effekseer.GUI.Dock
 						{
 							if (Manager.NativeManager.IsKeyDown(LEFT_SHIFT) || Manager.NativeManager.IsKeyDown(RIGHT_SHIFT))
 							{
+								properties[i].Selected = !properties[i].Selected;
+							}
+							else if (Manager.NativeManager.IsKeyDown(LEFT_ALT) || Manager.NativeManager.IsKeyDown(RIGHT_ALT))
+							{
 								properties[i].Selected = true;
 							}
 							else
@@ -1298,7 +1605,7 @@ namespace Effekseer.GUI.Dock
 				}
 			}
 
-			public override void Move(float x, float y, int changedType, IFCurve except)
+			public void Move(float x, float y, int changedType, IFCurve except)
 			{
 				for (int j = 0; j < properties.Length; j++)
 				{
@@ -1368,7 +1675,35 @@ namespace Effekseer.GUI.Dock
 				}
 			}
 
-			public override void ShrinkAnchors()
+			public void DeleteSelectedPoints()
+			{
+				foreach (var prop in properties)
+				{
+					if (!prop.IsShown) continue;
+					if (!prop.Selected) continue;
+
+					for (int i = 0; i < prop.KVSelected.Length - 1;)
+					{
+						if (prop.KVSelected[i] == 0)
+						{
+							i++;
+							continue;
+						}
+
+						prop.LeftKeys = prop.LeftKeys.Where((v, ind) => ind != i).ToArray();
+						prop.LeftValues = prop.LeftValues.Where((v, ind) => ind != i).ToArray();
+						prop.RightKeys = prop.RightKeys.Where((v, ind) => ind != i).ToArray();
+						prop.RightValues = prop.RightValues.Where((v, ind) => ind != i).ToArray();
+						prop.Keys = prop.Keys.Where((v, ind) => ind != i).ToArray();
+						prop.Values = prop.Values.Where((v, ind) => ind != i).ToArray();
+						prop.KVSelected = prop.KVSelected.Where((v, ind) => ind != i).ToArray();
+
+						prop.IsDirtied = true;
+					}
+				}
+			}
+
+			public void ShrinkAnchors()
 			{
 				foreach (var prop in properties)
 				{
@@ -1390,7 +1725,7 @@ namespace Effekseer.GUI.Dock
 				}
 			}
 
-			public override void EnlargeAnchors()
+			public void EnlargeAnchors()
 			{
 				foreach(var prop in properties)
 				{
@@ -1446,7 +1781,7 @@ namespace Effekseer.GUI.Dock
 				}
 			}
 
-			public override void OnAdded()
+			public void OnAdded()
 			{
 				fcurves[0].OnChanged += OnChanged_1;
 				if (fcurves.Length >= 2) fcurves[1].OnChanged += OnChanged_2;
@@ -1454,7 +1789,7 @@ namespace Effekseer.GUI.Dock
 				if (fcurves.Length >= 4) fcurves[3].OnChanged += OnChanged_4;
 			}
 
-			public override void OnRemoved()
+			public void OnRemoved()
 			{
 				fcurves[0].OnChanged -= OnChanged_1;
 				if (fcurves.Length >= 2) fcurves[1].OnChanged -= OnChanged_2;
@@ -1495,7 +1830,7 @@ namespace Effekseer.GUI.Dock
 				properties[i].CopyValuesFromDataIfSizeDifferent(fcurves[i]);
 			}
 
-			public override void Unselect()
+			public void Unselect()
 			{
 				foreach(var prop in properties)
 				{
@@ -1503,7 +1838,7 @@ namespace Effekseer.GUI.Dock
 				}
 			}
 
-			public override void Hide()
+			public void Hide()
 			{
 				foreach (var prop in properties)
 				{
@@ -1511,13 +1846,15 @@ namespace Effekseer.GUI.Dock
 				}
 			}
 
-			public override void Commit()
+			public void Commit()
 			{
+				Command.CommandManager.StartCollection();
+
 				for(int i = 0; i < properties.Length; i++)
 				{
 					if (!properties[i].IsDirtied) continue;
 					
-					var keys = new List<Data.Value.FCurveKey<T>>();
+					var keys = new List<IFCurveKey>();
 
 					// Change value format into int
 					for (int j = 0; j < properties[i].Keys.Length - 1; j++)
@@ -1537,30 +1874,18 @@ namespace Effekseer.GUI.Dock
 					for (int j = 0; j < properties[i].Keys.Length - 1; j++)
 					{
 						var v = properties[i].Values[j];
-						var v_ = converter(v);
-
-						Data.Value.FCurveKey<T> key = new FCurveKey<T>(
-							(int)properties[i].Keys[j],
-							v_);
-
-						key.SetLeftDirectly(
-							properties[i].LeftKeys[j],
-							properties[i].LeftValues[j]);
-
-						key.SetRightDirectly(
-							properties[i].RightKeys[j],
-							properties[i].RightValues[j]);
-
+						var key = converter.CreateKey((int)properties[i].Keys[j], v, properties[i].LeftKeys[j], properties[i].LeftValues[j], properties[i].RightKeys[j], properties[i].RightValues[j]);
 						keys.Add(key);
 					}
 
-					fcurves[i].SetKeys(keys.ToArray());
-
+					converter.SetKeys(fcurves[i], keys.ToArray());
 					properties[i].IsDirtied = false;
 				}
+
+				Command.CommandManager.EndCollection();
 			}
 
-			public override bool IsDirtied()
+			public bool IsDirtied()
 			{
 				for (int i = 0; i < properties.Length; i++)
 				{
@@ -1568,6 +1893,11 @@ namespace Effekseer.GUI.Dock
 				}
 
 				return false;
+			}
+
+			public Enum<FCurveTimelineMode> GetTimeLineType()
+			{
+				return timelineType;
 			}
 		}
 
@@ -1671,43 +2001,38 @@ namespace Effekseer.GUI.Dock
 				return -1;
 			}
 
-			public void CopyValuesFromDataIfSizeDifferent<T>(Data.Value.FCurve<T> fcurve) where T : struct, IComparable<T>, IEquatable<T>
+			public void CopyValuesFromDataIfSizeDifferent(Data.Value.IFCurve fcurve)
 			{
 				var plength = fcurve.Keys.Count() + 1;
+				var keyFrames = fcurve.Keys.ToArray();
 
 				if (Keys.Length != plength)
 				{
-					var keyFrames = fcurve.Keys.ToArray();
 					Keys = keyFrames.Select(_ => (float)_.Frame).Concat(new float[] { 0.0f }).ToArray();
 				}
 
 				if (Values.Length != plength)
 				{
-					var keyFrames = fcurve.Keys.ToArray();
 					Values = keyFrames.Select(_ => _.ValueAsFloat).Concat(new float[] { 0.0f }).ToArray();
 				}
 
 				if (LeftKeys.Length != plength)
 				{
-					var keyFrames = fcurve.Keys.ToArray();
 					LeftKeys = keyFrames.Select(_ => _.LeftX).Concat(new float[] { 0.0f }).ToArray();
 				}
 
 				if (LeftValues.Length != plength)
 				{
-					var keyFrames = fcurve.Keys.ToArray();
 					LeftValues = keyFrames.Select(_ => _.LeftY).Concat(new float[] { 0.0f }).ToArray();
 				}
 
 				if (RightKeys.Length != plength)
 				{
-					var keyFrames = fcurve.Keys.ToArray();
 					RightKeys = keyFrames.Select(_ => _.RightX).Concat(new float[] { 0.0f }).ToArray();
 				}
 
 				if (RightValues.Length != plength)
 				{
-					var keyFrames = fcurve.Keys.ToArray();
 					RightValues = keyFrames.Select(_ => _.RightY).Concat(new float[] { 0.0f }).ToArray();
 				}
 
@@ -1720,8 +2045,6 @@ namespace Effekseer.GUI.Dock
 
 				if (Interpolations.Length != plength)
 				{
-					var keyFrames = fcurve.Keys.ToArray();
-
 					var new_interpolations = new int[keyFrames.Length + 1];
 					Interpolations.CopyTo(new_interpolations, 0);
 					Interpolations = new_interpolations;

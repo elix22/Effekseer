@@ -12,12 +12,20 @@
 namespace EffekseerRendererLLGI
 {
 
+class VertexLayout
+{
+public:
+	LLGI::VertexLayoutFormat Format;
+	std::string Name;
+	int32_t Semantic;
+};
+
 class Shader : public DeviceObject, public ::EffekseerRenderer::ShaderBase
 {
 private:
 	LLGI::Shader* vertexShader_ = nullptr;
 	LLGI::Shader* pixelShader_ = nullptr;
-	std::vector<LLGI::VertexLayoutFormat> layoutFormats;
+	std::vector<VertexLayout> layouts_;
 
 	void* m_vertexConstantBuffer;
 	void* m_pixelConstantBuffer;
@@ -27,26 +35,28 @@ private:
 	int32_t m_vertexRegisterCount;
 	int32_t m_pixelRegisterCount;
 
-	Shader(RendererImplemented* renderer,
+	Shader(GraphicsDevice* graphicsDevice,
 		   LLGI::Shader* vertexShader,
 		   LLGI::Shader* pixelShader,
-		   const std::vector<LLGI::VertexLayoutFormat>& layoutFormats);
+		   const std::vector<VertexLayout>& layouts,
+		   bool hasRefCount);
 
 public:
 	virtual ~Shader();
 
-	static Shader* Create(RendererImplemented* renderer,
+	static Shader* Create(GraphicsDevice* graphicsDevice,
 						  LLGI::DataStructure* vertexData,
 						  int32_t vertexDataCount,
 						  LLGI::DataStructure* pixelData,
 						  int32_t pixelDataCount,
 						  const char* name,
-						  const std::vector<LLGI::VertexLayoutFormat>& layoutFormats);
+						  const std::vector<VertexLayout>& layoutFormats,
+						  bool hasRefCount);
 
 public:
 	LLGI::Shader* GetVertexShader() const { return vertexShader_; }
 	LLGI::Shader* GetPixelShader() const { return pixelShader_; }
-	std::vector<LLGI::VertexLayoutFormat>& GetVertexLayoutFormat() { return layoutFormats; }
+	std::vector<VertexLayout>& GetVertexLayouts() { return layouts_; }
 	void SetVertexConstantBufferSize(int32_t size);
 	void SetPixelConstantBufferSize(int32_t size);
 	int32_t GetVertexConstantBufferSize() { return vertexConstantBufferSize; }

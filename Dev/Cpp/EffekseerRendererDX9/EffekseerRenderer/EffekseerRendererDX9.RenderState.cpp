@@ -127,7 +127,7 @@ void RenderState::Update( bool forced )
 		}
 	}
 	
-	for( int32_t i = 0; i < 4; i++ )
+	for( int32_t i = 0; i < Effekseer::TextureSlotMax; i++ )
 	{
 		if( m_active.TextureFilterTypes[i] != m_next.TextureFilterTypes[i] || forced )
 		{
@@ -148,6 +148,8 @@ void RenderState::Update( bool forced )
 
 			int32_t filter_ = (int32_t)m_next.TextureFilterTypes[i];
 
+			// VTF is not supported
+
 			m_renderer->GetDevice()->SetSamplerState( i, D3DSAMP_MINFILTER, MinFilterTable[filter_] );
 			m_renderer->GetDevice()->SetSamplerState( i, D3DSAMP_MAGFILTER, MagFilterTable[filter_] );
 			m_renderer->GetDevice()->SetSamplerState( i, D3DSAMP_MIPFILTER, MipFilterTable[filter_] );
@@ -155,6 +157,20 @@ void RenderState::Update( bool forced )
 
 		if( m_active.TextureWrapTypes[i] != m_next.TextureWrapTypes[i] || forced )
 		{
+			// for VTF
+			if(i < 4)
+			{
+				m_renderer->GetDevice()->SetSamplerState(
+					i + D3DVERTEXTEXTURESAMPLER0,
+					D3DSAMP_ADDRESSU,
+					m_next.TextureWrapTypes[i] == ::Effekseer::TextureWrapType::Repeat ? D3DTADDRESS_WRAP : D3DTADDRESS_CLAMP);
+
+				m_renderer->GetDevice()->SetSamplerState(
+					i + D3DVERTEXTEXTURESAMPLER0,
+					D3DSAMP_ADDRESSV,
+					m_next.TextureWrapTypes[i] == ::Effekseer::TextureWrapType::Repeat ? D3DTADDRESS_WRAP : D3DTADDRESS_CLAMP);
+			}
+
 			m_renderer->GetDevice()->SetSamplerState( 
 				i, 
 				D3DSAMP_ADDRESSU, 

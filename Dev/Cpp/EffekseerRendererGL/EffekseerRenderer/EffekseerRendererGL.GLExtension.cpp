@@ -249,8 +249,14 @@ bool Initialize(OpenGLDeviceType deviceType)
 	GET_PROC(glDeleteVertexArraysOES);
 	GET_PROC(glBindVertexArrayOES);
 	char *glExtensions = (char *)glGetString(GL_EXTENSIONS);
-	g_isSupportedVertexArray = (g_glGenVertexArraysOES && g_glDeleteVertexArraysOES && g_glBindVertexArrayOES
-		&& ((glExtensions && strstr(glExtensions, "GL_OES_vertex_array_object")) ? true : false));
+
+#if defined(__EMSCRIPTEN__)
+	g_isSupportedVertexArray = (g_glGenVertexArraysOES && g_glDeleteVertexArraysOES && g_glBindVertexArrayOES &&
+								((glExtensions && strstr(glExtensions, "OES_vertex_array_object")) ? true : false));
+#else
+	g_isSupportedVertexArray = (g_glGenVertexArraysOES && g_glDeleteVertexArraysOES && g_glBindVertexArrayOES &&
+								((glExtensions && strstr(glExtensions, "GL_OES_vertex_array_object")) ? true : false));
+#endif
 
 	// Some smartphone causes segmentation fault.
 	//GET_PROC(glMapBufferRangeEXT);
@@ -296,6 +302,8 @@ bool IsSupportedMapBuffer()
 {
 	return g_isSurrpotedMapBuffer;
 }
+
+void MakeMapBufferInvalid() { g_isSurrpotedMapBuffer = false; }
 
 void glDeleteBuffers(GLsizei n, const GLuint* buffers)
 {

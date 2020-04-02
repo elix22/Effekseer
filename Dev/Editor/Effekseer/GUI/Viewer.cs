@@ -32,6 +32,11 @@ namespace Effekseer.GUI
 		public bool IsChanged { get; set; } = true;
 
 		/// <summary>
+		/// Is required to reload in the next frame
+		/// </summary>
+		public bool IsRequiredToReload { get; set; } = false;
+
+		/// <summary>
 		/// current frame
 		/// </summary>
 		public int Current
@@ -361,6 +366,15 @@ namespace Effekseer.GUI
 			native.SetViewerParamater(param);
 		}
 
+		public void SetViewMode(int viewMode)
+		{
+			var param = native.GetViewerParamater();
+
+			param.ViewerMode = (swig.ViewMode)viewMode;
+
+			native.SetViewerParamater(param);
+		}
+
 		public void SetIsRightHand(bool value)
 		{
 			native.SetIsRightHand(value);
@@ -412,15 +426,18 @@ namespace Effekseer.GUI
 				return false;
 			}
 
+			ViewMode_OnChanged(null, null);
+			Core.Option.ViewerMode.OnChanged += ViewMode_OnChanged;
+
 			Bloom_OnChanged(null, null);
-			Core.PostEffect.BloomSwitch.OnChanged += Bloom_OnChanged;
-			Core.PostEffect.Bloom.Intensity.OnChanged += Bloom_OnChanged;
-			Core.PostEffect.Bloom.Threshold.OnChanged += Bloom_OnChanged;
-			Core.PostEffect.Bloom.SoftKnee.OnChanged += Bloom_OnChanged;
+			Core.Environment.PostEffect.BloomSwitch.OnChanged += Bloom_OnChanged;
+			Core.Environment.PostEffect.Bloom.Intensity.OnChanged += Bloom_OnChanged;
+			Core.Environment.PostEffect.Bloom.Threshold.OnChanged += Bloom_OnChanged;
+			Core.Environment.PostEffect.Bloom.SoftKnee.OnChanged += Bloom_OnChanged;
 			
 			Tonemap_OnChanged(null, null);
-			Core.PostEffect.TonemapSelector.OnChanged += Tonemap_OnChanged;
-			Core.PostEffect.TonemapReinhard.Exposure.OnChanged += Tonemap_OnChanged;
+			Core.Environment.PostEffect.TonemapSelector.OnChanged += Tonemap_OnChanged;
+			Core.Environment.PostEffect.TonemapReinhard.Exposure.OnChanged += Tonemap_OnChanged;
 			
 			return true;
 		}
@@ -430,14 +447,16 @@ namespace Effekseer.GUI
 			if (!isViewerShown) return;
 			isViewerShown = false;
 			
-			Core.PostEffect.BloomSwitch.OnChanged -= Bloom_OnChanged;
-			Core.PostEffect.Bloom.Intensity.OnChanged -= Bloom_OnChanged;
-			Core.PostEffect.Bloom.Threshold.OnChanged -= Bloom_OnChanged;
-			Core.PostEffect.Bloom.SoftKnee.OnChanged -= Bloom_OnChanged;
+			Core.Environment.PostEffect.BloomSwitch.OnChanged -= Bloom_OnChanged;
+			Core.Environment.PostEffect.Bloom.Intensity.OnChanged -= Bloom_OnChanged;
+			Core.Environment.PostEffect.Bloom.Threshold.OnChanged -= Bloom_OnChanged;
+			Core.Environment.PostEffect.Bloom.SoftKnee.OnChanged -= Bloom_OnChanged;
 			
-			Core.PostEffect.TonemapSelector.OnChanged -= Tonemap_OnChanged;
-			Core.PostEffect.TonemapReinhard.Exposure.OnChanged -= Tonemap_OnChanged;
-			
+			Core.Environment.PostEffect.TonemapSelector.OnChanged -= Tonemap_OnChanged;
+			Core.Environment.PostEffect.TonemapReinhard.Exposure.OnChanged -= Tonemap_OnChanged;
+
+			Core.Option.ViewerMode.OnChanged -= ViewMode_OnChanged;
+
 			native.DestroyWindow();
 		}
 
@@ -445,10 +464,19 @@ namespace Effekseer.GUI
 		{
 			if (isViewerShown)
 			{
-				if (IsChanged && (IsPlaying || IsPaused))
+				if ((IsChanged && (IsPlaying || IsPaused)) || IsRequiredToReload)
 				{
-					Reload(false);
+					if(IsRequiredToReload)
+					{
+						Reload(true);
+					}
+					else
+					{
+						Reload(false);
+					}
+
 					IsChanged = false;
+					IsRequiredToReload = false;
 				}
 
 				if (IsPlaying && !IsPaused)
@@ -456,12 +484,13 @@ namespace Effekseer.GUI
 					StepViewer(true);
 				}
 
+				// update environment
 				native.SetBackgroundColor(
-				(byte)Core.Option.BackgroundColor.R,
-				(byte)Core.Option.BackgroundColor.G,
-				(byte)Core.Option.BackgroundColor.B);
+				(byte)Core.Environment.Background.BackgroundColor.R,
+				(byte)Core.Environment.Background.BackgroundColor.G,
+				(byte)Core.Environment.Background.BackgroundColor.B);
 
-				native.SetBackgroundImage(Core.Option.BackgroundImage.AbsolutePath);
+				native.SetBackgroundImage(Core.Environment.Background.BackgroundImage.AbsolutePath);
 
 				native.SetGridColor(
 				(byte)Core.Option.GridColor.R,
@@ -479,21 +508,21 @@ namespace Effekseer.GUI
 					Core.Option.IsYZGridShown);
 
 				native.SetLightDirection(
-					Core.Option.LightDirection.X,
-					Core.Option.LightDirection.Y,
-					Core.Option.LightDirection.Z);
+					Core.Environment.Lighting.LightDirection.X,
+					Core.Environment.Lighting.LightDirection.Y,
+					Core.Environment.Lighting.LightDirection.Z);
 
 				native.SetLightColor(
-					(byte)Core.Option.LightColor.R,
-					(byte)Core.Option.LightColor.G,
-					(byte)Core.Option.LightColor.B,
-					(byte)Core.Option.LightColor.A);
+					(byte)Core.Environment.Lighting.LightColor.R,
+					(byte)Core.Environment.Lighting.LightColor.G,
+					(byte)Core.Environment.Lighting.LightColor.B,
+					(byte)Core.Environment.Lighting.LightColor.A);
 
 				native.SetLightAmbientColor(
-					(byte)Core.Option.LightAmbientColor.R,
-					(byte)Core.Option.LightAmbientColor.G,
-					(byte)Core.Option.LightAmbientColor.B,
-					(byte)Core.Option.LightAmbientColor.A);
+					(byte)Core.Environment.Lighting.LightAmbientColor.R,
+					(byte)Core.Environment.Lighting.LightAmbientColor.G,
+					(byte)Core.Environment.Lighting.LightAmbientColor.B,
+					(byte)Core.Environment.Lighting.LightAmbientColor.A);
 
 				native.SetMouseInverseFlag(
 					Core.Option.MouseRotInvX,
@@ -633,14 +662,18 @@ namespace Effekseer.GUI
 				(byte)Core.EffectBehavior.ColorAll.B,
 				(byte)Core.EffectBehavior.ColorAll.A);
 
+			var behavior = native.GetEffectBehavior();
+			behavior.PlaybackSpeed = Core.EffectBehavior.PlaybackSpeed.Value;
+			native.SetViewerEffectBehavior(behavior);
+
 			SetEffectTimeSpan(Core.EffectBehavior.TimeSpan);
 
 			SetEffectDistance(Core.EffectBehavior.Distance);
 
 			SetBackgroundColor(
-				(byte)Core.Option.BackgroundColor.R,
-				(byte)Core.Option.BackgroundColor.G,
-				(byte)Core.Option.BackgroundColor.B);
+				(byte)Core.Environment.Background.BackgroundColor.R,
+				(byte)Core.Environment.Background.BackgroundColor.G,
+				(byte)Core.Environment.Background.BackgroundColor.B);
 
 			SetGridLength(
 				Core.Option.GridLength);
@@ -650,6 +683,7 @@ namespace Effekseer.GUI
 
 			SetDistortionType((int)Core.Option.DistortionType.Value);
 			SetRenderMode((int)Core.Option.RenderingMode.Value);
+			SetViewMode((int)Core.Option.ViewerMode.Value);
 
 			if (Core.Culling.Type.Value == Data.EffectCullingValues.ParamaterType.Sphere)
 			{
@@ -664,7 +698,8 @@ namespace Effekseer.GUI
 			var data = binaryExporter.Export(Core.Option.Magnification);
 			fixed (byte* p = &data[0])
 			{
-				LoadEffect(new IntPtr(p), data.Length, Core.FullPath);
+				// TODO refactor replace
+				LoadEffect(new IntPtr(p), data.Length, Core.FullPath.Replace('\\', '/'));
 			}
 		}
 
@@ -697,7 +732,7 @@ namespace Effekseer.GUI
 		}
 
 		/// <summary>
-		/// 状態はそのまま、エフェクトのデータだけ差し替え
+		/// reload an effect including resources
 		/// </summary>
 		public unsafe void Reload(bool isResourceReloaded)
 		{
@@ -777,23 +812,61 @@ namespace Effekseer.GUI
 			}
 		}
 
-		
+
+		private void ViewMode_OnChanged(object sender, ChangedValueEventArgs e)
+		{
+			var viewerMode = Core.Option.ViewerMode.Value;
+
+			if (viewerMode == Data.OptionValues.ViewMode._3D)
+			{
+				var param = Manager.Viewer.GetViewerParamater();
+				param.ViewerMode = (swig.ViewMode)viewerMode;
+				param.IsPerspective = true;
+				param.IsOrthographic = false;
+				param.FocusX = 0.0f;
+				param.FocusY = 0.0f;
+				param.FocusZ = 0.0f;
+				param.AngleX = 30.0f;
+				param.AngleY = -30.0f;
+				Manager.Viewer.SetViewerParamater(param);
+				Core.Option.IsXYGridShown.Value = false;
+				Core.Option.IsXZGridShown.Value = true;
+				Core.Option.IsYZGridShown.Value = false;
+			}
+			else if (viewerMode == Data.OptionValues.ViewMode._2D)
+			{
+				var param = Manager.Viewer.GetViewerParamater();
+				param.ViewerMode = (swig.ViewMode)viewerMode;
+				param.IsPerspective = false;
+				param.IsOrthographic = true;
+				param.FocusX = 0.0f;
+				param.FocusY = 0.0f;
+				param.FocusZ = 0.0f;
+				param.AngleX = 0.0f;
+				param.AngleY = 0.0f;
+				Manager.Viewer.SetViewerParamater(param);
+				Core.Option.IsXYGridShown.Value = true;
+				Core.Option.IsXZGridShown.Value = false;
+				Core.Option.IsYZGridShown.Value = false;
+			}
+		}
+
 		private void Bloom_OnChanged(object sender, ChangedValueEventArgs e)
 		{
-			bool enabled = Core.PostEffect.BloomSwitch.Value == Data.PostEffectValues.EffectSwitch.On;
+			bool enabled = Core.Environment.PostEffect.BloomSwitch.Value == Data.EnvironmentPostEffectValues.EffectSwitch.On;
 
 			native.SetBloomParameters(enabled, 
-				Core.PostEffect.Bloom.Intensity.Value,
-				Core.PostEffect.Bloom.Threshold.Value,
-				Core.PostEffect.Bloom.SoftKnee.Value);
+				Core.Environment.PostEffect.Bloom.Intensity.Value,
+				Core.Environment.PostEffect.Bloom.Threshold.Value,
+				Core.Environment.PostEffect.Bloom.SoftKnee.Value);
 		}
 		
 		private void Tonemap_OnChanged(object sender, ChangedValueEventArgs e)
 		{
-			int algorithm = (int)Core.PostEffect.TonemapSelector.Value;
+			int algorithm = (int)Core.Environment.PostEffect.TonemapSelector.Value;
 
 			native.SetTonemapParameters(algorithm, 
-				Core.PostEffect.TonemapReinhard.Exposure.Value);
+				Core.Environment.PostEffect.TonemapReinhard.Exposure.Value);
 		}
 	}
 }

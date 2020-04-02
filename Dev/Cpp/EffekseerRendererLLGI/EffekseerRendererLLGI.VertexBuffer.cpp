@@ -4,15 +4,15 @@
 namespace EffekseerRendererLLGI
 {
 
-VertexBuffer::VertexBuffer(RendererImplemented* renderer, LLGI::VertexBuffer* buffer, int size, bool isDynamic)
-	: DeviceObject(renderer)
+VertexBuffer::VertexBuffer(GraphicsDevice* graphicsDevice, LLGI::VertexBuffer* buffer, int size, bool isDynamic, bool hasRefCount)
+	: DeviceObject(graphicsDevice, hasRefCount)
 	, VertexBufferBase(size, isDynamic)
 	, m_vertexRingOffset(0)
 	, m_ringBufferLock(false)
 	, m_ringLockedOffset(0)
 	, m_ringLockedSize(0)
 {
-	m_lockedResource = new uint8_t[size];
+	lockedResource_ = new uint8_t[size];
 	vertexBuffers.push_back(buffer);
 }
 
@@ -23,15 +23,16 @@ VertexBuffer::~VertexBuffer()
 		LLGI::SafeRelease(v);
 	}
 	vertexBuffers.clear();
+	ES_SAFE_DELETE(lockedResource_);
 }
 
-VertexBuffer* VertexBuffer::Create(RendererImplemented* renderer, int size, bool isDynamic)
+VertexBuffer* VertexBuffer::Create(GraphicsDevice* graphicsDevice, int size, bool isDynamic, bool hasRefCount)
 {
-	auto vertexBuffer = renderer->GetGraphics()->CreateVertexBuffer(size);
+	auto vertexBuffer = graphicsDevice->GetGraphics()->CreateVertexBuffer(size);
 	if (vertexBuffer == nullptr)
 		return nullptr;
 
-	return new VertexBuffer(renderer, vertexBuffer, size, isDynamic);
+	return new VertexBuffer(graphicsDevice, vertexBuffer, size, isDynamic, hasRefCount);
 }
 
 void VertexBuffer::Lock()
@@ -40,14 +41,14 @@ void VertexBuffer::Lock()
 	assert(!m_ringBufferLock);
 
 	m_isLock = true;
-	m_resource = (uint8_t*)m_lockedResource;
+	m_resource = (uint8_t*)lockedResource_;
 	m_offset = 0;
 
 	/* 次のRingBufferLockは強制的にDiscard */
 	m_vertexRingOffset = m_size;
 }
 
-bool VertexBuffer::RingBufferLock(int32_t size, int32_t& offset, void*& data)
+bool VertexBuffer::RingBufferLock(int32_t size, int32_t& offset, void*& data, int32_t alignment)
 {
 	assert(!m_isLock);
 	assert(!m_ringBufferLock);
@@ -55,6 +56,8 @@ bool VertexBuffer::RingBufferLock(int32_t size, int32_t& offset, void*& data)
 
 	if (size > m_size)
 		return false;
+
+	m_vertexRingOffset = (m_vertexRingOffset + alignment - 1) / alignment* alignment;
 
 	if ((int32_t)m_vertexRingOffset + size > m_size)
 	{
@@ -73,19 +76,19 @@ bool VertexBuffer::RingBufferLock(int32_t size, int32_t& offset, void*& data)
 		m_vertexRingOffset += size;
 	}
 
-	data = (uint8_t*)m_lockedResource;
-	m_resource = (uint8_t*)m_lockedResource;
+	data = (uint8_t*)lockedResource_;
+	m_resource = (uint8_t*)lockedResource_;
 	m_ringBufferLock = true;
 
 	return true;
 }
 
-bool VertexBuffer::TryRingBufferLock(int32_t size, int32_t& offset, void*& data)
+bool VertexBuffer::TryRingBufferLock(int32_t size, int32_t& offset, void*& data, int32_t alignment)
 {
 	if ((int32_t)m_vertexRingOffset + size > m_size)
 		return false;
 
-	return RingBufferLock(size, offset, data);
+	return RingBufferLock(size, offset, data, alignment);
 }
 
 void VertexBuffer::Unlock()

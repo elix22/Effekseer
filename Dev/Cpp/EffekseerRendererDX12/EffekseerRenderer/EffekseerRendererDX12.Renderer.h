@@ -8,6 +8,16 @@
 
 namespace EffekseerRendererDX12
 {
+
+::EffekseerRenderer::GraphicsDevice* CreateDevice(ID3D12Device* device, ID3D12CommandQueue* commandQueue, int32_t swapBufferCount);
+
+::EffekseerRenderer::Renderer* Create(::EffekseerRenderer::GraphicsDevice* graphicsDevice,
+									  DXGI_FORMAT* renderTargetFormats,
+									  int32_t renderTargetCount,
+									  bool hasDepth,
+									  bool isReversedDepth,
+									  int32_t squareMaxCount);
+
 /**
 @brief	Create an instance
 @param	device			directX12 device
@@ -15,27 +25,39 @@ namespace EffekseerRendererDX12
 @return	instance
 */
 ::EffekseerRenderer::Renderer* Create(ID3D12Device* device,
-									  int32_t swapBufferCount,
 									  ID3D12CommandQueue* commandQueue,
-									  std::function<void()> flushAndWaitQueueFunc,
+									  int32_t swapBufferCount,
+									  DXGI_FORMAT* renderTargetFormats,
+									  int32_t renderTargetCount,
+									  bool hasDepth,
 									  bool isReversedDepth,
 									  int32_t squareMaxCount);
 
 Effekseer::TextureData* CreateTextureData(::EffekseerRenderer::Renderer* renderer, ID3D12Resource* texture);
 
+Effekseer::TextureData* CreateTextureData(::EffekseerRenderer::GraphicsDevice* graphicsDevice, ID3D12Resource* texture);
+
 void DeleteTextureData(::EffekseerRenderer::Renderer* renderer, Effekseer::TextureData* textureData);
+
+void DeleteTextureData(::EffekseerRenderer::GraphicsDevice* graphicsDevice, Effekseer::TextureData* textureData);
 
 void FlushAndWait(::EffekseerRenderer::Renderer* renderer);
 
-EffekseerRenderer::CommandList* CreateCommandList(::EffekseerRenderer::Renderer* renderer, ::EffekseerRenderer::SingleFrameMemoryPool* memoryPool);
+void FlushAndWait(::EffekseerRenderer::GraphicsDevice* graphicsDevice);
+
+EffekseerRenderer::CommandList* CreateCommandList(::EffekseerRenderer::Renderer* renderer,
+												  ::EffekseerRenderer::SingleFrameMemoryPool* memoryPool);
+
+EffekseerRenderer::CommandList* CreateCommandList(::EffekseerRenderer::GraphicsDevice* graphicsDevice,
+												  ::EffekseerRenderer::SingleFrameMemoryPool* memoryPool);
 
 EffekseerRenderer::SingleFrameMemoryPool* CreateSingleFrameMemoryPool(::EffekseerRenderer::Renderer* renderer);
 
-void BeginCommandList(EffekseerRenderer::CommandList* commandList);
+EffekseerRenderer::SingleFrameMemoryPool* CreateSingleFrameMemoryPool(::EffekseerRenderer::GraphicsDevice* renderer);
+
+void BeginCommandList(EffekseerRenderer::CommandList* commandList, ID3D12GraphicsCommandList* dx12CommandList);
 
 void EndCommandList(EffekseerRenderer::CommandList* commandList);
-
-void ExecuteCommandList(EffekseerRenderer::CommandList* commandList);
 
 } // namespace EffekseerRendererDX12
 

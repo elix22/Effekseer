@@ -3,11 +3,11 @@
 //----------------------------------------------------------------------------------
 // Include
 //----------------------------------------------------------------------------------
-#include "EffekseerRendererDX11.RendererImplemented.h"
 #include "EffekseerRendererDX11.TextureLoader.h"
+#include "EffekseerRendererDX11.RendererImplemented.h"
 
-#include "../../EffekseerRendererCommon/EffekseerRenderer.DXTK.DDSTextureLoader.h"
 #include "../../EffekseerRendererCommon/EffekseerRenderer.DDSTextureLoader.h"
+#include "../../EffekseerRendererCommon/EffekseerRenderer.DXTK.DDSTextureLoader.h"
 
 //-----------------------------------------------------------------------------------
 //
@@ -17,15 +17,16 @@ namespace EffekseerRendererDX11
 //----------------------------------------------------------------------------------
 //
 //----------------------------------------------------------------------------------
-TextureLoader::TextureLoader(ID3D11Device* device, ID3D11DeviceContext* context, ::Effekseer::FileInterface* fileInterface )
-	: m_fileInterface	(fileInterface)
-	, device			(device)
-	, context			(context)
+TextureLoader::TextureLoader(ID3D11Device* device,
+							 ID3D11DeviceContext* context,
+							 ::Effekseer::FileInterface* fileInterface,
+							 ::Effekseer::ColorSpaceType colorSpaceType)
+	: device(device), context(context), m_fileInterface(fileInterface), colorSpaceType_(colorSpaceType)
 {
 	ES_SAFE_ADDREF(device);
 	ES_SAFE_ADDREF(context);
 
-	if( fileInterface == NULL )
+	if (fileInterface == NULL)
 	{
 		m_fileInterface = &m_defaultFileInterface;
 	}
@@ -48,19 +49,15 @@ TextureLoader::~TextureLoader()
 	ES_SAFE_RELEASE(context);
 }
 
-//----------------------------------------------------------------------------------
-//
-//----------------------------------------------------------------------------------
 Effekseer::TextureData* TextureLoader::Load(const EFK_CHAR* path, ::Effekseer::TextureType textureType)
 {
-	std::auto_ptr<::Effekseer::FileReader> 
-		reader( m_fileInterface->OpenRead( path ) );
-	
-	if( reader.get() != NULL )
+	std::unique_ptr<::Effekseer::FileReader> reader(m_fileInterface->OpenRead(path));
+
+	if (reader.get() != NULL)
 	{
 		size_t size_texture = reader->GetLength();
 		char* data_texture = new char[size_texture];
-		reader->Read( data_texture, size_texture );
+		reader->Read(data_texture, size_texture);
 
 		Effekseer::TextureData* textureData = Load(data_texture, size_texture, textureType);
 		delete[] data_texture;
@@ -70,7 +67,8 @@ Effekseer::TextureData* TextureLoader::Load(const EFK_CHAR* path, ::Effekseer::T
 	return nullptr;
 }
 
-Effekseer::TextureData* TextureLoader::Load(const void* data, int32_t size, Effekseer::TextureType textureType) {
+Effekseer::TextureData* TextureLoader::Load(const void* data, int32_t size, Effekseer::TextureType textureType)
+{
 	auto size_texture = size;
 	auto data_texture = (uint8_t*)data;
 	ID3D11ShaderResourceView* texture = NULL;
@@ -83,13 +81,17 @@ Effekseer::TextureData* TextureLoader::Load(const void* data, int32_t size, Effe
 	{
 		if (pngTextureLoader.Load(data_texture, size_texture, false))
 		{
+			DXGI_FORMAT colorFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
+			if (colorSpaceType_ == ::Effekseer::ColorSpaceType::Linear && textureType == Effekseer::TextureType::Color)
+				colorFormat = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+
 			ID3D11Texture2D* tex = NULL;
 
 			D3D11_TEXTURE2D_DESC TexDesc{};
 			TexDesc.Width = pngTextureLoader.GetWidth();
 			TexDesc.Height = pngTextureLoader.GetHeight();
 			TexDesc.ArraySize = 1;
-			TexDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+			TexDesc.Format = colorFormat;
 			TexDesc.SampleDesc.Count = 1;
 			TexDesc.SampleDesc.Quality = 0;
 			TexDesc.Usage = D3D11_USAGE_DEFAULT;
@@ -178,7 +180,7 @@ void TextureLoader::Unload(Effekseer::TextureData* data)
 //----------------------------------------------------------------------------------
 //
 //----------------------------------------------------------------------------------
-}
+} // namespace EffekseerRendererDX11
 //----------------------------------------------------------------------------------
 //
 //----------------------------------------------------------------------------------

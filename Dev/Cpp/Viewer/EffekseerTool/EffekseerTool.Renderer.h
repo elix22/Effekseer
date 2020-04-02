@@ -4,7 +4,6 @@
 #include "EffekseerTool.Base.h"
 
 #ifdef _WIN32
-#include "../Graphics/Platform/DX9/efk.GraphicsDX9.h"
 #include "../Graphics/Platform/DX11/efk.GraphicsDX11.h"
 #endif
 
@@ -46,6 +45,7 @@ private:
 	int32_t				m_windowWidth = 0;
 	int32_t				m_windowHeight = 0;
 	int32_t				m_squareMaxCount;
+	float				m_orthoScale = 1.0f;
 
 	eProjectionType		m_projection;
 
@@ -58,6 +58,7 @@ private:
 	::EffekseerRenderer::Paste*	m_background;
 	std::unique_ptr<efk::BloomEffect> m_bloomEffect;
 	std::unique_ptr<efk::TonemapEffect> m_tonemapEffect;
+	std::unique_ptr<efk::LinearToSRGBEffect> m_linearToSRGBEffect;
 
 	bool		m_recording = false;
 	int32_t		m_recordingWidth = 0;
@@ -76,12 +77,16 @@ private:
 	std::shared_ptr<efk::RenderTexture>	viewRenderTexture;
 	std::shared_ptr<efk::DepthTexture>	viewDepthTexture;
 
-	efk::RenderTexture* targetRenderTexture = nullptr;
-	efk::DepthTexture* targetDepthTexture = nullptr;
+	//! a render texture which is drawn at last
+	efk::RenderTexture* lastDstRenderTexture = nullptr;
 
-	std::shared_ptr<efk::RenderTexture>	hdrRenderTexture;
-	std::shared_ptr<efk::RenderTexture>	postfxRenderTexture;
-	std::shared_ptr<efk::DepthTexture>	depthTexture;
+	//! a depth texture which is drawn at last
+	efk::DepthTexture* lastDstDepthTexture = nullptr;
+
+	std::shared_ptr<efk::RenderTexture> linearRenderTexture;
+	std::shared_ptr<efk::RenderTexture> hdrRenderTexture;
+	std::shared_ptr<efk::RenderTexture> hdrRenderTextureMSAA;
+	std::shared_ptr<efk::DepthTexture> depthTexture;
 	
 	int32_t		screenWidth = 0;
 	int32_t		screenHeight = 0;
@@ -140,6 +145,11 @@ public:
 		@brief	射影行列設定
 	*/
 	void SetOrthographic( int width, int height );
+
+	/**
+		@brief	射影行列設定
+	*/
+	void SetOrthographicScale( float scale );
 
 	/**
 		@brief	Orthographic表示の拡大率
@@ -210,7 +220,7 @@ public:
 	/**
 		@brief	The type of distortion
 	*/
-	eDistortionType		Distortion;
+	DistortionType Distortion;
 
 	/**
 		@brief	背景色

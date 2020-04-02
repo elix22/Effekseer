@@ -66,7 +66,7 @@ public:
 
 				struct
 				{
-					float	offset[4];
+					std::array<float, 4> offset;
 				} fcurve_rgba;
 
 			} color;
@@ -144,6 +144,8 @@ public:
 	int TrackTexture;
 
 	int32_t	SplineDivision = 1;
+
+	NodeRendererTextureUVTypeParameter TextureUVType;
 
 	EffectNodeTrack(Effect* effect, unsigned char*& pos)
 		: EffectNodeImplemented(effect, pos)

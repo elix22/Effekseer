@@ -7,8 +7,10 @@
 //----------------------------------------------------------------------------------
 #include "../Effekseer.Base.h"
 #include "../Effekseer.Vector2D.h"
-#include "../Effekseer.Vector3D.h"
 #include "../Effekseer.Matrix43.h"
+#include "../SIMD/Effekseer.Vec2f.h"
+#include "../SIMD/Effekseer.Vec3f.h"
+#include "../SIMD/Effekseer.Mat43f.h"
 #include "../Effekseer.Color.h"
 
 //----------------------------------------------------------------------------------
@@ -27,39 +29,53 @@ public:
 	struct NodeParameter
 	{
 		Effect*				EffectPointer;
-		int32_t				ColorTextureIndex;
-		AlphaBlendType			AlphaBlend;
-		TextureFilterType	TextureFilter;
-		TextureWrapType	TextureWrap;
+		//int32_t				ColorTextureIndex;
+		//AlphaBlendType			AlphaBlend;
+		//TextureFilterType	TextureFilter;
+		//TextureWrapType	TextureWrap;
 		bool				ZTest;
 		bool				ZWrite;
 		BillboardType		Billboard;
 		bool				IsRightHand;
 
-		bool				Distortion;
-		float				DistortionIntensity;
+		//bool				Distortion;
+		//float				DistortionIntensity;
 
-		float				DepthOffset;
-		bool				IsDepthOffsetScaledWithCamera;
-		bool				IsDepthOffsetScaledWithParticleScale;
+		//float				DepthOffset;
+		//bool				IsDepthOffsetScaledWithCamera;
+		//bool				IsDepthOffsetScaledWithParticleScale;
 
 		ZSortType			ZSort;
 
 		NodeRendererDepthParameter* DepthParameterPtr = nullptr;
-		MaterialParameter* MaterialParameterPtr = nullptr;
+		NodeRendererBasicParameter* BasicParameterPtr = nullptr;
+
+		//RendererMaterialType MaterialType = RendererMaterialType::Default;
+		//MaterialParameter* MaterialParameterPtr = nullptr;
 	};
 
 	struct InstanceParameter
 	{
-		Matrix43		SRTMatrix43;
+		Mat43f		SRTMatrix43;
 		Color		AllColor;
 
 		// Lower left, Lower right, Upper left, Upper right
 		Color		Colors[4];
 
-		Vector2D	Positions[4];
+		Vec2f		Positions[4];
 
-		RectF	UV;
+		RectF		UV;
+
+#ifdef __EFFEKSEER_BUILD_VERSION16__
+		RectF		AlphaUV;
+
+		float		FlipbookIndexAndNextRate;
+
+		float		AlphaThreshold;
+#endif
+
+		std::array<float, 4> CustomData1;
+		std::array<float, 4> CustomData2;
 	};
 
 public:

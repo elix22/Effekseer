@@ -9,6 +9,9 @@
 #include "../Effekseer.Vector2D.h"
 #include "../Effekseer.Vector3D.h"
 #include "../Effekseer.Matrix43.h"
+#include "../SIMD/Effekseer.Vec2f.h"
+#include "../SIMD/Effekseer.Vec3f.h"
+#include "../SIMD/Effekseer.Mat43f.h"
 #include "../Effekseer.Color.h"
 
 //----------------------------------------------------------------------------------
@@ -16,6 +19,9 @@
 //----------------------------------------------------------------------------------
 namespace Effekseer
 {
+
+struct NodeRendererTextureUVTypeParameter;
+
 	//----------------------------------------------------------------------------------
 	//
 	//----------------------------------------------------------------------------------
@@ -27,19 +33,25 @@ namespace Effekseer
 		struct NodeParameter
 		{
 			Effect*				EffectPointer;
-			int32_t				ColorTextureIndex;
-			AlphaBlendType			AlphaBlend;
-			TextureFilterType	TextureFilter;
-			TextureWrapType		TextureWrap;
+			//int32_t				ColorTextureIndex;
+			//AlphaBlendType			AlphaBlend;
+			//TextureFilterType	TextureFilter;
+			//TextureWrapType		TextureWrap;
 			bool				ZTest;
 			bool				ZWrite;
 
-			bool				Distortion;
-			float				DistortionIntensity;
+			//bool				Distortion;
+			//float				DistortionIntensity;
 
 			int32_t				SplineDivision;
 
+			bool IsRightHand;
 			NodeRendererDepthParameter* DepthParameterPtr = nullptr;
+			NodeRendererBasicParameter* BasicParameterPtr = nullptr;
+			NodeRendererTextureUVTypeParameter* TextureUVTypeParameterPtr = nullptr;
+
+			RendererMaterialType MaterialType = RendererMaterialType::Default;
+			MaterialParameter* MaterialParameterPtr = nullptr;
 		};
 
 		struct InstanceGroupParameter
@@ -51,7 +63,7 @@ namespace Effekseer
 		{
 			int32_t			InstanceCount;
 			int32_t			InstanceIndex;
-			Matrix43		SRTMatrix43;
+			Mat43f			SRTMatrix43;
 
 			Color	ColorLeft;
 			Color	ColorCenter;
@@ -66,6 +78,15 @@ namespace Effekseer
 			float	SizeBack;
 
 			RectF	UV;
+#ifdef __EFFEKSEER_BUILD_VERSION16__
+			RectF	AlphaUV;
+
+			float	FlipbookIndexAndNextRate;
+
+			float	AlphaThreshold;
+#endif
+			std::array<float, 4> CustomData1;
+			std::array<float, 4> CustomData2;
 		};
 
 	public:

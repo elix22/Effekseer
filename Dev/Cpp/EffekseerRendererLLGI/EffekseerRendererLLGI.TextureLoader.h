@@ -5,6 +5,8 @@
 
 #include "EffekseerRendererLLGI.DeviceObject.h"
 #include "EffekseerRendererLLGI.RendererImplemented.h"
+#include "../EffekseerRendererCommon/EffekseerRenderer.PngTextureLoader.h"
+
 #include <LLGI.Graphics.h>
 #include <LLGI.Texture.h>
 
@@ -14,13 +16,14 @@ namespace EffekseerRendererLLGI
 class TextureLoader : public ::Effekseer::TextureLoader
 {
 private:
-	LLGI::Graphics* graphics = nullptr;
+	GraphicsDevice* graphicsDevice_ = nullptr;
 
 	::Effekseer::FileInterface* m_fileInterface;
 	::Effekseer::DefaultFileInterface m_defaultFileInterface;
+	::EffekseerRenderer::PngTextureLoader pngTextureLoader_;
 
 public:
-	TextureLoader(LLGI::Graphics* graphics, ::Effekseer::FileInterface* fileInterface = NULL);
+	TextureLoader(GraphicsDevice* graphicsDevice, ::Effekseer::FileInterface* fileInterface = NULL);
 	virtual ~TextureLoader();
 
 public:

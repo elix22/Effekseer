@@ -22,7 +22,6 @@ namespace Effekseer.GUI.Dock
 			Core.OnAfterNew += OnAfter;
 
 			Icon = Images.GetIcon("PanelOption");
-			IconSize = new swig.Vec2(24, 24);
 			TabToolTip = Resources.GetString("Options");
 		}
 
@@ -46,10 +45,18 @@ namespace Effekseer.GUI.Dock
 				paramerterList.SetValue(Core.Option);
 				isFiestUpdate = false;
 
+				Core.Option.ColorSpace.OnChanged += GuiLanguage_OnChanged;
 				Core.Option.GuiLanguage.OnChanged += GuiLanguage_OnChanged;
+				Core.Option.FontSize.OnChanged += FontSize_OnChanged;
+				Core.Option.Font.OnChanged += FontSize_OnChanged;
 			}
 
 			paramerterList.Update();
+		}
+
+		private void FontSize_OnChanged(object sender, ChangedValueEventArgs e)
+		{
+			Manager.UpdateFontSize();
 		}
 
 		private void GuiLanguage_OnChanged(object sender, ChangedValueEventArgs e_)

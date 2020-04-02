@@ -3,7 +3,7 @@
 //----------------------------------------------------------------------------------
 //
 //----------------------------------------------------------------------------------
-#include "Effekseer.Manager.h"
+#include "Effekseer.ManagerImplemented.h"
 #include "Effekseer.Instance.h"
 #include "Effekseer.InstanceContainer.h"
 #include "Effekseer.InstanceGlobal.h"
@@ -23,28 +23,10 @@ namespace Effekseer
 //----------------------------------------------------------------------------------
 //
 //----------------------------------------------------------------------------------
-void* InstanceContainer::operator new(size_t size, Manager* pManager)
-{
-	return pManager->GetMallocFunc()((uint32_t)size);
-}
-
-//----------------------------------------------------------------------------------
-//
-//----------------------------------------------------------------------------------
-void InstanceContainer::operator delete(void* p, Manager* pManager)
-{
-	pManager->GetFreeFunc()(p, sizeof(InstanceContainer));
-}
-
-//----------------------------------------------------------------------------------
-//
-//----------------------------------------------------------------------------------
-InstanceContainer::InstanceContainer(Manager* pManager, EffectNode* pEffectNode, InstanceGlobal* pGlobal, int ChildrenCount)
+InstanceContainer::InstanceContainer(ManagerImplemented* pManager, EffectNode* pEffectNode, InstanceGlobal* pGlobal)
 	: m_pManager(pManager)
 	, m_pEffectNode((EffectNodeImplemented*)pEffectNode)
 	, m_pGlobal(pGlobal)
-	, m_Children(NULL)
-	, m_ChildrenCount(ChildrenCount)
 	, m_headGroups(NULL)
 	, m_tailGroups(NULL)
 
@@ -53,12 +35,6 @@ InstanceContainer::InstanceContainer(Manager* pManager, EffectNode* pEffectNode,
 	if (en->RenderingPriority >= 0)
 	{
 		pGlobal->RenderedInstanceContainers[en->RenderingPriority] = this;
-	}
-
-	m_Children = (InstanceContainer**)m_pManager->GetMallocFunc()(sizeof(InstanceContainer*) * m_ChildrenCount);
-	for (int i = 0; i < m_ChildrenCount; i++)
-	{
-		m_Children[i] = NULL;
 	}
 }
 
@@ -72,32 +48,27 @@ InstanceContainer::~InstanceContainer()
 	assert(m_headGroups == NULL);
 	assert(m_tailGroups == NULL);
 
-	for (int i = 0; i < m_ChildrenCount; i++)
+	for( auto child : m_Children )
 	{
-		if (m_Children[i] != NULL)
-		{
-			m_Children[i]->~InstanceContainer();
-			InstanceContainer::operator delete(m_Children[i], m_pManager);
-			m_Children[i] = NULL;
-		}
+		m_pManager->ReleaseInstanceContainer( child );
 	}
-	m_pManager->GetFreeFunc()((void*)m_Children, sizeof(InstanceContainer*) * m_ChildrenCount);
 }
 
 //----------------------------------------------------------------------------------
 //
 //----------------------------------------------------------------------------------
-InstanceContainer* InstanceContainer::GetChild(int num)
+void InstanceContainer::AddChild(InstanceContainer* pContainter)
 {
-	return m_Children[num];
+	m_Children.push_back( pContainter );
 }
 
-//----------------------------------------------------------------------------------
-//
-//----------------------------------------------------------------------------------
-void InstanceContainer::SetChild(int num, InstanceContainer* pContainter)
+InstanceContainer* InstanceContainer::GetChild(int index)
 {
-	m_Children[num] = pContainter;
+	auto it = m_Children.begin();
+	for( int i = 0; i < index; i++) {
+		it++;
+	}
+	return *it;
 }
 
 //----------------------------------------------------------------------------------
@@ -110,11 +81,10 @@ void InstanceContainer::RemoveInvalidGroups()
 
 	for (InstanceGroup* group = m_headGroups; group != NULL; )
 	{
-		if (!group->IsReferencedFromInstance && group->GetInstanceCount() == 0 && group->GetRemovingInstanceCount() == 0)
+		if (!group->IsReferencedFromInstance && group->GetInstanceCount() == 0)
 		{
 			InstanceGroup* next = group->NextUsedByContainer;
-
-			delete group;
+			m_pManager->ReleaseGroup( group );
 
 			if (m_headGroups == group)
 			{
@@ -143,9 +113,13 @@ void InstanceContainer::RemoveInvalidGroups()
 //----------------------------------------------------------------------------------
 //
 //----------------------------------------------------------------------------------
-InstanceGroup* InstanceContainer::CreateGroup()
+InstanceGroup* InstanceContainer::CreateInstanceGroup()
 {
-	InstanceGroup* group = new InstanceGroup(m_pManager, m_pEffectNode, this, m_pGlobal);
+	InstanceGroup* group = m_pManager->CreateInstanceGroup( m_pEffectNode, this, m_pGlobal );
+	if (group == nullptr)
+	{
+		return nullptr;
+	}
 
 	if (m_tailGroups != NULL)
 	{
@@ -175,12 +149,12 @@ InstanceGroup* InstanceContainer::GetFirstGroup() const
 //----------------------------------------------------------------------------------
 //
 //----------------------------------------------------------------------------------
-void InstanceContainer::Update(bool recursive, float deltaFrame, bool shown)
+void InstanceContainer::Update(bool recursive, bool shown)
 {
 	// 更新
 	for (InstanceGroup* group = m_headGroups; group != NULL; group = group->NextUsedByContainer)
 	{
-		group->Update(deltaFrame, shown);
+		group->Update(shown);
 	}
 
 	// 破棄
@@ -188,9 +162,9 @@ void InstanceContainer::Update(bool recursive, float deltaFrame, bool shown)
 
 	if (recursive)
 	{
-		for (int i = 0; i < m_ChildrenCount; i++)
+		for (auto child : m_Children)
 		{
-			m_Children[i]->Update(recursive, deltaFrame, shown);
+			child->Update(recursive, shown);
 		}
 	}
 }
@@ -198,7 +172,7 @@ void InstanceContainer::Update(bool recursive, float deltaFrame, bool shown)
 //----------------------------------------------------------------------------------
 //
 //----------------------------------------------------------------------------------
-void InstanceContainer::SetBaseMatrix(bool recursive, const Matrix43& mat)
+void InstanceContainer::SetBaseMatrix(bool recursive, const Mat43f& mat)
 {
 	if (m_pEffectNode->GetType() != EFFECT_NODE_TYPE_ROOT)
 	{
@@ -210,9 +184,9 @@ void InstanceContainer::SetBaseMatrix(bool recursive, const Matrix43& mat)
 
 	if (recursive)
 	{
-		for (int i = 0; i < m_ChildrenCount; i++)
+		for (auto child : m_Children)
 		{
-			m_Children[i]->SetBaseMatrix(recursive, mat);
+			child->SetBaseMatrix(recursive, mat);
 		}
 	}
 }
@@ -233,9 +207,9 @@ void InstanceContainer::RemoveForcibly(bool recursive)
 
 	if (recursive)
 	{
-		for (int i = 0; i < m_ChildrenCount; i++)
+		for (auto child : m_Children)
 		{
-			m_Children[i]->RemoveForcibly(recursive);
+			child->RemoveForcibly(recursive);
 		}
 	}
 }
@@ -328,9 +302,9 @@ void InstanceContainer::Draw(bool recursive)
 
 	if (recursive)
 	{
-		for (int i = 0; i < m_ChildrenCount; i++)
+		for (auto child : m_Children)
 		{
-			m_Children[i]->Draw(recursive);
+			child->Draw(recursive);
 		}
 	}
 }
@@ -347,9 +321,9 @@ void InstanceContainer::KillAllInstances(bool recursive)
 
 	if (recursive)
 	{
-		for (int i = 0; i < m_ChildrenCount; i++)
+		for (auto child : m_Children)
 		{
-			m_Children[i]->KillAllInstances(recursive);
+			child->KillAllInstances(recursive);
 		}
 	}
 }

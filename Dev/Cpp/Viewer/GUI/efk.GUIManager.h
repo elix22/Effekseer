@@ -11,13 +11,14 @@
 #include "../3rdParty/imgui_platform/imgui_impl_opengl3.h"
 
 #ifdef _WIN32
-#include "../3rdParty/imgui_platform/imgui_impl_dx9.h"
 #include "../3rdParty/imgui_platform/imgui_impl_dx11.h"
 #endif
 
 //#include "../3rdParty/imgui_glfw_gl3/imgui_impl_glfw_gl3.h"
 #include "../3rdParty/imgui_addon/imguidock/imguidock.h"
 
+#include "../../3rdParty/imgui_markdown/imgui_markdown.h"
+#include <EditorCommon/GUI/MainWindow.h>
 class Native;
 
 namespace efk
@@ -278,6 +279,31 @@ namespace efk
         Error
     };
 
+	enum class Key {
+		Tab,
+		LeftArrow,
+		RightArrow,
+		UpArrow,
+		DownArrow,
+		PageUp,
+		PageDown,
+		Home,
+		End,
+		Insert,
+		Delete,
+		Backspace,
+		Space,
+		Enter,
+		NumEnter,
+		Escape,
+		A,         // for text edit CTRL+A: select all
+		C,         // for text edit CTRL+C: copy
+		V,         // for text edit CTRL+V: paste
+		X,         // for text edit CTRL+X: cut
+		Y,         // for text edit CTRL+Y: redo
+		Z,         // for text edit CTRL+Z: undo
+	};
+
 	class GUIManagerCallback
 	{
 		std::u16string	path;
@@ -289,6 +315,9 @@ namespace efk
 		virtual void Focused() {}
 		virtual bool Closing() { return true; }
 		virtual void Iconify(int f) {}
+		virtual void DpiChanged(float scale) {}
+
+		virtual bool ClickLink(const char16_t* path) { return false; }
 
 		const char16_t* GetPath()
 		{
@@ -306,18 +335,24 @@ namespace efk
 	private:
 		GUIManagerCallback*		callback = nullptr;
 		efk::Window*	window = nullptr;
+		std::shared_ptr<Effekseer::MainWindow> mainWindow_;
 		efk::DeviceType deviceType;
 		std::u16string	clipboard;
-		float			fontScale = 1.0f;
+
+		ImGui::MarkdownConfig markdownConfig_;
+
+		static void MarkdownLinkCallback(ImGui::MarkdownLinkCallbackData data);
 
 	public:
 		GUIManager();
 
 		virtual ~GUIManager();
 
-		bool Initialize(const char16_t* title, int32_t width, int32_t height, efk::DeviceType deviceType, bool isSRGBMode);
+		bool Initialize(std::shared_ptr<Effekseer::MainWindow> mainWindow, efk::DeviceType deviceType);
 
 		void InitializeGUI(Native* native);
+
+		void ResetGUIStyle();
 
 		void SetTitle(const char16_t* title);
 
@@ -343,6 +378,8 @@ namespace efk
 
 		void SetCallback(GUIManagerCallback* callback);
 
+		void InvalidateFont();
+
 		void ResetGUI();
 
 		void RenderGUI(bool isValid = true);
@@ -363,6 +400,8 @@ namespace efk
 		Vec2 GetWindowSize();
 		Vec2 GetContentRegionAvail();
 
+		void SetNextWindowPos(const Vec2& pos, Cond cond, const const Vec2& pivot);
+
 		void SetNextWindowSize(float size_x, float size_y, Cond cond);
 
 		// Parameters stacks (shared)
@@ -380,9 +419,11 @@ namespace efk
 
 		void Separator();
 
-		void HiddenSeparator();
+		void HiddenSeparator(float thicknessDraw, float thicknessItem);
 
-		void SameLine();
+		void Indent(float indent_w);
+		void Spacing();
+		void SameLine(float offset_from_start_x = 0.0f, float spacing = -1.0f);
 
 		void BeginGroup();
 		void EndGroup();
@@ -395,6 +436,7 @@ namespace efk
 		float GetTextLineHeightWithSpacing();
 		float GetFrameHeight();
 		float GetFrameHeightWithSpacing();
+		float GetDpiScale() const;
 
 		// Column
 		void  Columns(int count = 1, const char* id = NULL, bool border = true);
@@ -506,7 +548,10 @@ namespace efk
 		void EndChildFrame();
 
 		// Inputs
+		int GetKeyIndex(Key key);
 		bool IsKeyDown(int user_key_index);
+		bool IsKeyPressed(int user_key_index);
+		bool IsKeyReleased(int user_key_index);
 		bool IsMouseDown(int button);
 		bool IsMouseDoubleClicked(int button);
 
@@ -514,9 +559,15 @@ namespace efk
 		bool IsItemActive();
 		bool IsItemFocused();
 		bool IsItemClicked(int mouse_button);
+		bool IsAnyItemActive();
 		bool IsWindowHovered();
+		bool IsWindowFocused();
 		bool IsAnyWindowHovered();
+		bool IsAnyWindowFocused();
 		MouseCursor GetMouseCursor();
+
+		// Context
+		float GetHoveredIDTimer();
 
 		// Design
 		void DrawLineBackground(float height, uint32_t col);
@@ -564,6 +615,8 @@ namespace efk
 			float* movedY,
 			int* changedType);
 
+		bool StartSelectingAreaFCurve();
+
 		// Drag
 		bool BeginDragDropSource();
 		bool SetDragDropPayload(const char* type, uint8_t* data, int size);
@@ -580,7 +633,7 @@ namespace efk
 
 		static void SetIniFilename(const char16_t* filename);
 
-		// Language
-		static int GetLanguage();
+		// Markdown
+		void Markdown(const char16_t* text);
 	};
 }

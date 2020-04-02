@@ -16,6 +16,9 @@ namespace Effekseer.GUI.Component
 
 		Data.Value.Color binding = null;
 
+		/// <summary>
+		/// function. A border is shown when value is changed.
+		/// </summary>
 		ValueChangingProperty valueChangingProp = new ValueChangingProperty();
 
 		float[] internalValue = new float[] { 1.0f, 1.0f, 1.0f, 1.0f };
@@ -24,6 +27,9 @@ namespace Effekseer.GUI.Component
 
 		public bool EnableUndo { get; set; } = true;
 
+		/// <summary>
+		/// a parameter which is bound this instance
+		/// </summary>
 		public Data.Value.Color Binding
 		{
 			get
@@ -85,7 +91,9 @@ namespace Effekseer.GUI.Component
 
 			valueChangingProp.Enable(binding);
 
-			if (Manager.NativeManager.ColorEdit4(id, internalValue, swig.ColorEditFlags.NoOptions))
+			var colorSpace = binding.ColorSpace == Data.ColorSpace.RGBA ? swig.ColorEditFlags.RGB : swig.ColorEditFlags.HSV;
+
+			if (Manager.NativeManager.ColorEdit4(id, internalValue, colorSpace))
 			{
 				if (EnableUndo)
 				{

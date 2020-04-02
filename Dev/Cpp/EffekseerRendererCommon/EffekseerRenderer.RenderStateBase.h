@@ -27,8 +27,11 @@ public:
 		bool								DepthWrite				: 1;
 		::Effekseer::AlphaBlendType			AlphaBlend;
 		::Effekseer::CullingType			CullingType;
-		::Effekseer::TextureFilterType		TextureFilterTypes[4];
-		::Effekseer::TextureWrapType		TextureWrapTypes[4];
+		std::array<::Effekseer::TextureFilterType, Effekseer::TextureSlotMax> TextureFilterTypes;
+		std::array<::Effekseer::TextureWrapType, Effekseer::TextureSlotMax> TextureWrapTypes;
+
+		//! for OpenGL
+		std::array<uint64_t, Effekseer::TextureSlotMax> TextureIDs;
 
 		State();
 

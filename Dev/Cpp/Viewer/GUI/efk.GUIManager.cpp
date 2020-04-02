@@ -9,9 +9,7 @@
 
 #include "efk.GUIManager.h"
 
-#include "Platform/efk.Language.h"
-
-#include "efk.JapaneseFont.h"
+#include "../EditorCommon/GUI/JapaneseFont.h"
 
 #include "../3rdParty/imgui_addon/fcurve/fcurve.h"
 
@@ -720,7 +718,15 @@ namespace efk
 		return value_changed;
 	}
 
+	void GUIManager::MarkdownLinkCallback(ImGui::MarkdownLinkCallbackData data) { 
+		
+	    std::string url(data.link, data.linkLength);
+		auto url16 = utf8_to_utf16(url);
 
+		auto self = reinterpret_cast<GUIManager*>(data.userData);
+
+		self->callback->ClickLink(url16.c_str());
+	}
 
 	GUIManager::GUIManager()
 	{}
@@ -728,17 +734,19 @@ namespace efk
 	GUIManager::~GUIManager()
 	{}
 
-	bool GUIManager::Initialize(const char16_t* title, int32_t width, int32_t height, efk::DeviceType deviceType, bool isSRGBMode)
+	bool GUIManager::Initialize(std::shared_ptr<Effekseer::MainWindow> mainWindow, efk::DeviceType deviceType)
 	{
 		window = new efk::Window();
 
 		this->deviceType = deviceType;
 
-		if (!window->Initialize(title, width, height, isSRGBMode, deviceType))
+		if (!window->Initialize(mainWindow, deviceType))
 		{
 			ES_SAFE_DELETE(window);
 			return false;
 		}
+
+		mainWindow_ = mainWindow;
 
 		window->Resized = [this](int x, int y) -> void
 		{
@@ -783,6 +791,16 @@ namespace efk
 			}
 		};
 
+		window->DpiChanged = [this](float scale) -> void
+		{
+			this->ResetGUIStyle();
+
+			if (this->callback != nullptr)
+			{
+				this->callback->DpiChanged(scale);
+			}
+		};
+
 		if (deviceType == DeviceType::OpenGL)
 		{
 			window->MakeCurrent();
@@ -792,23 +810,17 @@ namespace efk
 #endif
 		}
 
-#ifdef _WIN32
-		// Calculate font scale from DPI
-		HDC screen = GetDC(0);
-		int dpiX = GetDeviceCaps(screen, LOGPIXELSX);
-		fontScale = (float)dpiX / 96.0f;
-#endif
-		
 		return true;
 	}
 
 	void GUIManager::InitializeGUI(Native* native)
 	{
 		ImGui::CreateContext();
+
+		ImGuiIO& io = ImGui::GetIO();
 		
 		if (deviceType == DeviceType::OpenGL)
 		{
-			ImGuiIO& io = ImGui::GetIO();
 			// It causes bugs on some mac pc
 			//io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
 
@@ -825,7 +837,6 @@ namespace efk
 #ifdef _WIN32
 		else if (deviceType == DeviceType::DirectX11)
 		{
-			ImGuiIO& io = ImGui::GetIO();
 			io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
 
 			ImGui_ImplGlfw_InitForVulkan(window->GetGLFWWindows(), true);
@@ -834,23 +845,31 @@ namespace efk
 		}
 		else
 		{
-			ImGui_ImplGlfw_InitForOpenGL(window->GetGLFWWindows(), true);
-			auto r = (EffekseerRendererDX9::Renderer*)native->GetRenderer();
-			ImGui_ImplDX9_Init(r->GetDevice());
+			assert(0);
 		}
 #endif
+		// Enable keyboard navication
+		io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
 
 		ImGui::StyleColorsDark();
+		ResetGUIStyle();
 
+		markdownConfig_.userData = this;
+		markdownConfig_.linkCallback = GUIManager::MarkdownLinkCallback;
+	}
+
+	void GUIManager::ResetGUIStyle()
+	{
 		ImGuiStyle& style = ImGui::GetStyle();
 
+		style = ImGuiStyle();
 		style.ChildRounding = 3.f;
 		style.GrabRounding = 3.f;
 		style.WindowRounding = 3.f;
 		style.ScrollbarRounding = 3.f;
 		style.FrameRounding = 3.f;
 		style.WindowTitleAlign = ImVec2(0.5f, 0.5f);
-
+		style.ScaleAllSizes(mainWindow_->GetDPIScale());
 		// mono tone
 
 		for (int32_t i = 0; i < ImGuiCol_COUNT; i++)
@@ -864,7 +883,6 @@ namespace efk
 		style.Colors[ImGuiCol_Text] = ImVec4(0.80f, 0.80f, 0.80f, 1.00f);
 		style.Colors[ImGuiCol_TextDisabled] = ImVec4(0.50f, 0.50f, 0.50f, 1.00f);
 		style.Colors[ImGuiCol_WindowBg] = ImVec4(0.1f, 0.1f, 0.1f, 0.9f);
-
 	}
 
 	void GUIManager::SetTitle(const char16_t* title)
@@ -900,7 +918,7 @@ namespace efk
 		}
 		else
 		{
-			ImGui_ImplDX9_Shutdown();
+			assert(0);
 		}
 #endif
 
@@ -947,6 +965,24 @@ namespace efk
 		this->callback = callback;
 	}
 
+	void GUIManager::InvalidateFont()
+	{
+		if (deviceType == DeviceType::OpenGL)
+		{
+			ImGui_ImplOpenGL3_DestroyFontsTexture();
+		}
+#if _WIN32
+		else if (deviceType == DeviceType::DirectX11)
+		{
+			ImGui_ImplDX11_InvalidateDeviceObjects();
+		}
+		else
+		{
+			assert(0);
+		}
+#endif
+	}
+
 	void GUIManager::ResetGUI()
 	{
 		if (deviceType == DeviceType::OpenGL)
@@ -960,7 +996,7 @@ namespace efk
 		}
 		else
 		{
-			ImGui_ImplDX9_NewFrame();
+			assert(0);
 		}
 #endif
 
@@ -971,22 +1007,24 @@ namespace efk
 	void GUIManager::RenderGUI(bool isValid)
 	{
 		ImGui::EndFrame();
-		ImGui::Render();
+		
 
 		if (isValid)
 		{
 			if (deviceType == DeviceType::OpenGL)
 			{
+				ImGui::Render();
 				ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 			}
 #if _WIN32
 			else if (deviceType == DeviceType::DirectX11)
 			{
+				ImGui::Render();
 				ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
 			}
 			else
 			{
-				ImGui_ImplDX9_RenderDrawData(ImGui::GetDrawData());
+				assert(0);
 			}
 #endif
 		}
@@ -1003,7 +1041,11 @@ namespace efk
 			if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
 			{
 				ImGui::UpdatePlatformWindows();
-				ImGui::RenderPlatformWindowsDefault();
+
+				if (isValid)
+				{
+					ImGui::RenderPlatformWindowsDefault();
+				}
 			}
 
 			if (deviceType == DeviceType::OpenGL)
@@ -1067,6 +1109,11 @@ namespace efk
 		return Vec2(v.x, v.y);
 	}
 
+	void GUIManager::SetNextWindowPos(const Vec2& pos, Cond cond, const const Vec2& pivot)
+	{
+		ImGui::SetNextWindowPos(ImVec2(pos.X, pos.Y), (ImGuiCond)cond, ImVec2(pivot.X, pivot.Y));
+	}
+
 	void GUIManager::SetNextWindowSize(float size_x, float size_y, Cond cond)
 	{
 		ImVec2 size;
@@ -1119,7 +1166,7 @@ namespace efk
 		ImGui::Separator();
 	}
 
-	void GUIManager::HiddenSeparator()
+	void GUIManager::HiddenSeparator(float thicknessDraw, float thicknessItem)
 	{
 		ImGuiWindow* window = ImGui::GetCurrentWindow();
 		if (window->SkipItems)
@@ -1164,15 +1211,15 @@ namespace efk
 				ImGui::PushColumnsBackground();
 
 			// We don't provide our width to the layout so that it doesn't get feed back into AutoFit
-			const ImRect bb(ImVec2(x1, window->DC.CursorPos.y), ImVec2(x2, window->DC.CursorPos.y + thickness_draw));
-			ImGui::ItemSize(ImVec2(0.0f, thickness_layout));
+			const ImRect bb(ImVec2(x1, window->DC.CursorPos.y), ImVec2(x2, window->DC.CursorPos.y + thicknessDraw));
+			ImGui::ItemSize(ImVec2(0.0f, thicknessItem));
 			if (!ImGui::ItemAdd(bb, 0))
 			{
 				if (columns)
 					ImGui::PopColumnsBackground();
 				return;
 			}
-
+			
 			// Draw
 			window->DrawList->AddLine(bb.Min, ImVec2(bb.Max.x, bb.Min.y), 0);
 			if (g.LogEnabled)
@@ -1186,9 +1233,19 @@ namespace efk
 		}
 	}
 
-	void GUIManager::SameLine()
+	void GUIManager::Indent(float indent_w)
 	{
-		ImGui::SameLine();
+		ImGui::Indent(indent_w);
+	}
+
+	void GUIManager::Spacing()
+	{
+		ImGui::Spacing();
+	}
+
+	void GUIManager::SameLine(float offset_from_start_x, float spacing)
+	{
+		ImGui::SameLine(offset_from_start_x, spacing);
 	}
 
 	void GUIManager::BeginGroup()
@@ -1241,6 +1298,11 @@ namespace efk
 		return ImGui::GetFrameHeightWithSpacing();
 	}
 
+	float GUIManager::GetDpiScale() const
+	{ 
+		return mainWindow_->GetDPIScale();
+	}
+
 	void GUIManager::Columns(int count, const char* id, bool border)
 	{
 		ImGui::Columns(count, id, border);
@@ -1271,16 +1333,70 @@ namespace efk
 		ImGui::SetColumnOffset(column_index, offset_x);
 	}
 
-	void GUIManager::Text(const char16_t* text)
+	void CallWithEscaped(const std::function<void(const char*)>& f, const char16_t* text)
 	{
-		if (std::char_traits<char16_t>::length(text) < 1024)
+		bool isPersentFound = false;
+		for (size_t i = 0;; i++)
 		{
-			ImGui::Text(utf8str<1024>(text));
+			if (text[i] == 0)
+			{
+				break;
+			}
+
+			if (text[i] == u'%')
+			{
+				isPersentFound = true;
+				break;
+			}
+		}
+
+		if (isPersentFound)
+		{
+			// HACK
+			std::u16string text_;
+			for (size_t i = 0;; i++)
+			{
+				if (text[i] == 0)
+				{
+					break;
+				}
+
+				if (text[i] == u'%')
+				{
+					text_ += u"%%";
+				}
+				else
+				{
+					text_ += text[i];
+				}
+			}
+
+			if (std::char_traits<char16_t>::length(text_.c_str()) < 1024)
+			{
+				f(utf8str<1024>(text_.c_str()));
+			}
+			else
+			{
+				f(utf16_to_utf8(text_).c_str());
+			}
 		}
 		else
 		{
-			ImGui::Text(utf16_to_utf8(text).c_str());
+			if (std::char_traits<char16_t>::length(text) < 1024)
+			{
+				f(utf8str<1024>(text));
+			}
+			else
+			{
+				f(utf16_to_utf8(text).c_str());
+			}
 		}
+	}
+
+	void GUIManager::Text(const char16_t* text)
+	{
+		auto func = [](const char* c) -> void { ImGui::Text(c); };
+		CallWithEscaped(func, text);
 	}
 
 	void GUIManager::TextWrapped(const char16_t* text)
@@ -1546,7 +1662,8 @@ namespace efk
 
 	void GUIManager::SetTooltip(const char16_t* text)
 	{
-		ImGui::SetTooltip(utf8str<256>(text));
+		auto func = [](const char* c) -> void { ImGui::SetTooltip(c); };
+		CallWithEscaped(func, text);
 	}
 
 	void GUIManager::BeginTooltip()
@@ -1643,9 +1760,15 @@ namespace efk
 	{
 		ImGuiIO& io = ImGui::GetIO();
 		
-		size_pixels = roundf(size_pixels * fontScale);
+		size_pixels = roundf(size_pixels * mainWindow_->GetDPIScale());
 
+		io.Fonts->Clear();
 		io.Fonts->AddFontFromFileTTF(utf8str<280>(filename), size_pixels, nullptr, glyphRangesJapanese);
+
+		markdownConfig_.headingFormats[1].font = io.Fonts->AddFontFromFileTTF(utf8str<280>(filename), size_pixels * 1.1);
+		markdownConfig_.headingFormats[2].font = markdownConfig_.headingFormats[1].font;
+		markdownConfig_.headingFormats[0].font = io.Fonts->AddFontFromFileTTF(utf8str<280>(filename), size_pixels * 1.2);
+
 	}
 
 	bool GUIManager::BeginChildFrame(uint32_t id, const Vec2& size, WindowFlags flags)
@@ -1658,9 +1781,24 @@ namespace efk
 		ImGui::EndChildFrame();
 	}
 
+	int GUIManager::GetKeyIndex(Key key)
+	{
+		return ImGui::GetKeyIndex((ImGuiKey)key);
+	}
+
 	bool GUIManager::IsKeyDown(int user_key_index)
 	{
 		return ImGui::IsKeyDown(user_key_index);
+	}
+
+	bool GUIManager::IsKeyPressed(int user_key_index)
+	{
+		return ImGui::IsKeyPressed(user_key_index);
+	}
+
+	bool GUIManager::IsKeyReleased(int user_key_index)
+	{
+		return ImGui::IsKeyReleased(user_key_index);
 	}
 
 	bool GUIManager::IsMouseDown(int button)
@@ -1693,9 +1831,19 @@ namespace efk
 		return ImGui::IsItemClicked(mouse_button);
 	}
 
+	bool GUIManager::IsAnyItemActive() 
+	{
+		return ImGui::IsAnyItemActive();
+	}
+
 	bool GUIManager::IsWindowHovered()
 	{
 		return ImGui::IsWindowHovered();
+	}
+
+	bool GUIManager::IsWindowFocused()
+	{
+		return ImGui::IsWindowFocused();
 	}
 
 	bool GUIManager::IsAnyWindowHovered()
@@ -1703,9 +1851,19 @@ namespace efk
 		return ImGui::IsAnyWindowHovered();
 	}
 
+	bool GUIManager::IsAnyWindowFocused()
+	{
+		return ImGui::IsAnyWindowFocused();
+	}
+
 	MouseCursor GUIManager::GetMouseCursor()
 	{
 		return (MouseCursor)ImGui::GetMouseCursor();
+	}
+
+	float GUIManager::GetHoveredIDTimer() 
+	{ 
+		return ImGui::GetCurrentContext()->HoveredIdTimer;
 	}
 
 	void GUIManager::DrawLineBackground(float height, uint32_t col)
@@ -1879,6 +2037,8 @@ namespace efk
 			changedType);
 	}
 
+	bool GUIManager::StartSelectingAreaFCurve() { return ImGui::StartSelectingAreaFCurve(); }
+
 	bool GUIManager::BeginDragDropSource()
 	{
 		return ImGui::BeginDragDropSource();
@@ -1944,8 +2104,10 @@ namespace efk
 		ImGui::GetIO().IniFilename = filename_.c_str();
 	}
 
-	int GUIManager::GetLanguage()
-	{
-		return (int32_t)GetEfkLanguage();
+	void GUIManager::Markdown(const char16_t* text) 
+	{ 
+		utf8str<2048> textUtf8(text);
+
+		::ImGui::Markdown(textUtf8, strlen(textUtf8), markdownConfig_);
 	}
 }

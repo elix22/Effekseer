@@ -149,6 +149,7 @@ namespace Effekseer.GUI.Component
 			if (binding.IsDynamicEquationEnabled)
 			{
 				DynamicSelector.SelectInComponent(id_d, binding.DynamicEquation);
+
 				Popup();
 			}
 

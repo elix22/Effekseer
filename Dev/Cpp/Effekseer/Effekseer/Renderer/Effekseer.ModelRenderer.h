@@ -9,6 +9,9 @@
 #include "../Effekseer.Vector2D.h"
 #include "../Effekseer.Vector3D.h"
 #include "../Effekseer.Matrix43.h"
+#include "../SIMD/Effekseer.Vec2f.h"
+#include "../SIMD/Effekseer.Vec3f.h"
+#include "../SIMD/Effekseer.Mat43f.h"
 #include "../Effekseer.Color.h"
 
 //----------------------------------------------------------------------------------
@@ -27,38 +30,50 @@ public:
 	struct NodeParameter
 	{
 		Effect*				EffectPointer;
-		AlphaBlendType		AlphaBlend;
-		TextureFilterType	TextureFilter;
-		TextureWrapType	TextureWrap;
+		//AlphaBlendType		AlphaBlend;
+		//TextureFilterType	TextureFilter;
+		//TextureWrapType	TextureWrap;
 		bool				ZTest;
 		bool				ZWrite;
 		BillboardType		Billboard;
 
-		bool				Lighting;
+		//bool				Lighting;
 		CullingType		Culling;
 		int32_t				ModelIndex;
-		int32_t				ColorTextureIndex;
-		int32_t				NormalTextureIndex;
+		//int32_t				ColorTextureIndex;
+		//int32_t				NormalTextureIndex;
 		float				Magnification;
 		bool				IsRightHand;
 
-		bool				Distortion;
-		float				DistortionIntensity;
+		//bool				Distortion;
+		//float				DistortionIntensity;
 
 		NodeRendererDepthParameter* DepthParameterPtr = nullptr;
-		MaterialParameter* MaterialParameterPtr = nullptr;
+		NodeRendererBasicParameter* BasicParameterPtr = nullptr;
 
-		float				DepthOffset;
-		bool				IsDepthOffsetScaledWithCamera;
-		bool				IsDepthOffsetScaledWithParticleScale;
+		//RendererMaterialType MaterialType = RendererMaterialType::Default;
+		//MaterialParameter* MaterialParameterPtr = nullptr;
+
+		//float				DepthOffset;
+		//bool				IsDepthOffsetScaledWithCamera;
+		//bool				IsDepthOffsetScaledWithParticleScale;
 	};
 
 	struct InstanceParameter
 	{
-		Matrix43		SRTMatrix43;
+		Mat43f			SRTMatrix43;
 		RectF			UV;
+#ifdef __EFFEKSEER_BUILD_VERSION16__
+		RectF			AlphaUV;
+
+		float			FlipbookIndexAndNextRate;
+
+		float			AlphaThreshold;
+#endif
 		Color			AllColor;
 		int32_t			Time;
+		std::array<float, 4> CustomData1;
+		std::array<float, 4> CustomData2;
 	};
 
 public:

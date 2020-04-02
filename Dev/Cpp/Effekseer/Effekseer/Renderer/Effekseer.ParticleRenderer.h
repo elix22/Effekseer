@@ -8,6 +8,8 @@
 #include "../Effekseer.Base.h"
 #include "../Effekseer.Vector3D.h"
 #include "../Effekseer.Matrix43.h"
+#include "../SIMD/Effekseer.Vec3f.h"
+#include "../SIMD/Effekseer.Mat43f.h"
 #include "../Effekseer.Color.h"
 
 //----------------------------------------------------------------------------------
@@ -25,18 +27,18 @@ public:
 	struct NodeParameter
 	{
 		Effect*				EffectPointer;
-		int32_t				TextureIndex;
-		AlphaBlendType			AlphaBlend;
-		TextureFilterType	TextureFilter;
-		TextureWrapType	TextureWrap;
+		//int32_t				TextureIndex;
+		//AlphaBlendType			AlphaBlend;
+		//TextureFilterType	TextureFilter;
+		//TextureWrapType	TextureWrap;
 
-		bool				Distortion;
-		float				DistortionIntensity;
+		//bool				Distortion;
+		//float				DistortionIntensity;
 	};
 
 	struct InstanceParameter
 	{
-		Vector3D	Position;
+		Vec3f		Position;
 		float		Size;
 		Color		ParticleColor;
 	};

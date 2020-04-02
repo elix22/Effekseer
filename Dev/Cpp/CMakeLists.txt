@@ -1,38 +1,22 @@
-# Limit in Debug and Release
-set(CMAKE_CONFIGURATION_TYPES Debug Release CACHE TYPE INTERNAL FORCE )
-
 # The project's name
 project(Effekseer)
 
 # Check cmake version
-cmake_minimum_required(VERSION 2.8)
+cmake_minimum_required(VERSION 3.1)
 
-set(CMAKE_CXX_STANDARD 14)
-set(CMAKE_DEBUG_POSTFIX ".Debug")
-
-option(BUILD_TEST "Build test" OFF)
+# C++ version
+if(WIN32)
+    set(CMAKE_CXX_STANDARD 17)
+else()
+    set(CMAKE_CXX_STANDARD 14)
+endif()
 
 # For Mac
 if(APPLE)
 	set(CMAKE_OSX_DEPLOYMENT_TARGET 10.10)
 endif()
 
-if (MSVC)
-
-else()
-	set(CMAKE_CXX_FLAGS " -fPIC" ${CMAKE_CXX_FLAGS})
-endif()
-
-
 option(USE_INTERNAL_LOADER "Use Internal Loader" ON)
-
-option(USE_GLEW_STATIC "Use Glew static library" OFF)
-
-if (WIN32)
-option(USE_GLEW_DLL "Use Glew DLL" ON)
-else()
-option(USE_GLEW_DLL "Use Glew DLL" OFF)
-endif()
 
 option(USE_OPENGLES2 "Use OpenGL ES2" OFF)
 option(USE_OPENGLES3 "Use OpenGL ES3" OFF)
@@ -46,184 +30,9 @@ option(USE_OPENAL "Use OpenAL" ON)
 endif()
 
 if (WIN32)
-option(USE_XAUDIO2 "Use XAudio2" OFF)
-option(USE_DSOUND "Use DirectSound" OFF)
+option(USE_XAUDIO2 "Use XAudio2" ON)
+option(USE_DSOUND "Use DirectSound" ON)
 option(USE_OSM "Use OpenSoundMixer" OFF)
-endif()
-
-
-# Setup source codes
-file(GLOB effekseer_h
-    Effekseer/*.h
-	Effekseer/Effekseer/*.h
-	Effekseer/Effekseer/Culling/*.h)
-
-set(effekseer_src
-	Effekseer/Effekseer/Effekseer.CustomAllocator.cpp
-	Effekseer/Effekseer/Effekseer.Client.cpp
-	Effekseer/Effekseer/Effekseer.Color.cpp
-	Effekseer/Effekseer/Effekseer.DefaultEffectLoader.cpp
-	Effekseer/Effekseer/Effekseer.DefaultFile.cpp
-	Effekseer/Effekseer/Effekseer.Effect.cpp
-	Effekseer/Effekseer/Effekseer.EffectNode.cpp
-	Effekseer/Effekseer/Effekseer.EffectNodeModel.cpp
-	Effekseer/Effekseer/Effekseer.EffectNodeRibbon.cpp
-	Effekseer/Effekseer/Effekseer.EffectNodeRing.cpp
-	Effekseer/Effekseer/Effekseer.EffectNodeRoot.cpp
-	Effekseer/Effekseer/Effekseer.EffectNodeSprite.cpp
-	Effekseer/Effekseer/Effekseer.EffectNodeTrack.cpp
-	Effekseer/Effekseer/Effekseer.FCurves.cpp
-	Effekseer/Effekseer/Effekseer.Instance.cpp
-	Effekseer/Effekseer/Effekseer.InstanceContainer.cpp
-	Effekseer/Effekseer/Effekseer.InstanceGlobal.cpp
-	Effekseer/Effekseer/Effekseer.InstanceGroup.cpp
-	Effekseer/Effekseer/Effekseer.InternalScript.cpp
-	Effekseer/Effekseer/Effekseer.Manager.cpp
-	Effekseer/Effekseer/Effekseer.Matrix43.cpp
-	Effekseer/Effekseer/Effekseer.Matrix44.cpp
-	Effekseer/Effekseer/Effekseer.RectF.cpp
-	Effekseer/Effekseer/Effekseer.Setting.cpp
-	Effekseer/Effekseer/Effekseer.Server.cpp
-	Effekseer/Effekseer/Effekseer.Socket.cpp
-	Effekseer/Effekseer/Effekseer.Vector2D.cpp
-	Effekseer/Effekseer/Effekseer.Vector3D.cpp
-	Effekseer/Effekseer/Culling/Culling3D.Grid.cpp
-	Effekseer/Effekseer/Culling/Culling3D.Layer.cpp
-	Effekseer/Effekseer/Culling/Culling3D.Matrix44.cpp
-	Effekseer/Effekseer/Culling/Culling3D.ObjectInternal.cpp
-	Effekseer/Effekseer/Culling/Culling3D.ReferenceObject.cpp
-	Effekseer/Effekseer/Culling/Culling3D.Vector3DF.cpp
-	Effekseer/Effekseer/Culling/Culling3D.WorldInternal.cpp)
-
-file(GLOB effekseer_renderer_common_h
-    EffekseerRendererCommon/*.h)
-
-set(effekseer_renderer_common_src
-	EffekseerRendererCommon/EffekseerRenderer.CommonUtils.cpp
-	EffekseerRendererCommon/EffekseerRenderer.IndexBufferBase.cpp
-	EffekseerRendererCommon/EffekseerRenderer.ModelRendererBase.cpp
-	EffekseerRendererCommon/EffekseerRenderer.RenderStateBase.cpp
-	EffekseerRendererCommon/EffekseerRenderer.Renderer.cpp
-	EffekseerRendererCommon/EffekseerRenderer.Renderer_Impl.cpp
-	EffekseerRendererCommon/EffekseerRenderer.RibbonRendererBase.cpp
-	EffekseerRendererCommon/EffekseerRenderer.RingRendererBase.cpp
-	EffekseerRendererCommon/EffekseerRenderer.SpriteRendererBase.cpp
-	EffekseerRendererCommon/EffekseerRenderer.TrackRendererBase.cpp
-	EffekseerRendererCommon/EffekseerRenderer.VertexBufferBase.cpp
-	EffekseerRendererCommon/EffekseerRenderer.DDSTextureLoader.cpp)
-
-set(effekseer_renderer_dx9_src
-	EffekseerRendererDX9/EffekseerRenderer/EffekseerRendererDX9.DeviceObject.cpp
-	EffekseerRendererDX9/EffekseerRenderer/EffekseerRendererDX9.IndexBuffer.cpp
-	EffekseerRendererDX9/EffekseerRenderer/EffekseerRendererDX9.ModelLoader.cpp
-	EffekseerRendererDX9/EffekseerRenderer/EffekseerRendererDX9.MaterialLoader.cpp
-	EffekseerRendererDX9/EffekseerRenderer/EffekseerRendererDX9.ModelRenderer.cpp
-	EffekseerRendererDX9/EffekseerRenderer/EffekseerRendererDX9.Renderer.cpp
-	EffekseerRendererDX9/EffekseerRenderer/EffekseerRendererDX9.RenderState.cpp
-	EffekseerRendererDX9/EffekseerRenderer/EffekseerRendererDX9.Shader.cpp
-	EffekseerRendererDX9/EffekseerRenderer/EffekseerRendererDX9.TextureLoader.cpp
-	EffekseerRendererDX9/EffekseerRenderer/EffekseerRendererDX9.VertexBuffer.cpp)
-
-set(effekseer_renderer_dx11_src
-	EffekseerRendererDX11/EffekseerRenderer/EffekseerRendererDX11.DeviceObject.cpp
-	EffekseerRendererDX11/EffekseerRenderer/EffekseerRendererDX11.IndexBuffer.cpp
-	EffekseerRendererDX11/EffekseerRenderer/EffekseerRendererDX11.ModelLoader.cpp
-	EffekseerRendererDX11/EffekseerRenderer/EffekseerRendererDX11.ModelRenderer.cpp
-	EffekseerRendererDX11/EffekseerRenderer/EffekseerRendererDX11.MaterialLoader.cpp
-	EffekseerRendererDX11/EffekseerRenderer/EffekseerRendererDX11.Renderer.cpp
-	EffekseerRendererDX11/EffekseerRenderer/EffekseerRendererDX11.RenderState.cpp
-	EffekseerRendererDX11/EffekseerRenderer/EffekseerRendererDX11.Shader.cpp
-	EffekseerRendererDX11/EffekseerRenderer/EffekseerRendererDX11.TextureLoader.cpp
-	EffekseerRendererDX11/EffekseerRenderer/EffekseerRendererDX11.VertexBuffer.cpp)
-
-set(effekseer_renderer_gl_src
-	EffekseerRendererGL/EffekseerRenderer/EffekseerRendererGL.DeviceObject.cpp
-	EffekseerRendererGL/EffekseerRenderer/EffekseerRendererGL.GLExtension.cpp
-	EffekseerRendererGL/EffekseerRenderer/EffekseerRendererGL.IndexBuffer.cpp
-	EffekseerRendererGL/EffekseerRenderer/EffekseerRendererGL.ModelLoader.cpp
-	EffekseerRendererGL/EffekseerRenderer/EffekseerRendererGL.ModelRenderer.cpp
-	EffekseerRendererGL/EffekseerRenderer/EffekseerRendererGL.MaterialLoader.cpp
-	EffekseerRendererGL/EffekseerRenderer/EffekseerRendererGL.Renderer.cpp
-	EffekseerRendererGL/EffekseerRenderer/EffekseerRendererGL.RenderState.cpp
-	EffekseerRendererGL/EffekseerRenderer/EffekseerRendererGL.Shader.cpp
-	EffekseerRendererGL/EffekseerRenderer/EffekseerRendererGL.TextureLoader.cpp
-	EffekseerRendererGL/EffekseerRenderer/EffekseerRendererGL.VertexArray.cpp
-	EffekseerRendererGL/EffekseerRenderer/EffekseerRendererGL.VertexBuffer.cpp)
-
-list(APPEND effekseer_renderer_dx9_src
-    ${effekseer_renderer_common_h}
-	${effekseer_renderer_common_src})
-
-list(APPEND effekseer_renderer_dx11_src
-    ${effekseer_renderer_common_h}
-	${effekseer_renderer_common_src})
-
-list(APPEND effekseer_renderer_gl_src
-    ${effekseer_renderer_common_h}
-	${effekseer_renderer_common_src})
-
-if (USE_INTERNAL_LOADER)
-set(effekseer_renderer_dx_loader_src
-	EffekseerRendererCommon/EffekseerRenderer.DXTK.DDSTextureLoader.cpp
-	EffekseerRendererCommon/EffekseerRenderer.PngTextureLoader.cpp)
-
-set(effekseer_renderer_gl_loader_src
-	EffekseerRendererCommon/EffekseerRenderer.PngTextureLoader.cpp)
-
-list(APPEND effekseer_renderer_dx9_src
-	${effekseer_renderer_dx_loader_src})
-
-list(APPEND effekseer_renderer_dx11_src
-	${effekseer_renderer_dx_loader_src})
-
-list(APPEND effekseer_renderer_gl_src
-	${effekseer_renderer_gl_loader_src})
-
-endif()
-
-# set include directories
-include_directories(
-	Effekseer/
-	include/
-	)
-
-# set lib directories
-
-link_directories(
-	${PROJECT_SOURCE_DIR}/lib/
-	)
-
-# Add compile targets
-add_library( effekseer STATIC
-    ${effekseer_h}
-    ${effekseer_src} )
-
-if (WIN32)
-add_library( effekseer_renderer_dx9 STATIC ${effekseer_renderer_dx9_src} )
-add_library( effekseer_renderer_dx11 STATIC ${effekseer_renderer_dx11_src} )
-endif()
-
-add_library( effekseer_renderer_gl STATIC ${effekseer_renderer_gl_src} )
-
-if (USE_OPENAL)
-	add_subdirectory(EffekseerSoundAL)
-endif()
-
-if (USE_DSOUND)
-	add_subdirectory(EffekseerSoundDSound)
-endif()
-
-if (USE_XAUDIO2)
-	add_subdirectory(EffekseerSoundXAudio2)
-endif()
-
-if (USE_OSM OR BUILD_VIEWER)
-	add_subdirectory("EffekseerSoundOSMixer")
-endif()
-
-if (USE_LLGI)
-	add_subdirectory(3rdParty/LLGI)
-	add_subdirectory(EffekseerRendererDX12)
 endif()
 
 # Flags
@@ -250,14 +59,6 @@ if (USE_INTERNAL_LOADER)
 	add_definitions(-D__EFFEKSEER_RENDERER_INTERNAL_LOADER__)
 endif()
 
-if (USE_GLEW_STATIC)
-	add_definitions(-D__EFFEKSEER_RENDERER_GL_GLEW_S__)
-endif()
-
-if (USE_GLEW_DLL)
-	add_definitions(-D__EFFEKSEER_RENDERER_GL_GLEW__)
-endif()
-
 if (USE_OPENGLES2)
 	add_definitions(-D__EFFEKSEER_RENDERER_GLES2__)
 endif()
@@ -270,68 +71,103 @@ if (USE_OPENGL3)
 	add_definitions(-D__EFFEKSEER_RENDERER_GL3__)
 endif()
 
+add_subdirectory(Effekseer)
 
-# set exported directory
-if (MSVC)
-set_target_properties(effekseer PROPERTIES OUTPUT_NAME_DEBUG "Effekseer" )
-set_target_properties(effekseer PROPERTIES OUTPUT_NAME_RELEASE "Effekseer" )
-else()
-set_target_properties(effekseer PROPERTIES OUTPUT_NAME "Effekseer" )
+if (WIN32)
+    add_subdirectory(EffekseerRendererDX9)
+    add_subdirectory(EffekseerRendererDX11)
 endif()
 
-if (MSVC)
-if (MSVC)
-set_target_properties(effekseer_renderer_dx9 PROPERTIES OUTPUT_NAME_DEBUG "EffekseerRendererDX9" )
-set_target_properties(effekseer_renderer_dx9 PROPERTIES OUTPUT_NAME_RELEASE "EffekseerRendererDX9" )
-else()
-set_target_properties(effekseer_renderer_dx9 PROPERTIES OUTPUT_NAME "EffekseerRendererDX9" )
-endif()
+add_subdirectory(EffekseerRendererGL)
+
+if(BUILD_UNITYPLUGIN)
+    add_subdirectory(EffekseerRendererCommon)
 endif()
 
-if (MSVC)
-if (MSVC)
-set_target_properties(effekseer_renderer_dx11 PROPERTIES OUTPUT_NAME_DEBUG "EffekseerRendererDX11" )
-set_target_properties(effekseer_renderer_dx11 PROPERTIES OUTPUT_NAME_RELEASE "EffekseerRendererDX11" )
-else()
-set_target_properties(effekseer_renderer_dx11 PROPERTIES OUTPUT_NAME "EffekseerRendererDX11" )
-endif()
-endif()
+# set include directories
+include_directories(
+	Effekseer/
+	include/
+	)
 
-if (MSVC)
-set_target_properties(effekseer_renderer_gl PROPERTIES OUTPUT_NAME_DEBUG "EffekseerRendererGL" )
-set_target_properties(effekseer_renderer_gl PROPERTIES OUTPUT_NAME_RELEASE "EffekseerRendererGL" )
-else()
-set_target_properties(effekseer_renderer_gl PROPERTIES OUTPUT_NAME "EffekseerRendererGL" )
-endif()
+# set lib directories
+link_directories(
+	${PROJECT_SOURCE_DIR}/lib/
+	)
 
-install(
-	TARGETS effekseer
-	ARCHIVE DESTINATION lib
-	LIBRARY DESTINATION lib)
-
-if (MSVC)
-install(
-	TARGETS effekseer_renderer_dx9
-	ARCHIVE DESTINATION lib
-	LIBRARY DESTINATION lib)
+# Add compile targets
+if (BUILD_DX12 OR BUILD_METAL OR BUILD_VULKAN)
+    set(BUILD_TEST_TEMP ${BUILD_TEST})
+    set(BUILD_TEST OFF)
+    add_subdirectory(3rdParty/LLGI)
+    set(BUILD_TEST ${BUILD_TEST_TEMP})
 endif()
 
-if (MSVC)
-install(
-	TARGETS effekseer_renderer_dx11
-	ARCHIVE DESTINATION lib
-	LIBRARY DESTINATION lib)
+if (BUILD_DX12)
+    add_subdirectory(EffekseerRendererDX12)
 endif()
 
-install(
-	TARGETS effekseer_renderer_gl
-	ARCHIVE DESTINATION lib
-	LIBRARY DESTINATION lib)
+if (BUILD_METAL)
+    add_subdirectory(EffekseerRendererMetal)
+endif()
+
+if (BUILD_VULKAN)
+    add_subdirectory(EffekseerRendererVulkan)
+endif()
+
+if (USE_OPENAL)
+	add_subdirectory(EffekseerSoundAL)
+endif()
+
+if (USE_DSOUND)
+	add_subdirectory(EffekseerSoundDSound)
+endif()
+
+if (USE_XAUDIO2)
+	add_subdirectory(EffekseerSoundXAudio2)
+endif()
+
+if (USE_OSM OR BUILD_VIEWER)
+    add_subdirectory("EffekseerSoundOSMixer")
+endif()
+
+if(BUILD_VIEWER OR BUILD_TEST)
+    add_subdirectory(3rdParty/spdlog EXCLUDE_FROM_ALL)
+    list(APPEND EFK_THIRDPARTY_INCLUDES ${CMAKE_CURRENT_SOURCE_DIR}/3rdParty/spdlog/include/)
+endif()
 
 if (BUILD_VIEWER)
-	add_subdirectory("Viewer")
+    add_subdirectory("EditorCommon")
+    add_subdirectory("Viewer")
+    add_subdirectory("IPC")
+    add_subdirectory("EffekseerMaterialCompiler")
+    add_dependencies(Viewer ResourceData)
 endif()
+
 
 if (BUILD_TEST)
 	add_subdirectory("Test")
+endif()
+
+if(BUILD_VIEWER)
+
+    set(BUILD_TEST_TEMP ${BUILD_TEST})
+    set(BUILD_TEST OFF)
+	add_subdirectory("3rdParty/AltseedRHI")
+    set(BUILD_TEST ${BUILD_TEST_TEMP})
+
+    if(APPLE)
+        add_dependencies(AltseedRHI ExternalProject_zlib ExternalProject_libpng) 
+    else()
+        add_dependencies(AltseedRHI ExternalProject_glew)
+    endif()
+    
+    target_include_directories(
+        AltseedRHI
+        PRIVATE
+        ${EFK_THIRDPARTY_INCLUDES}
+    )
+
+    add_subdirectory("EffekseerMaterial")
+    add_subdirectory("EffekseerMaterialEditor")
 endif()

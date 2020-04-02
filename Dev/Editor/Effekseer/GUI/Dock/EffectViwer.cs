@@ -13,6 +13,7 @@ namespace Effekseer.GUI.Dock
 
 
 		Component.Enum renderMode;
+		Component.Enum viewMode;
 
 		public EffectViwer()
 		{
@@ -20,41 +21,82 @@ namespace Effekseer.GUI.Dock
 			renderMode = new Component.Enum();
 			renderMode.Initialize(typeof(Data.OptionValues.RenderMode));
 			renderMode.SetBinding(Core.Option.RenderingMode);
+			renderMode.EnableUndo = false;
+			viewMode = new Component.Enum();
+			viewMode.Initialize(typeof(Data.OptionValues.ViewMode));
+			viewMode.SetBinding(Core.Option.ViewerMode);
+			viewMode.EnableUndo = false;
+
+			NoPadding = true;
+			NoScrollBar = true;
 		}
 
 		protected override void UpdateInternal()
 		{
+			float dpiScale = Manager.DpiScale;
+
 			IsHovered = false;
 
-			var windowSize = Manager.NativeManager.GetWindowSize();
+			var contentSize = Manager.NativeManager.GetContentRegionAvail();
 
 			// Menu
-			windowSize.X = System.Math.Max(1, windowSize.X - 20);
-			windowSize.Y = System.Math.Max(1, windowSize.Y - 50);
+			contentSize.X = System.Math.Max(1, contentSize.X);
+			contentSize.Y = System.Math.Max(1, contentSize.Y - 30 * dpiScale);
 
-			var p = Manager.Native.RenderView((int)windowSize.X, (int)windowSize.Y);
-			Manager.NativeManager.Image(p, (int)windowSize.X, (int)windowSize.Y);
+			var p = Manager.Native.RenderView((int)contentSize.X, (int)contentSize.Y);
+			Manager.NativeManager.Image(p, (int)contentSize.X, (int)contentSize.Y);
 
 			IsHovered = Manager.NativeManager.IsWindowHovered();
 
+			Manager.NativeManager.Indent(4 * dpiScale);
+
 			// Enum
+			Manager.NativeManager.PushItemWidth(120 * dpiScale);
 			renderMode.Update();
+			Manager.NativeManager.PopItemWidth();
 
 			Manager.NativeManager.SameLine();
 
-			// DrawCall
-			Manager.NativeManager.Text("Draw : " + Manager.Native.GetAndResetDrawCall().ToString());
+			Manager.NativeManager.PushItemWidth(50 * dpiScale);
+			viewMode.Update();
+			Manager.NativeManager.PopItemWidth();
 
+			Manager.NativeManager.SameLine(contentSize.X - 170 * dpiScale);
+
+			Manager.NativeManager.PushItemWidth(50 * dpiScale);
+
+			// DrawCall
+			Manager.NativeManager.Text("D:" + Manager.Native.GetAndResetDrawCall().ToString("D5"));
+			if (Manager.NativeManager.IsItemHovered())
+			{
+				Manager.NativeManager.SetTooltip("Draw calls of current rendering.");
+			}
+
+			Manager.NativeManager.SameLine();
+			Manager.NativeManager.Spacing();
 			Manager.NativeManager.SameLine();
 
 			// DrawCall
-			Manager.NativeManager.Text("Vertex : " + Manager.Native.GetAndResetVertexCount().ToString());
+			Manager.NativeManager.Text("V:" + Manager.Native.GetAndResetVertexCount().ToString("D5"));
+			if (Manager.NativeManager.IsItemHovered())
+			{
+				Manager.NativeManager.SetTooltip("Vertex count of current rendering.");
+			}
 
+			Manager.NativeManager.SameLine();
+			Manager.NativeManager.Spacing();
 			Manager.NativeManager.SameLine();
 
 			// DrawCall
-			Manager.NativeManager.Text("Particle : " + Manager.Native.GetInstanceCount().ToString());
+			Manager.NativeManager.Text("P:" + Manager.Native.GetInstanceCount().ToString("D2"));
+			if (Manager.NativeManager.IsItemHovered())
+			{
+				Manager.NativeManager.SetTooltip("Particle count of current rendering.");
+			}
 
+			Manager.NativeManager.PopItemWidth();
+
+			Manager.NativeManager.Spacing();
 		}
 	}
 }

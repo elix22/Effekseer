@@ -9,9 +9,16 @@ source_group("EffekseerRendererCommon" FILES ${LOCAL_SOURCES_Common})
 
 file(GLOB_RECURSE LOCAL_HEADERS_DX12 *.h)
 file(GLOB_RECURSE LOCAL_SOURCES_DX12 *.cpp)
-source_group("EffekseerRenderer" FILES ${LOCAL_HEADERS_DX12} ${LOCAL_SOURCES_DX12})
+list(APPEND LOCAL_HEADERS_DX12 ../EffekseerMaterialCompiler/DirectX12/EffekseerMaterialCompilerDX12.h)
+list(APPEND LOCAL_SOURCES_DX12 ../EffekseerMaterialCompiler/DirectX12/EffekseerMaterialCompilerDX12.cpp)
 
-file(GLOB_RECURSE LOCAL_SOURCES_LLGI ../EffekseerRendererLLGI/*.h ../EffekseerRendererLLGI/*.cpp)
+FilterFolder("${LOCAL_HEADERS_DX12}")
+FilterFolder("${LOCAL_SOURCES_DX12}")
+
+file(GLOB_RECURSE LOCAL_SOURCES_LLGI
+    ../EffekseerRendererLLGI/*.h
+    ../EffekseerRendererLLGI/*.cpp)
+
 source_group("EffekseerRendererLLGI" FILES ${LOCAL_SOURCES_LLGI})
 
 set(LOCAL_SOURCES
@@ -24,9 +31,10 @@ set(LOCAL_SOURCES
 # Projects
 
 add_library(${PROJECT_NAME} STATIC ${LOCAL_SOURCES})
-target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_LIST_DIR}/Effekseer ${CMAKE_CURRENT_LIST_DIR}/../3rdparty/LLGI/src)
+target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_LIST_DIR}/../Effekseer ${CMAKE_CURRENT_LIST_DIR}/../3rdparty/LLGI/src ${EFK_THIRDPARTY_INCLUDES})
 target_link_libraries(${PROJECT_NAME} LLGI)
 set_target_properties(${PROJECT_NAME} PROPERTIES PUBLIC_HEADER "${LOCAL_HEADERS_DX12}")
+add_dependencies(${PROJECT_NAME} Effekseer)
 
 #--------------------
 # Install

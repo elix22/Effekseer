@@ -55,7 +55,7 @@ public:
 
 			struct
 			{
-				float	offset[4];
+				std::array<float, 4> offset;
 			} fcurve_rgba;
 
 		} allColorValues;
@@ -64,8 +64,13 @@ public:
 public:
 	AlphaBlendType		AlphaBlend;
 	int32_t			ModelIndex;
+
+	//! this value is not used
 	int32_t			NormalTextureIndex;
+
 	BillboardType	Billboard;
+
+	//! this value is not used
 	bool			Lighting;
 	CullingType	Culling;
 

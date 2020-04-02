@@ -9,6 +9,7 @@
 #include "Effekseer.Manager.h"
 
 #include "Effekseer.Vector3D.h"
+#include "SIMD/Effekseer.SIMDUtils.h"
 
 #include "Effekseer.Instance.h"
 #include "Effekseer.InstanceContainer.h"
@@ -18,9 +19,9 @@
 #include "Effekseer.EffectNodeRing.h"
 #include "Effekseer.EffectNodeRoot.h"
 #include "Effekseer.EffectNodeSprite.h"
-#include "Sound/Effekseer.SoundPlayer.h"
-
 #include "Effekseer.Setting.h"
+#include "Sound/Effekseer.SoundPlayer.h"
+#include "Utils/Effekseer.BinaryReader.h"
 
 //----------------------------------------------------------------------------------
 //
@@ -28,11 +29,49 @@
 namespace Effekseer
 {
 
+LocalForceFieldTurbulenceParameter::LocalForceFieldTurbulenceParameter(int32_t seed, float scale, float strength, int octave) : Noise(seed)
+{
+	Noise.Octave = octave;
+	Noise.Scale = scale;
+	Strength = strength;
+}
+
+bool LocalForceFieldParameter::Load(uint8_t*& pos, int32_t version)
+{
+	auto br = BinaryReader<false>(pos, std::numeric_limits<int>::max());
+
+	LocalForceFieldType type{};
+	br.Read(type);
+
+	if (type == LocalForceFieldType::Turbulence)
+	{
+		int32_t seed{};
+		float scale{};
+		float strength{};
+		int octave{};
+
+		br.Read(seed);
+		br.Read(scale);
+		br.Read(strength);
+		br.Read(octave);
+
+		scale = 1.0f / scale;
+
+		Turbulence =
+			std::unique_ptr<LocalForceFieldTurbulenceParameter>(new LocalForceFieldTurbulenceParameter(seed, scale, strength, octave));
+	}
+
+	pos += br.GetOffset();
+
+	return true;
+}
+
 //----------------------------------------------------------------------------------
 //
 //----------------------------------------------------------------------------------
 EffectNodeImplemented::EffectNodeImplemented(Effect* effect, unsigned char*& pos)
 	: m_effect(effect)
+	, generation_(0)
 	, m_userData(NULL)
 	, IsRendered(true)
 	, TranslationFCurve(NULL)
@@ -51,6 +90,15 @@ void EffectNodeImplemented::LoadParameter(unsigned char*& pos, EffectNode* paren
 	int size = 0;
 	int node_type = 0;
 	auto ef = (EffectImplemented*)m_effect;
+
+	if (parent)
+	{
+		generation_ = parent->GetGeneration() + 1;
+	}
+	else
+	{
+		generation_ = 0;
+	}
 
 	memcpy(&node_type, pos, sizeof(int));
 	pos += sizeof(int);
@@ -230,6 +278,19 @@ void EffectNodeImplemented::LoadParameter(unsigned char*& pos, EffectNode* paren
 				TranslationFCurve->X.Maginify(m_effect->GetMaginification());
 				TranslationFCurve->Y.Maginify(m_effect->GetMaginification());
 				TranslationFCurve->Z.Maginify(m_effect->GetMaginification());
+			}
+		}
+
+		// Local force field
+		if (ef->GetVersion() >= 1500)
+		{
+			int32_t count = 0;
+			memcpy(&count, pos, sizeof(int));
+			pos += sizeof(int);
+
+			for (int32_t i = 0; i < count; i++)
+			{
+				LocalForceFields[i].Load(pos, ef->GetVersion());
 			}
 		}
 
@@ -500,6 +561,8 @@ void EffectNodeImplemented::LoadParameter(unsigned char*& pos, EffectNode* paren
 			memcpy(&IsDepthOffsetScaledWithParticleScale, pos, sizeof(int32_t));
 			pos += sizeof(int32_t);
 
+			DepthValues.IsDepthOffsetScaledWithParticleScale = IsDepthOffsetScaledWithParticleScale > 0;
+
 			if (m_effect->GetVersion() >= 15)
 			{
 				memcpy(&DepthValues.DepthParameter.SuppressionOfScalingByDepth, pos, sizeof(float));
@@ -508,7 +571,7 @@ void EffectNodeImplemented::LoadParameter(unsigned char*& pos, EffectNode* paren
 				memcpy(&DepthValues.DepthParameter.DepthClipping, pos, sizeof(float));
 				pos += sizeof(float);
 			}
-	
+
 			if (m_effect->GetVersion() >= 13)
 			{
 				memcpy(&DepthValues.ZSort, pos, sizeof(int32_t));
@@ -532,6 +595,7 @@ void EffectNodeImplemented::LoadParameter(unsigned char*& pos, EffectNode* paren
 			DepthValues.DepthParameter.DepthOffset = DepthValues.DepthOffset;
 			DepthValues.DepthParameter.IsDepthOffsetScaledWithCamera = DepthValues.IsDepthOffsetScaledWithCamera;
 			DepthValues.DepthParameter.IsDepthOffsetScaledWithParticleScale = DepthValues.IsDepthOffsetScaledWithParticleScale;
+			DepthValues.DepthParameter.ZSort = DepthValues.ZSort;
 		}
 
 		// Convert right handle coordinate system into left handle coordinate system
@@ -652,6 +716,16 @@ void EffectNodeImplemented::LoadParameter(unsigned char*& pos, EffectNode* paren
 
 		LoadRendererParameter(pos, m_effect->GetSetting());
 
+		// rescale intensity after 1.5
+#ifndef __EFFEKSEER_FOR_UE4__ // Hack for EffekseerForUE4
+		RendererCommon.BasicParameter.DistortionIntensity *= m_effect->GetMaginification();
+		RendererCommon.DistortionIntensity *= m_effect->GetMaginification();
+#endif // !__EFFEKSEER_FOR_UE4__
+
+#ifdef __EFFEKSEER_BUILD_VERSION16__
+		AlphaCrunch.load(pos, m_effect->GetVersion());
+#endif
+
 		if (m_effect->GetVersion() >= 1)
 		{
 			// Sound
@@ -704,10 +778,35 @@ EffectNodeImplemented::~EffectNodeImplemented()
 	ES_SAFE_DELETE(ScalingFCurve);
 }
 
+void EffectNodeImplemented::CalcCustomData(const Instance* instance, std::array<float, 4>& customData1, std::array<float, 4>& customData2)
+{
+	if (this->RendererCommon.BasicParameter.MaterialParameterPtr != nullptr)
+	{
+		if (this->RendererCommon.BasicParameter.MaterialParameterPtr->MaterialIndex >= 0)
+		{
+			auto material = m_effect->GetMaterial(this->RendererCommon.BasicParameter.MaterialParameterPtr->MaterialIndex);
+
+			if (material != nullptr)
+			{
+				if (material->CustomData1 > 0)
+				{
+					customData1 = instance->GetCustomData(0);
+				}
+				if (material->CustomData2 > 0)
+				{
+					customData2 = instance->GetCustomData(1);
+				}
+			}
+		}
+	}
+}
+
 //----------------------------------------------------------------------------------
 //
 //----------------------------------------------------------------------------------
 Effect* EffectNodeImplemented::GetEffect() const { return m_effect; }
+
+int EffectNodeImplemented::GetGeneration() const { return generation_; }
 
 //----------------------------------------------------------------------------------
 //
@@ -866,7 +965,7 @@ void EffectNodeImplemented::PlaySound_(Instance& instance, SoundTag tag, Manager
 		parameter.Pan = Sound.Pan.getValue(*instanceGlobal);
 
 		parameter.Mode3D = (Sound.PanType == ParameterSoundPanType_3D);
-		Vector3D::Transform(parameter.Position, Vector3D(0.0f, 0.0f, 0.0f), instance.GetGlobalMatrix43());
+		parameter.Position = ToStruct(instance.GetGlobalMatrix43().GetTranslation());
 		parameter.Distance = Sound.Distance;
 
 		player->Play(tag, parameter);

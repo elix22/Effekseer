@@ -20,7 +20,10 @@ namespace EffekseerRendererDX11
 /**
 @brief	テクスチャ読込クラスを生成する。
 */
-::Effekseer::TextureLoader* CreateTextureLoader(ID3D11Device* device, ID3D11DeviceContext* context, ::Effekseer::FileInterface* fileInterface = NULL);
+::Effekseer::TextureLoader* CreateTextureLoader(ID3D11Device* device,
+												ID3D11DeviceContext* context,
+												::Effekseer::FileInterface* fileInterface = nullptr,
+												::Effekseer::ColorSpaceType colorSpaceType = ::Effekseer::ColorSpaceType::Gamma);
 
 /**
 @brief	モデル読込クラスを生成する。
@@ -45,13 +48,15 @@ public:
 		@param	context		DirectXのコンテキスト
 		@param	squareMaxCount	最大描画スプライト数
 		@param	depthFunc	奥行きの計算方法
+		@param	isMSAAEnabled whether is MSAA enabled 
 		@return	インスタンス
 	*/
 	static Renderer* Create(
 		ID3D11Device* device, 
 		ID3D11DeviceContext* context, 
 		int32_t squareMaxCount, 
-		D3D11_COMPARISON_FUNC depthFunc = D3D11_COMPARISON_LESS);
+		D3D11_COMPARISON_FUNC depthFunc = D3D11_COMPARISON_LESS_EQUAL,
+		bool isMSAAEnabled = false);
 
 	virtual ID3D11Device* GetDevice() = 0;
 

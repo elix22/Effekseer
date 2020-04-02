@@ -8,6 +8,7 @@ namespace Effekseer.GUI.Dock
 {
 	class SoundValues : DockPanel
 	{
+		Component.CopyAndPaste candp = null;
 		Component.ParameterList paramerterList = null;
 
 		bool isFiestUpdate = true;
@@ -18,17 +19,18 @@ namespace Effekseer.GUI.Dock
 
 			paramerterList = new Component.ParameterList();
 			paramerterList.SetType(typeof(Data.SoundValues));
+			candp = new Component.CopyAndPaste("Sound", GetTargetObject, Read);
 
 			Core.OnAfterLoad += OnAfterLoad;
 			Core.OnAfterNew += OnAfterLoad;
 			Core.OnAfterSelectNode += OnAfterSelectNode;
 
+			Controls.Add(candp);
 			Controls.Add(paramerterList);
 			
 			Read();
 
 			Icon = Images.GetIcon("PanelSound");
-			IconSize = new swig.Vec2(24, 24);
 			TabToolTip = Resources.GetString("Sound");
 		}
 
@@ -55,22 +57,21 @@ namespace Effekseer.GUI.Dock
 
 		void Read()
 		{
+			paramerterList.SetValue(GetTargetObject());
+		}
+
+		object GetTargetObject()
+		{
 			if (Core.SelectedNode != null)
 			{
 				if (Core.SelectedNode is Data.Node)
 				{
-					paramerterList.SetValue(((Data.Node)Core.SelectedNode).SoundValues);
-				}
-				else
-				{
-					paramerterList.SetValue(null);
+					return ((Data.Node)Core.SelectedNode).SoundValues;
 				}
 			}
-			else
-			{
-				paramerterList.SetValue(null);
-			}
+			return null;
 		}
+
 
 		void OnAfterLoad(object sender, EventArgs e)
 		{

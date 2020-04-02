@@ -2,9 +2,9 @@
 #include "efk.Window.h"
 #include "../EffekseerRendererCommon/EffekseerRenderer.PngTextureLoader.h"
 #include "../Effekseer/Effekseer/Effekseer.DefaultFile.h"
-#include "../Effekseer/Effekseer/Effekseer.CustomAllocator.h"
 
 #ifdef __APPLE__
+#define GL_SILENCE_DEPRECATION
 #include <OpenGL/gl3.h>
 #endif
 
@@ -77,6 +77,15 @@ namespace efk
 		}
 	}
 
+	void GLFW_ContentScaleCallback(GLFWwindow* w, float xscale, float yscale)
+	{
+		auto w_ = (Window*)glfwGetWindowUserPointer(w);
+		if (w_->DpiChanged != nullptr)
+		{
+			w_->DpiChanged(xscale);
+		}
+	}
+
 	Window::Window()
 	{}
 
@@ -84,54 +93,12 @@ namespace efk
 	{}
 
 
-	bool Window::Initialize(const char16_t* title, int32_t width, int32_t height, bool isSRGBMode, DeviceType deviceType)
+	bool Window::Initialize(std::shared_ptr<Effekseer::MainWindow> mainWindow, DeviceType deviceType)
 	{
-		Effekseer::CustomVector<int> v;
-		v.push_back(10);
-
-		Effekseer::CustomList<int> l;
-		l.push_back(10);
-
-		Effekseer::CustomSet<int> s;
-		s.insert(10);
-
-		Effekseer::CustomMap<int, int> m;
-		m[1] = 10;
-
-		if (!glfwInit())
-		{
-			return false;
-		}
-
-#ifdef __APPLE__
-		glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-		glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 2);
-		glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
-		glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-#endif
-
 		this->deviceType = deviceType;
 
-		if (deviceType == DeviceType::OpenGL)
-		{
-			glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_API);
-		}
-		else
-		{
-			glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-		}
-
-		if (isSRGBMode)
-		{
-			glfwWindowHint(GLFW_SRGB_CAPABLE, GL_TRUE);
-		}
-
-		window = glfwCreateWindow(width, height, utf16_to_utf8(title).c_str(), nullptr, nullptr);
-		if (window == nullptr)
-		{
-			glfwTerminate();
-			return false;
-		}
+		window = mainWindow->GetGLFWWindows();
+		mainWindow_ = mainWindow;
 
 		glfwSetWindowUserPointer(window, this);
 		glfwSetFramebufferSizeCallback(window, GLFLW_ResizeCallback);
@@ -139,21 +106,22 @@ namespace efk
 		glfwSetWindowFocusCallback(window, GLFW_WindowFocusCallback);
 		glfwSetWindowCloseCallback(window, GLFLW_CloseCallback);
 		glfwSetWindowIconifyCallback(window, GLFW_IconifyCallback);
+		//glfwSetWindowContentScaleCallback(window, GLFW_ContentScaleCallback);
 		glfwMakeContextCurrent(window);
 		glfwSwapInterval(1);
+
+		mainWindow_->DpiChanged = [this](float scale) -> void { 
+			GLFW_ContentScaleCallback(window, scale, 1.0f);
+		};
 
 		return true;
 	}
 
 
 	void Window::Terminate()
-	{
-		if (window != nullptr)
-		{
-			glfwDestroyWindow(window);
-			window = nullptr;
-			glfwTerminate();
-		}
+	{ 
+		window = nullptr;
+		mainWindow_ = nullptr;
 	}
 
 	bool Window::DoEvents()

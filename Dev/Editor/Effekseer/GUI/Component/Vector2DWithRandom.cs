@@ -170,11 +170,11 @@ namespace Effekseer.GUI.Component
 			}
 			else
 			{
-				txt_r1 = Resources.GetString("Max");
-				txt_r2 = Resources.GetString("Min");
+				txt_r1 = Resources.GetString("Min");
+				txt_r2 = Resources.GetString("Max");
 			}
 
-			Manager.NativeManager.PushItemWidth(Manager.NativeManager.GetColumnWidth() - 60);
+			Manager.NativeManager.PushItemWidth(Manager.NativeManager.GetColumnWidth() - 48 * Manager.DpiScale);
 			if (Manager.NativeManager.DragFloat2EfkEx(id1, internalValue1, step,
 				float.MinValue, float.MaxValue,
 				float.MinValue, float.MaxValue,

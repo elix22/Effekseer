@@ -5,6 +5,17 @@ using System.Text;
 
 namespace Effekseer.Data.Value
 {
+	public enum FCurveTimelineMode : int
+	{
+		[Name(language = Language.Japanese, value = "時間(フレーム)")]
+		[Name(language = Language.English, value = "Time(Frame)")]
+		Time = 0,
+
+		[Name(language = Language.Japanese, value = "パーセント(0-100)")]
+		[Name(language = Language.English, value = "Percent(0-100)")]
+		Percent = 1,
+	}
+
 	public enum FCurveEdge
 	{
 		[Name(language = Language.Japanese, value = "一定")]
@@ -38,6 +49,8 @@ namespace Effekseer.Data.Value
 		Float OffsetMax { get; }
 		Float OffsetMin { get; }
 		Int Sampling { get; }
+
+		event ChangedValueEventHandler OnChanged;
 	}
 
 	public class FCurve<T> : IFCurve where T : struct, IComparable<T>, IEquatable<T>
@@ -48,9 +61,9 @@ namespace Effekseer.Data.Value
 
             if (o is float) return (float)o;
 
-            if (v is byte)
+            if (v is int)
             {
-                var b = (byte)o;
+                var b = (int)o;
                 return (float)b;
             }
 
@@ -95,7 +108,7 @@ namespace Effekseer.Data.Value
 			OffsetMax = new Float();
 			OffsetMin = new Float();
 
-			Sampling = new Int(5, int.MaxValue, 1, 1);
+			Sampling = new Int(10, int.MaxValue, 1, 1);
 		}
 
 		public void SetKeys(FCurveKey<T>[] keys)
@@ -259,7 +272,7 @@ namespace Effekseer.Data.Value
 						data.Add(BitConverter.GetBytes(v));
 					}
 				}
-				else if (typeof(T) == typeof(byte))
+				else if (typeof(T) == typeof(int))
 				{
 					for (int f = keys.First().Frame; f < keys.Last().Frame; f += freq)
 					{
@@ -702,6 +715,8 @@ namespace Effekseer.Data.Value
 
 		void SetLeft(float x, float y);
 		void SetRight(float x, float y);
+
+		event ChangedValueEventHandler OnChanged;
 	}
 
 	public class FCurveKey<T> : IFCurveKey where T : struct, IComparable<T>, IEquatable<T>
@@ -727,9 +742,9 @@ namespace Effekseer.Data.Value
 
             if (o is float) return (float)o;
 
-            if (v is byte)
+            if (v is int)
             {
-                var b = (byte)o;
+                var b = (int)o;
                 return (float)b;
             }
 
@@ -974,7 +989,7 @@ namespace Effekseer.Data.Value
 
 		public void SetValueAsFloat(float value)
 		{
-			if (typeof(T) == typeof(byte))
+			if (typeof(T) == typeof(int))
 			{
 				value = (float)Math.Round((double)value);
 				value = Math.Max(0, value);

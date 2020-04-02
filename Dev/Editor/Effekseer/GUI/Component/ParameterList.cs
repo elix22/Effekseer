@@ -17,6 +17,8 @@ namespace Effekseer.GUI.Component
 
 		bool isControlsChanged = false;
 
+		bool isFirstUpdate = true;
+
 		public ParameterList()
 		{
 		}
@@ -34,7 +36,11 @@ namespace Effekseer.GUI.Component
 			Manager.NativeManager.Columns(2);
 
 			var columnWidth = Manager.NativeManager.GetColumnWidth(0);
-			Manager.NativeManager.SetColumnWidth(0, 120);
+
+			if(isFirstUpdate)
+			{
+				Manager.NativeManager.SetColumnWidth(0, 120 * Manager.GetUIScaleBasedOnFontSize());
+			}
 
 			for (int i = 0; i < controlRows.Internal.Count; i++)
 			{
@@ -52,7 +58,7 @@ namespace Effekseer.GUI.Component
 				//Manager.NativeManager.PushItemWidth(100);
 
 				Manager.NativeManager.SetCursorPosY(Manager.NativeManager.GetCursorPosY() + Manager.TextOffsetY);
-				Manager.NativeManager.Text(c.Label);
+				Manager.NativeManager.Text(controlRows.Internal[i].Label);
 
 				if (Manager.NativeManager.IsItemHovered())
 				{
@@ -60,9 +66,9 @@ namespace Effekseer.GUI.Component
 
 					Manager.NativeManager.BeginTooltip();
 
-					Manager.NativeManager.Text(c.Label);
+					Manager.NativeManager.Text(controlRows.Internal[i].Label);
 					Manager.NativeManager.Separator();
-					Manager.NativeManager.Text(c.Description);
+					Manager.NativeManager.Text(controlRows.Internal[i].Description);
 
 					Manager.NativeManager.EndTooltip();
 				}
@@ -87,6 +93,8 @@ namespace Effekseer.GUI.Component
 				SetValue(bindingObject);
 				isControlsChanged = false;
 			}
+
+			isFirstUpdate = false;
 		}
 
 		public void SetType(Type type)
@@ -227,6 +235,7 @@ namespace Effekseer.GUI.Component
 						if (objToTypeRow.ContainsKey(propValue))
 						{
 							row = objToTypeRow[propValue];
+							row.UpdateTitleAndDesc(prop);
 							row.SetSelector(localRows);
 							row.SelectorIndent = indent;
 							if (row.Selector != null) row.SelectorIndent++;
@@ -275,6 +284,9 @@ namespace Effekseer.GUI.Component
 							var o0 = row.BindingValue as Data.Value.EnumBase;
 							var o1 = row.BindingValue as Data.Value.PathForImage;
 							var o2 = row.BindingValue as Data.IEditableValueCollection;
+#if __EFFEKSEER_BUILD_VERSION16__
+							var o3 = row.BindingValue as Data.Value.Boolean;
+#endif
 							if (o0 != null && row.IsSelector)
 							{
 								o0.OnChanged += ChangeSelector;
@@ -287,6 +299,12 @@ namespace Effekseer.GUI.Component
 							{
 								o2.OnChanged += ChangeSelector;
 							}
+#if __EFFEKSEER_BUILD_VERSION16__
+							else if (o3 != null)
+							{
+								o3.OnChanged += ChangeSelector;
+							}
+#endif
 						}
 					}
 				};
@@ -339,6 +357,9 @@ namespace Effekseer.GUI.Component
 				var o0 = row.BindingValue as Data.Value.EnumBase;
 				var o1 = row.BindingValue as Data.Value.PathForImage;
 				var o2 = row.BindingValue as Data.IEditableValueCollection;
+#if __EFFEKSEER_BUILD_VERSION16__
+				var o3 = row.BindingValue as Data.Value.Boolean;
+#endif
 				if (o0 != null && row.IsSelector)
 				{
 					o0.OnChanged -= ChangeSelector;
@@ -351,6 +372,12 @@ namespace Effekseer.GUI.Component
 				{
 					o2.OnChanged -= ChangeSelector;
 				}
+#if __EFFEKSEER_BUILD_VERSION16__
+				else if (o3 != null)
+				{
+					o3.OnChanged += ChangeSelector;
+				}
+#endif
 			}
 
 			if (removeControls)
@@ -420,7 +447,7 @@ namespace Effekseer.GUI.Component
 				private set;
 			}
 
-			public int SelectorID
+			public int SelfSelectorID
 			{
 				get;
 				private set;
@@ -436,9 +463,9 @@ namespace Effekseer.GUI.Component
 			}
 
 			/// <summary>
-			/// Selectorに要求するID
+			/// A value which is required to show
 			/// </summary>
-			public int SelectorValue
+			public int[] RequiredSelectorValues
 			{
 				get;
 				private set;
@@ -548,10 +575,14 @@ namespace Effekseer.GUI.Component
 				{
 					gui = new PathForSound(Title);
 				}
-#if MATERIAL_ENABLED
 				else if (type == typeof(Data.Value.PathForMaterial))
 				{
 					gui = new PathForMaterial(Title);
+				}
+#if __EFFEKSEER_BUILD_VERSION16__
+				else if (type == typeof(Data.Value.FCurveScalar))
+				{
+					gui = new FCurveButton(Title);
 				}
 #endif
 				else if (type == typeof(Data.Value.FCurveVector2D))
@@ -594,15 +625,15 @@ namespace Effekseer.GUI.Component
 					dgui.Initialize(types[0]);
 				}
 
-				if (editableValue.SelectorID >= 0)
+				if (editableValue.SelfSelectorID >= 0)
 				{
 					IsSelector = true;
-					SelectorID = editableValue.SelectorID;
+					SelfSelectorID = editableValue.SelfSelectorID;
 				}
 				else
 				{
 					IsSelector = false;
-					SelectorID = -1;
+					SelfSelectorID = -1;
 				}
 
 				Control = gui;
@@ -622,17 +653,23 @@ namespace Effekseer.GUI.Component
 				}
 			}
 
+			public void UpdateTitleAndDesc(Data.EditableValue propInfo)
+			{
+				Title = propInfo.Title;
+				Description = propInfo.Description;
+				Label = Title;
+			}
 			public void SetSelector(List<TypeRow> sameLayerRows)
 			{
 				// Selector
-				if(editableValue.SelectedID >= 0)
+				if(editableValue.TargetSelectorID >= 0)
 				{
-					var selector = sameLayerRows.Where(_ => _.IsSelector && _.SelectorID == editableValue.SelectedID).LastOrDefault();
+					var selector = sameLayerRows.Where(_ => _.IsSelector && _.SelfSelectorID == editableValue.TargetSelectorID).LastOrDefault();
 
 					if (selector != null)
 					{
 						Selector = selector;
-						SelectorValue = editableValue.SelectedValue;
+						RequiredSelectorValues = editableValue.RequiredSelectorValues;
 					}
 				}
 			}
@@ -647,10 +684,19 @@ namespace Effekseer.GUI.Component
 
 				var value = Selector.BindingValue as Data.Value.EnumBase;
 
-				if (value == null) return false;
+				if (value == null)
+				{
+#if __EFFEKSEER_BUILD_VERSION16__
+					if (Selector.BindingValue.GetType() == typeof(Data.Value.Boolean))
+					{
+						var v = Selector.BindingValue as Data.Value.Boolean;
+						return v.Value;
+					}
+#endif
+					return false;
+				}
 
-
-				return SelectorValue == value.GetValueAsInt();
+				return RequiredSelectorValues.Contains(value.GetValueAsInt());
 			}
 		}
 	}

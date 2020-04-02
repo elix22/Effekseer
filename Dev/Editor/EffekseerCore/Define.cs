@@ -8,6 +8,19 @@ using System.Threading;
 
 namespace Effekseer
 {
+	public class Constant
+	{
+		/// <summary>
+		///  the maximum number of generation of node
+		/// </summary>
+		public const int NodeLayerLimit = 20;
+
+		/// <summary>
+		///  the maximum number of texture slot which can be specified by an user
+		/// </summary>
+		public const int UserTextureSlotCount = 6;
+	}
+
 	/// <summary>
 	/// 値が変化したときのイベント
 	/// </summary>
@@ -111,6 +124,7 @@ namespace Effekseer
 
 		public static void LoadLanguageFile(string path)
 		{
+			keyToStrings.Clear();
 			var lines = System.IO.File.ReadAllLines(path);
 
 			foreach(var line in lines)
@@ -163,7 +177,7 @@ namespace Effekseer
     }
 
 	/// <summary>
-	/// 名称を設定する属性
+	/// attribute for parameter's name
 	/// </summary>
 	[AttributeUsage(
 	AttributeTargets.Class | AttributeTargets.Property | AttributeTargets.Field | AttributeTargets.Method,
@@ -194,26 +208,24 @@ namespace Effekseer
 		}
 
 		/// <summary>
-		/// 属性から名称を取得する。
+		/// Get name from attributes
 		/// </summary>
 		/// <param name="attributes"></param>
+		/// <param name="selected">selector's value to show</param>
 		/// <returns></returns>
-		public static string GetName(object[] attributes)
+		public static string GetName(object[] attributes, int selected = -1)
 		{
 			if (attributes != null && attributes.Length > 0)
 			{
-				foreach (var attribute in attributes)
+				foreach (var attribute in attributes.OfType<NameAttribute>())
 				{
-					if (!(attribute is NameAttribute)) continue;
+                    // search from resources at first
+                    var value = Resources.GetString(attribute.value);
+                    if (!String.IsNullOrEmpty(value)) return value;
 
-                    // 先にProperties.Resourcesから検索する
-                    var value = Resources.GetString(((NameAttribute)attribute).value);
-                    if (!String.IsNullOrEmpty(value)) return value; // 発見した場合、文字列を返す
-
-                    // なければ、既存振る舞いで返す
-					if (((NameAttribute)attribute).language == Core.Language)
+					if (attribute.language == Core.Language)
 					{
-						return ((NameAttribute)attribute).value;
+						return attribute.value;
 					}
 				}
 			}
@@ -223,7 +235,7 @@ namespace Effekseer
 	}
 
 	/// <summary>
-	/// 説明を設定する属性
+	/// attribute for parameter's description
 	/// </summary>
 	[AttributeUsage(
 	AttributeTargets.Class | AttributeTargets.Property | AttributeTargets.Field,
@@ -250,25 +262,24 @@ namespace Effekseer
 		}
 
 		/// <summary>
-		/// 属性から説明を取得する。
+		/// Get description from attributes
 		/// </summary>
 		/// <param name="attributes"></param>
+		/// <param name="selected">selector's value to show</param>
 		/// <returns></returns>
-		public static string GetDescription(object[] attributes)
+		public static string GetDescription(object[] attributes, int selected = -1)
 		{
 			if (attributes != null && attributes.Length > 0)
 			{
-				foreach (var attribute in attributes)
+				foreach (var attribute in attributes.OfType<DescriptionAttribute>())
 				{
-					if (!(attribute is DescriptionAttribute)) continue;
+					// search from resources at first
+					var value = Resources.GetString(attribute.value);
+                    if (!String.IsNullOrEmpty(value)) return value;
 
-                    // 先にProperties.Resourcesから検索する
-                    var value = Resources.GetString(((DescriptionAttribute)attribute).value);
-                    if (!String.IsNullOrEmpty(value)) return value; // 発見した場合、文字列を返す
-
-					if (((DescriptionAttribute)attribute).language == Core.Language)
+					if (attribute.language == Core.Language)
 					{
-						return ((DescriptionAttribute)attribute).value;
+						return attribute.value;
 					}
 				}
 			}

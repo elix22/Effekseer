@@ -6,6 +6,13 @@
 #include "dll.h"
 #include "GUI/efk.GUIManager.h"
 #include "GUI/efk.FileDialog.h"
+#include "CompiledMaterialGenerator.h"
+#include "../EditorCommon/Platform/PlatformMisc.h"
+#include "../EditorCommon/GUI/MainWindow.h"
+#include "../EditorCommon/IO/FileReader.h"
+#include "../EditorCommon/IO/StaticFile.h"
+#include "../EditorCommon/IO/IO.h"
+
 %}
 
 //-----------------------------------------------------------------------------------
@@ -14,8 +21,10 @@
 %include "wchar.i"
 %include "stdint.i"
 %include "char16.i"
+%include "u16string.i"
 %include "typemaps.i"
 %include "arrays_csharp.i"
+%include <std_shared_ptr.i>
 
 %pragma(csharp) imclassclassmodifiers="
 [System.Security.SuppressUnmanagedCodeSecurity]
@@ -75,6 +84,12 @@ class"
 %apply uint8_t INOUT[] { uint8_t* data_output }
 
 %feature("director") GUIManagerCallback;
+%feature("director") IOCallback;
+
+%shared_ptr(Effekseer::MainWindow);
+%shared_ptr(Effekseer::StaticFile);
+%shared_ptr(Effekseer::IO);
+%shared_ptr(Effekseer::IOCallback);
 
 //-----------------------------------------------------------------------------------
 //
@@ -85,4 +100,11 @@ class"
 %include "Cpp/Viewer/dll.h"
 %include "Cpp/Viewer/GUI/efk.GUIManager.h"
 %include "Cpp/Viewer/GUI/efk.FileDialog.h"
+%include "Cpp/Viewer/CompiledMaterialGenerator.h"
 
+%include "Cpp/EditorCommon/Platform/PlatformMisc.h"
+%include "Cpp/EditorCommon/GUI/MainWindow.h"
+
+%include "Cpp/EditorCommon/IO/FileReader.h"
+%include "Cpp/EditorCommon/IO/StaticFile.h"
+%include "Cpp/EditorCommon/IO/IO.h"

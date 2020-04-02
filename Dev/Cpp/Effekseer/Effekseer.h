@@ -12,6 +12,8 @@
 #include <climits>
 #include <vector>
 #include <cfloat>
+#include <array>
+#include <memory>
 
 //----------------------------------------------------------------------------------
 //
@@ -87,19 +89,29 @@ class Model;
 typedef	int	Handle;
 
 /**
-	@brief	メモリ確保関数
+	@brief	Memory Allocation function
 */
-typedef void* ( EFK_STDCALL *MallocFunc ) ( unsigned int size );
+typedef void*(EFK_STDCALL* MallocFunc)(unsigned int size);
 
 /**
-	@brief	メモリ破棄関数
+	@brief	Memory Free function
 */
-typedef	void ( EFK_STDCALL *FreeFunc ) ( void* p, unsigned int size );
+typedef void(EFK_STDCALL* FreeFunc)(void* p, unsigned int size);
 
 /**
-	@brief	ランダム関数
+	@brief	AlignedMemory Allocation function
 */
-typedef	int ( EFK_STDCALL *RandFunc ) (void);
+typedef void*(EFK_STDCALL* AlignedMallocFunc)(unsigned int size, unsigned int alignment);
+
+/**
+	@brief	AlignedMemory Free function
+*/
+typedef void(EFK_STDCALL* AlignedFreeFunc)(void* p, unsigned int size);
+
+/**
+	@brief	Random Function
+*/
+typedef int(EFK_STDCALL* RandFunc)(void);
 
 /**
 	@brief	エフェクトのインスタンス破棄時のコールバックイベント
@@ -115,6 +127,14 @@ typedef	void ( EFK_STDCALL *EffectInstanceRemovingCallback ) ( Manager* manager,
 #define ES_SAFE_DELETE_ARRAY(val)				if ( (val) != NULL ) { delete [] (val); (val) = NULL; }
 
 #define EFK_ASSERT(x) assert(x)
+
+//! the maximum number of texture slot which can be specified by an user
+const int32_t UserTextureSlotMax = 6;
+
+//! the maximum number of texture slot including textures system specified
+const int32_t TextureSlotMax = 8;
+
+const int32_t LocalFieldSlotMax = 4;
 
 //----------------------------------------------------------------------------------
 //
@@ -193,6 +213,12 @@ enum class TextureType : int32_t
 	Color,
 	Normal,
 	Distortion,
+};
+
+enum class MaterialFileType : int32_t
+{
+	Code,
+	Compiled,
 };
 
 enum class TextureFormatType : int32_t
@@ -276,30 +302,6 @@ T Clamp( T t, U max_, V min_ )
 	}
 
 	return t;
-}
-
-//----------------------------------------------------------------------------------
-//
-//----------------------------------------------------------------------------------
-inline float NormalizeAngle(float angle)
-{
-    int32_t ofs = (*(int32_t*)&angle & 0x80000000) | 0x3F000000; 
-    return (angle - ((int)(angle * 0.159154943f + *(float*)&ofs) * 6.283185307f)); 
-}
-
-//----------------------------------------------------------------------------------
-//
-//----------------------------------------------------------------------------------
-inline void SinCos(float x, float& s, float& c)
-{
-	x = NormalizeAngle(x);
-	float x2 = x * x;
-	float x4 = x * x * x * x;
-	float x6 = x * x * x * x * x * x;
-	float x8 = x * x * x * x * x * x * x * x;
-	float x10 = x * x * x * x * x * x * x * x * x * x;
-	s = x * (1.0f - x2 / 6.0f + x4 / 120.0f - x6 / 5040.0f + x8 / 362880.0f - x10 / 39916800.0f);
-	c = 1.0f - x2 / 2.0f + x4 / 24.0f - x6 / 720.0f + x8 / 40320.0f - x10 / 3628800.0f;
 }
 
 //----------------------------------------------------------------------------------
@@ -433,6 +435,35 @@ public:
 	virtual int Release() = 0;
 };
 
+/**
+	@brief	a deleter for IReference
+*/
+template <typename T>
+struct ReferenceDeleter
+{
+	void operator()(T* ptr) const
+	{ 
+		if (ptr != nullptr)
+		{
+			ptr->Release();
+		}
+	}
+};
+
+template<typename T> 
+inline std::unique_ptr<T, ReferenceDeleter<T>> CreateUniqueReference(T* ptr, bool addRef = false)
+{ 
+	if (ptr == nullptr)
+		return std::unique_ptr<T, ReferenceDeleter<T>>(nullptr); 
+
+	if (addRef)
+	{
+		ptr->AddRef();
+	}
+
+	return std::unique_ptr<T, ReferenceDeleter<T>>(ptr); 
+}
+
 //----------------------------------------------------------------------------------
 //
 //----------------------------------------------------------------------------------
@@ -485,6 +516,9 @@ public:
 class IRandObject
 {
 public:
+	IRandObject() = default;
+	virtual ~IRandObject() = default;
+
 	virtual float GetRand() = 0;
 
 	virtual float GetRand(float min_, float max_) = 0;
@@ -493,6 +527,13 @@ public:
 //----------------------------------------------------------------------------------
 //
 //----------------------------------------------------------------------------------
+
+enum class ColorSpaceType : int32_t
+{
+	Gamma,
+	Linear,
+};
+
 /**
 	@brief	\~english	Texture data
 			\~japanese	テクスチャデータ
@@ -504,19 +545,50 @@ struct TextureData
 	TextureFormatType	TextureFormat;
 	void*	UserPtr;
 	int64_t	UserID;
+
+	//! for OpenGL, it is ignored in other apis
+	bool HasMipmap = true;
+};
+
+enum class ShadingModelType : int32_t
+{
+	Lit,
+	Unlit,
+};
+
+/**
+	@brief	material type
+*/
+enum class RendererMaterialType : int32_t
+{
+	Default = 0,
+	BackDistortion = 6,
+	Lighting = 7,
+	File = 128,
 };
 
 /**
 	@brief	\~english	Material data
 			\~japanese	マテリアルデータ
 */
-struct MaterialData
+class MaterialData
 {
+public:
+	ShadingModelType ShadingModel = ShadingModelType::Lit;
+	bool IsSimpleVertex = false;
+	bool IsRefractionRequired = false;
+	int32_t CustomData1 = 0;
+	int32_t CustomData2 = 0;
 	int32_t TextureCount = 0;
 	int32_t UniformCount = 0;
+	std::array<TextureWrapType, UserTextureSlotMax> TextureWrapTypes;
 	void* UserPtr = nullptr;
-
 	void* ModelUserPtr = nullptr;
+	void* RefractionUserPtr = nullptr;
+	void* RefractionModelUserPtr = nullptr;
+
+	MaterialData() = default;
+	virtual ~MaterialData() = default;
 };
 
 /**
@@ -558,6 +630,38 @@ struct NodeRendererDepthParameter
 	ZSortType ZSort = ZSortType::None;
 	float SuppressionOfScalingByDepth = 1.0f;
 	float DepthClipping = FLT_MAX;
+};
+
+/**
+	@brief	\~english	Common parameters which is passed into a renderer
+			\~japanese	レンダラーに渡される共通に関するパラメーター
+*/
+struct NodeRendererBasicParameter
+{
+	RendererMaterialType MaterialType = RendererMaterialType::Default;
+	int32_t Texture1Index = -1;
+	int32_t Texture2Index = -1;
+#ifdef __EFFEKSEER_BUILD_VERSION16__
+	int32_t Texture3Index = -1;
+#endif
+	float DistortionIntensity = 0.0f;
+	MaterialParameter* MaterialParameterPtr = nullptr;
+	AlphaBlendType AlphaBlend = AlphaBlendType::Blend;
+
+	TextureFilterType TextureFilter1 = TextureFilterType::Nearest;
+	TextureWrapType TextureWrap1 = TextureWrapType::Repeat;
+	TextureFilterType TextureFilter2 = TextureFilterType::Nearest;
+	TextureWrapType TextureWrap2 = TextureWrapType::Repeat;
+#ifdef __EFFEKSEER_BUILD_VERSION16__
+	TextureFilterType TextureFilter3 = TextureFilterType::Nearest;
+	TextureWrapType TextureWrap3 = TextureWrapType::Repeat;
+
+	bool EnableInterpolation = false;
+	int32_t UVLoopType = 0;
+	int32_t InterpolationType = 0;
+	int32_t FlipbookDivideX = 1;
+	int32_t FlipbookDivideY = 1;
+#endif
 };
 
 //----------------------------------------------------------------------------------
@@ -605,6 +709,58 @@ FreeFunc GetFreeFunc();
 */
 void SetFreeFunc(FreeFunc func);
 
+/**
+	@brief
+	\~English get an allocator
+	\~Japanese メモリ確保関数を取得する。
+*/
+AlignedMallocFunc GetAlignedMallocFunc();
+
+/**
+	\~English specify an allocator
+	\~Japanese メモリ確保関数を設定する。
+*/
+void SetAlignedMallocFunc(AlignedMallocFunc func);
+
+/**
+	@brief
+	\~English get a deallocator
+	\~Japanese メモリ破棄関数を取得する。
+*/
+AlignedFreeFunc GetAlignedFreeFunc();
+
+/**
+	\~English specify a deallocator
+	\~Japanese メモリ破棄関数を設定する。
+*/
+void SetAlignedFreeFunc(AlignedFreeFunc func);
+
+/**
+	@brief
+	\~English get an allocator
+	\~Japanese メモリ確保関数を取得する。
+*/
+MallocFunc GetMallocFunc();
+
+/**
+	\~English specify an allocator
+	\~Japanese メモリ確保関数を設定する。
+*/
+void SetMallocFunc(MallocFunc func);
+
+/**
+	@brief
+	\~English get a deallocator
+	\~Japanese メモリ破棄関数を取得する。
+*/
+FreeFunc GetFreeFunc();
+
+/**
+	\~English specify a deallocator
+	\~Japanese メモリ破棄関数を設定する。
+*/
+void SetFreeFunc(FreeFunc func);
+
 template <class T> struct CustomAllocator
 {
 	using value_type = T;
@@ -617,11 +773,24 @@ template <class T> struct CustomAllocator
 	void deallocate(T* p, std::size_t n) { GetFreeFunc()(p, sizeof(T) * n); }
 };
 
+template <class T> struct CustomAlignedAllocator
+{
+	using value_type = T;
+
+	CustomAlignedAllocator() {}
+
+	template <class U> CustomAlignedAllocator(const CustomAlignedAllocator<U>&) {}
+
+	T* allocate(std::size_t n) { return reinterpret_cast<T*>(GetAlignedMallocFunc()(sizeof(T) * n, 16)); }
+	void deallocate(T* p, std::size_t n) { GetAlignedFreeFunc()(p, sizeof(T) * n); }
+};
+
 template <class T, class U> bool operator==(const CustomAllocator<T>&, const CustomAllocator<U>&) { return true; }
 
 template <class T, class U> bool operator!=(const CustomAllocator<T>&, const CustomAllocator<U>&) { return false; }
 
 template <class T> using CustomVector = std::vector<T, CustomAllocator<T>>;
+template <class T> using CustomAlignedVector = std::vector<T, CustomAlignedAllocator<T>>;
 template <class T> using CustomList = std::list<T, CustomAllocator<T>>;
 template <class T> using CustomSet = std::set<T, std::less<T>, CustomAllocator<T>>;
 template <class T, class U> using CustomMap = std::map<T, U, std::less<T>, CustomAllocator<std::pair<const T, U>>>;
@@ -958,7 +1127,6 @@ struct Matrix44;
 	[2,0][2,1][2,2]<BR>
 	[3,0][3,1][3,2]<BR>
 */
-#pragma pack(push,1)
 struct Matrix43
 {
 private:
@@ -1079,6 +1247,11 @@ public:
 	void ToMatrix44(Matrix44& dst);
 
 	/**
+		@brief	check whether all values are not valid number(not nan, not inf)
+	*/
+	bool IsValid() const;
+
+	/**
 		@brief	行列同士の乗算を行う。
 		@param	out	[out]	結果
 		@param	in1	[in]	乗算の左側
@@ -1087,7 +1260,6 @@ public:
 	static void Multiple( Matrix43& out, const Matrix43& in1, const Matrix43& in2 );
 };
 
-#pragma pack(pop)
 //----------------------------------------------------------------------------------
 //
 //----------------------------------------------------------------------------------
@@ -1305,21 +1477,30 @@ public:
 };
 
 /**
-	@brief	ファイルアクセス用のファクトリクラス
+	@brief
+	\~English	factory class for io
+	\~Japanese	IOのためのファクトリークラス
 */
 class FileInterface
 {
 private:
-
 public:
-	virtual FileReader* OpenRead( const EFK_CHAR* path ) = 0;
+	FileInterface() = default;
+	virtual ~FileInterface() = default;
 
-	virtual FileWriter* OpenWrite( const EFK_CHAR* path ) = 0;
+	virtual FileReader* OpenRead(const EFK_CHAR* path) = 0;
+
+	/**
+		@brief
+		\~English	try to open a reader. It need not to succeeds in opening it.
+		\~Japanese	リーダーを開くことを試します。成功する必要はありません。
+	*/
+	virtual FileReader* TryOpenRead(const EFK_CHAR* path) { return OpenRead(path); }
+
+	virtual FileWriter* OpenWrite(const EFK_CHAR* path) = 0;
 };
 
-//----------------------------------------------------------------------------------
-//
-//----------------------------------------------------------------------------------
+
  } 
 //----------------------------------------------------------------------------------
 //
@@ -2000,6 +2181,13 @@ public:
 	virtual Effect* GetEffect() const = 0;
 
 	/**
+	@brief	
+	\~English	Get a generation in the node tree. The generation increases by 1 as it moves a child node.
+	\~Japanese	ノードツリーの世代を取得する。世代は子のノードになるにしたがって1増える。
+	*/
+	virtual int GetGeneration() const = 0;
+
+	/**
 	@brief	子のノードの数を取得する。
 	*/
 	virtual int GetChildrenCount() const = 0;
@@ -2342,6 +2530,23 @@ public:
 		最初に確保した個数よりも多く存在する。
 	*/
 	virtual int32_t GetInstanceCount( Handle handle ) = 0;
+	
+	/**
+		@brief
+		\~English Get the number of instances which is used in playing effects
+		\~Japanese 全てのエフェクトに使用されているインスタンス数を取得する。
+		@return	
+		\~English The number of instances
+		\~Japanese インスタンス数
+		@note
+		\~English 
+		The number of Root is included. 
+		This means that the number of used instances added resting resting instances is larger than the number of allocated onces by the number of root.
+		\~Japanese 
+		Rootも個数に含まれる。つまり、Root削除をしていない限り、
+		Managerに残っているインスタンス数+エフェクトに使用されているインスタンス数は、最初に確保した個数よりも存在しているRootの数の分だけ多く存在する。
+	*/
+	virtual int32_t GetTotalInstanceCount() const = 0;
 
 	/**
 		@brief	エフェクトのインスタンスに設定されている行列を取得する。
@@ -2689,7 +2894,9 @@ public:
 	virtual int GetDrawTime() const = 0;
 
 	/**
-		@brief	残りの確保したインスタンス数を取得する。
+		@brief
+		\~English	Gets the number of remaining allocated instances.
+		\~Japanese	残りの確保したインスタンス数を取得する。
 	*/
 	virtual int32_t GetRestInstancesCount() const = 0;
 
@@ -2723,406 +2930,6 @@ public:
 //----------------------------------------------------------------------------------
 #endif	// __EFFEKSEER_MANAGER_H__
 
-#ifndef	__EFFEKSEER_SPRITE_RENDERER_H__
-#define	__EFFEKSEER_SPRITE_RENDERER_H__
-
-//----------------------------------------------------------------------------------
-// Include
-//----------------------------------------------------------------------------------
-
-//----------------------------------------------------------------------------------
-//
-//----------------------------------------------------------------------------------
-namespace Effekseer
-{
-//----------------------------------------------------------------------------------
-//
-//----------------------------------------------------------------------------------
-
-class SpriteRenderer
-{
-public:
-
-	struct NodeParameter
-	{
-		Effect*				EffectPointer;
-		int32_t				ColorTextureIndex;
-		AlphaBlendType			AlphaBlend;
-		TextureFilterType	TextureFilter;
-		TextureWrapType	TextureWrap;
-		bool				ZTest;
-		bool				ZWrite;
-		BillboardType		Billboard;
-		bool				IsRightHand;
-
-		bool				Distortion;
-		float				DistortionIntensity;
-
-		float				DepthOffset;
-		bool				IsDepthOffsetScaledWithCamera;
-		bool				IsDepthOffsetScaledWithParticleScale;
-
-		ZSortType			ZSort;
-
-		NodeRendererDepthParameter* DepthParameterPtr = nullptr;
-		MaterialParameter* MaterialParameterPtr = nullptr;
-	};
-
-	struct InstanceParameter
-	{
-		Matrix43		SRTMatrix43;
-		Color		AllColor;
-
-		// Lower left, Lower right, Upper left, Upper right
-		Color		Colors[4];
-
-		Vector2D	Positions[4];
-
-		RectF	UV;
-	};
-
-public:
-	SpriteRenderer() {}
-
-	virtual ~SpriteRenderer() {}
-
-	virtual void BeginRendering( const NodeParameter& parameter, int32_t count, void* userData ) {}
-
-	virtual void Rendering( const NodeParameter& parameter, const InstanceParameter& instanceParameter, void* userData ) {}
-
-	virtual void EndRendering( const NodeParameter& parameter, void* userData ) {}
-};
-
-//----------------------------------------------------------------------------------
-//
-//----------------------------------------------------------------------------------
-}
-//----------------------------------------------------------------------------------
-//
-//----------------------------------------------------------------------------------
-#endif	// __EFFEKSEER_SPRITE_RENDERER_H__
-
-#ifndef	__EFFEKSEER_RIBBON_RENDERER_H__
-#define	__EFFEKSEER_RIBBON_RENDERER_H__
-
-//----------------------------------------------------------------------------------
-// Include
-//----------------------------------------------------------------------------------
-
-//----------------------------------------------------------------------------------
-//
-//----------------------------------------------------------------------------------
-namespace Effekseer
-{
-	//----------------------------------------------------------------------------------
-	//
-	//----------------------------------------------------------------------------------
-
-	class RibbonRenderer
-	{
-	public:
-
-		struct NodeParameter
-		{
-			Effect*				EffectPointer;
-			int32_t				ColorTextureIndex;
-			AlphaBlendType			AlphaBlend;
-			TextureFilterType	TextureFilter;
-			TextureWrapType	TextureWrap;
-			bool				ZTest;
-			bool				ZWrite;
-			bool				ViewpointDependent;
-
-			bool				Distortion;
-			float				DistortionIntensity;
-
-			int32_t				SplineDivision;
-			NodeRendererDepthParameter* DepthParameterPtr = nullptr;
-		};
-
-		struct InstanceParameter
-		{
-			int32_t			InstanceCount;
-			int32_t			InstanceIndex;
-			Matrix43		SRTMatrix43;
-			Color		AllColor;
-
-			// Lower left, Lower right, Upper left, Upper right
-			Color	Colors[4];
-
-			float	Positions[4];
-
-			RectF	UV;
-		};
-
-	public:
-		RibbonRenderer() {}
-
-		virtual ~RibbonRenderer() {}
-
-		virtual void BeginRendering(const NodeParameter& parameter, int32_t count, void* userData) {}
-
-		virtual void Rendering(const NodeParameter& parameter, const InstanceParameter& instanceParameter, void* userData) {}
-
-		virtual void EndRendering(const NodeParameter& parameter, void* userData) {}
-
-		virtual void BeginRenderingGroup(const NodeParameter& parameter, int32_t count, void* userData) {}
-
-		virtual void EndRenderingGroup(const NodeParameter& parameter, int32_t count, void* userData) {}
-	};
-
-	//----------------------------------------------------------------------------------
-	//
-	//----------------------------------------------------------------------------------
-}
-//----------------------------------------------------------------------------------
-//
-//----------------------------------------------------------------------------------
-#endif	// __EFFEKSEER_RIBBON_RENDERER_H__
-#ifndef	__EFFEKSEER_RING_RENDERER_H__
-#define	__EFFEKSEER_RING_RENDERER_H__
-
-//----------------------------------------------------------------------------------
-// Include
-//----------------------------------------------------------------------------------
-
-//----------------------------------------------------------------------------------
-//
-//----------------------------------------------------------------------------------
-namespace Effekseer
-{
-//----------------------------------------------------------------------------------
-//
-//----------------------------------------------------------------------------------
-
-class RingRenderer
-{
-public:
-
-	struct NodeParameter
-	{
-		Effect*				EffectPointer;
-		int32_t				ColorTextureIndex;
-		AlphaBlendType			AlphaBlend;
-		TextureFilterType	TextureFilter;
-		TextureWrapType	TextureWrap;
-		bool				ZTest;
-		bool				ZWrite;
-		BillboardType		Billboard;
-		int32_t				VertexCount;
-		bool				IsRightHand;
-
-		bool				Distortion;
-		float				DistortionIntensity;
-
-		NodeRendererDepthParameter* DepthParameterPtr = nullptr;
-
-		float				DepthOffset;
-		bool				IsDepthOffsetScaledWithCamera;
-		bool				IsDepthOffsetScaledWithParticleScale;
-	};
-
-	struct InstanceParameter
-	{
-		Matrix43	SRTMatrix43;
-		float		ViewingAngle;
-		Vector2D	OuterLocation;
-		Vector2D	InnerLocation;
-		float		CenterRatio;
-		Color		OuterColor;
-		Color		CenterColor;
-		Color		InnerColor;
-		
-		RectF	UV;
-	};
-
-public:
-	RingRenderer() {}
-
-	virtual ~RingRenderer() {}
-
-	virtual void BeginRendering( const NodeParameter& parameter, int32_t count, void* userData ) {}
-
-	virtual void Rendering( const NodeParameter& parameter, const InstanceParameter& instanceParameter, void* userData ) {}
-
-	virtual void EndRendering( const NodeParameter& parameter, void* userData ) {}
-};
-
-//----------------------------------------------------------------------------------
-//
-//----------------------------------------------------------------------------------
-}
-//----------------------------------------------------------------------------------
-//
-//----------------------------------------------------------------------------------
-#endif	// __EFFEKSEER_RING_RENDERER_H__
-
-#ifndef	__EFFEKSEER_MODEL_RENDERER_H__
-#define	__EFFEKSEER_MODEL_RENDERER_H__
-
-//----------------------------------------------------------------------------------
-// Include
-//----------------------------------------------------------------------------------
-
-//----------------------------------------------------------------------------------
-//
-//----------------------------------------------------------------------------------
-namespace Effekseer
-{
-//----------------------------------------------------------------------------------
-//
-//----------------------------------------------------------------------------------
-
-class ModelRenderer
-{
-public:
-
-	struct NodeParameter
-	{
-		Effect*				EffectPointer;
-		AlphaBlendType		AlphaBlend;
-		TextureFilterType	TextureFilter;
-		TextureWrapType	TextureWrap;
-		bool				ZTest;
-		bool				ZWrite;
-		BillboardType		Billboard;
-
-		bool				Lighting;
-		CullingType		Culling;
-		int32_t				ModelIndex;
-		int32_t				ColorTextureIndex;
-		int32_t				NormalTextureIndex;
-		float				Magnification;
-		bool				IsRightHand;
-
-		bool				Distortion;
-		float				DistortionIntensity;
-
-		NodeRendererDepthParameter* DepthParameterPtr = nullptr;
-		MaterialParameter* MaterialParameterPtr = nullptr;
-
-		float				DepthOffset;
-		bool				IsDepthOffsetScaledWithCamera;
-		bool				IsDepthOffsetScaledWithParticleScale;
-	};
-
-	struct InstanceParameter
-	{
-		Matrix43		SRTMatrix43;
-		RectF			UV;
-		Color			AllColor;
-		int32_t			Time;
-	};
-
-public:
-	ModelRenderer() {}
-
-	virtual ~ModelRenderer() {}
-
-	virtual void BeginRendering( const NodeParameter& parameter, int32_t count, void* userData ) {}
-
-	virtual void Rendering( const NodeParameter& parameter, const InstanceParameter& instanceParameter, void* userData ) {}
-
-	virtual void EndRendering( const NodeParameter& parameter, void* userData ) {}
-};
-
-//----------------------------------------------------------------------------------
-//
-//----------------------------------------------------------------------------------
-}
-//----------------------------------------------------------------------------------
-//
-//----------------------------------------------------------------------------------
-#endif	// __EFFEKSEER_MODEL_RENDERER_H__
-
-#ifndef	__EFFEKSEER_TRACK_RENDERER_H__
-#define	__EFFEKSEER_TRACK_RENDERER_H__
-
-//----------------------------------------------------------------------------------
-// Include
-//----------------------------------------------------------------------------------
-
-//----------------------------------------------------------------------------------
-//
-//----------------------------------------------------------------------------------
-namespace Effekseer
-{
-	//----------------------------------------------------------------------------------
-	//
-	//----------------------------------------------------------------------------------
-
-	class TrackRenderer
-	{
-	public:
-
-		struct NodeParameter
-		{
-			Effect*				EffectPointer;
-			int32_t				ColorTextureIndex;
-			AlphaBlendType			AlphaBlend;
-			TextureFilterType	TextureFilter;
-			TextureWrapType		TextureWrap;
-			bool				ZTest;
-			bool				ZWrite;
-
-			bool				Distortion;
-			float				DistortionIntensity;
-
-			int32_t				SplineDivision;
-
-			NodeRendererDepthParameter* DepthParameterPtr = nullptr;
-		};
-
-		struct InstanceGroupParameter
-		{
-
-		};
-
-		struct InstanceParameter
-		{
-			int32_t			InstanceCount;
-			int32_t			InstanceIndex;
-			Matrix43		SRTMatrix43;
-
-			Color	ColorLeft;
-			Color	ColorCenter;
-			Color	ColorRight;
-
-			Color	ColorLeftMiddle;
-			Color	ColorCenterMiddle;
-			Color	ColorRightMiddle;
-
-			float	SizeFor;
-			float	SizeMiddle;
-			float	SizeBack;
-
-			RectF	UV;
-		};
-
-	public:
-		TrackRenderer() {}
-
-		virtual ~TrackRenderer() {}
-
-		virtual void BeginRendering(const NodeParameter& parameter, int32_t count, void* userData) {}
-
-		virtual void Rendering(const NodeParameter& parameter, const InstanceParameter& instanceParameter, void* userData) {}
-
-		virtual void EndRendering(const NodeParameter& parameter, void* userData) {}
-
-		virtual void BeginRenderingGroup(const NodeParameter& parameter, int32_t count, void* userData) {}
-
-		virtual void EndRenderingGroup(const NodeParameter& parameter, int32_t count, void* userData) {}
-	};
-
-	//----------------------------------------------------------------------------------
-	//
-	//----------------------------------------------------------------------------------
-}
-//----------------------------------------------------------------------------------
-//
-//----------------------------------------------------------------------------------
-#endif	// __EFFEKSEER_TRACK_RENDERER_H__
 #ifndef	__EFFEKSEER_EFFECTLOADER_H__
 #define	__EFFEKSEER_EFFECTLOADER_H__
 
@@ -3391,11 +3198,14 @@ public:
 		@param	size
 		\~English	the size of data
 		\~Japanese	データの大きさ
+		@param	fileType
+		\~English	file type
+		\~Japanese	ファイルの種類
 		@return
 		\~English	a pointer of loaded a material
 		\~Japanese	読み込まれたマテリアルのポインタ
 	*/
-	virtual MaterialData* Load(const void* data, int32_t size) { return nullptr; }
+	virtual MaterialData* Load(const void* data, int32_t size, MaterialFileType fileType) { return nullptr; }
 
 	/**
 		@brief

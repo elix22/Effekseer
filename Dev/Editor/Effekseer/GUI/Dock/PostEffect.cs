@@ -1,4 +1,5 @@
-﻿using System;
+﻿/*
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -16,13 +17,12 @@ namespace Effekseer.GUI.Dock
 		{
 			Label = Resources.GetString("PostEffect") + "###PostEffect";
 			paramerterList = new Component.ParameterList();
-			paramerterList.SetType(typeof(Data.PostEffectValues));
+			paramerterList.SetType(typeof(Data.EnvironmentValues));
 
 			Core.OnAfterLoad += OnAfter;
 			Core.OnAfterNew += OnAfter;
 
 			Icon = Images.GetIcon("PanelPostEffect");
-			IconSize = new swig.Vec2(24, 24);
 			TabToolTip = Resources.GetString("Options");
 		}
 
@@ -43,7 +43,7 @@ namespace Effekseer.GUI.Dock
 		{
 			if(isFiestUpdate)
 			{
-				paramerterList.SetValue(Core.PostEffect);
+				paramerterList.SetValue(Core.Environment);
 				isFiestUpdate = false;
 			}
 
@@ -52,7 +52,8 @@ namespace Effekseer.GUI.Dock
 
 		void OnAfter(object sender, EventArgs e)
 		{
-			paramerterList.SetValue(Core.PostEffect);
+			paramerterList.SetValue(Core.Environment);
 		}
 	}
 }
+*/

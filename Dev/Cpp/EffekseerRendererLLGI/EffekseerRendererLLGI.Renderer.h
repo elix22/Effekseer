@@ -14,45 +14,29 @@
 namespace EffekseerRendererLLGI
 {
 
-/**
-@brief	テクスチャ読込クラスを生成する。
-*/
-::Effekseer::TextureLoader* CreateTextureLoader(LLGI::Graphics* graphics, ::Effekseer::FileInterface* fileInterface = NULL);
+class GraphicsDevice;
 
-/**
-@brief	モデル読込クラスを生成する。
-*/
-::Effekseer::ModelLoader* CreateModelLoader(LLGI::Graphics* graphics, ::Effekseer::FileInterface* fileInterface = NULL);
+::Effekseer::TextureLoader* CreateTextureLoader(GraphicsDevice* graphicsDevice, ::Effekseer::FileInterface* fileInterface = NULL);
+
+::Effekseer::ModelLoader* CreateModelLoader(GraphicsDevice* graphicsDevice, ::Effekseer::FileInterface* fileInterface = NULL);
 
 struct FixedShader
 {
 	std::vector<LLGI::DataStructure> StandardTexture_VS;
-	std::vector<LLGI::DataStructure> Standard_VS;
+	std::vector<LLGI::DataStructure> StandardLightingTexture_VS;
 	std::vector<LLGI::DataStructure> StandardDistortedTexture_VS;
-	std::vector<LLGI::DataStructure> StandardDistorted_VS;
 
 	std::vector<LLGI::DataStructure> ModelShaderLightingTextureNormal_VS;
-	std::vector<LLGI::DataStructure> ModelShaderLightingNormal_VS;
-	std::vector<LLGI::DataStructure> ModelShaderLightingTexture_VS;
-	std::vector<LLGI::DataStructure> ModelShaderLighting_VS;
 	std::vector<LLGI::DataStructure> ModelShaderTexture_VS;
-	std::vector<LLGI::DataStructure> ModelShader_VS;
 	std::vector<LLGI::DataStructure> ModelShaderDistortionTexture_VS;
-	std::vector<LLGI::DataStructure> ModelShaderDistortion_VS;
 
 	std::vector<LLGI::DataStructure> StandardTexture_PS;
-	std::vector<LLGI::DataStructure> Standard_PS;
+	std::vector<LLGI::DataStructure> StandardLightingTexture_PS;
 	std::vector<LLGI::DataStructure> StandardDistortedTexture_PS;
-	std::vector<LLGI::DataStructure> StandardDistorted_PS;
 
 	std::vector<LLGI::DataStructure> ModelShaderLightingTextureNormal_PS;
-	std::vector<LLGI::DataStructure> ModelShaderLightingNormal_PS;
-	std::vector<LLGI::DataStructure> ModelShaderLightingTexture_PS;
-	std::vector<LLGI::DataStructure> ModelShaderLighting_PS;
 	std::vector<LLGI::DataStructure> ModelShaderTexture_PS;
-	std::vector<LLGI::DataStructure> ModelShader_PS;
 	std::vector<LLGI::DataStructure> ModelShaderDistortionTexture_PS;
-	std::vector<LLGI::DataStructure> ModelShaderDistortion_PS;
 };
 
 /**
@@ -65,7 +49,7 @@ protected:
 	virtual ~Renderer() {}
 
 public:
-	virtual LLGI::Graphics* GetGraphics() = 0;
+	virtual LLGI::Graphics* GetGraphics() const = 0;
 
 	/**
 		@brief	\~English	Get background
@@ -130,6 +114,60 @@ public:
 	LLGI::CommandList* GetInternal() { return commandList_; }
 
 	LLGI::SingleFrameMemoryPool* GetMemoryPooll() { return memoryPool_; }
+
+	virtual int GetRef() override { return ::Effekseer::ReferenceObject::GetRef(); }
+	virtual int AddRef() override { return ::Effekseer::ReferenceObject::AddRef(); }
+	virtual int Release() override { return ::Effekseer::ReferenceObject::Release(); }
+};
+
+class DeviceObject;
+
+class GraphicsDevice : public ::EffekseerRenderer::GraphicsDevice, public ::Effekseer::ReferenceObject
+{
+	friend class DeviceObject;
+
+private:
+	std::set<DeviceObject*> deviceObjects_;
+
+	LLGI::Graphics* graphics_ = nullptr;
+
+	/**
+		@brief	register an object
+	*/
+	void Register(DeviceObject* device);
+
+	/**
+		@brief	unregister an object
+	*/
+	void Unregister(DeviceObject* device);
+
+public:
+	GraphicsDevice(LLGI::Graphics* graphics)
+		: graphics_(graphics)
+	{
+		ES_SAFE_ADDREF(graphics_);
+	}
+
+	virtual ~GraphicsDevice()
+	{
+		ES_SAFE_RELEASE(graphics_);
+	}
+
+	/**
+		@brief
+		\~english Call when device lost causes
+		\~japanese デバイスロストが発生した時に実行する。
+	*/
+	void OnLostDevice();
+
+	/**
+		@brief
+		\~english Call when device reset causes
+		\~japanese デバイスがリセットされた時に実行する。
+	*/
+	void OnResetDevice();
+
+	LLGI::Graphics* GetGraphics() const { return graphics_; }
 
 	virtual int GetRef() override { return ::Effekseer::ReferenceObject::GetRef(); }
 	virtual int AddRef() override { return ::Effekseer::ReferenceObject::AddRef(); }

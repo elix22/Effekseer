@@ -63,24 +63,21 @@ void Instance::ApplyEq(T& dstParam, Effect* e, InstanceGlobal* instg, int dpInd,
 	}
 }
 
-template <typename S> Vector3D Instance::ApplyEq(const int& dpInd, Vector3D originalParam, const S& scale, const S& scaleInv)
+template <typename S> Vec3f Instance::ApplyEq(const int& dpInd, const Vec3f& originalParam, const S& scale, const S& scaleInv)
 {
 	const auto& e = this->m_pEffectNode->m_effect;
 	const auto& instg = this->m_pContainer->GetRootInstance();
 
+	Vec3f param = originalParam;
 	if (dpInd >= 0)
 	{
-		originalParam.X *= scaleInv[0];
-		originalParam.Y *= scaleInv[1];
-		originalParam.Z *= scaleInv[2];
+		param *= Vec3f(scaleInv[0], scaleInv[1], scaleInv[2]);
 
-		ApplyEq(originalParam, e, instg, dpInd, originalParam);
+		ApplyEq(param, e, instg, dpInd, param);
 
-		originalParam.X *= scale[0];
-		originalParam.Y *= scale[1];
-		originalParam.Z *= scale[2];
+		param *= Vec3f(scale[0], scale[1], scale[2]);
 	}
-	return originalParam;
+	return param;
 }
 
 random_float Instance::ApplyEq(const RefMinMax& dpInd, random_float originalParam)
@@ -161,22 +158,26 @@ random_int Instance::ApplyEq(const RefMinMax& dpInd, random_int originalParam)
 //----------------------------------------------------------------------------------
 //
 //----------------------------------------------------------------------------------
-Instance::Instance(Manager* pManager, EffectNode* pEffectNode, InstanceContainer* pContainer)
+Instance::Instance(Manager* pManager, EffectNode* pEffectNode, InstanceContainer* pContainer, InstanceGroup* pGroup)
 	: m_pManager(pManager)
 	, m_pEffectNode((EffectNodeImplemented*)pEffectNode)
 	, m_pContainer(pContainer)
-	, m_headGroups(NULL)
-	, m_pParent(NULL)
+	, ownGroup_(pGroup)
+	, childrenGroups_(nullptr)
+	, m_pParent(nullptr)
 	, m_State(INSTANCE_STATE_ACTIVE)
 	, m_LivedTime(0)
 	, m_LivingTime(0)
-	, uvTimeOffset(0)
 	, m_flexibleGeneratedChildrenCount(nullptr)
 	, m_flexibleNextGenerationTime(nullptr)
 	, m_GlobalMatrix43Calculated(false)
 	, m_ParentMatrix43Calculated(false)
 	, is_time_step_allowed(false)
 	, m_sequenceNumber(0)
+#ifdef __EFFEKSEER_BUILD_VERSION16__
+	, m_flipbookIndexAndNextRate(0)
+	, m_AlphaThreshold(0.0f)
+#endif
 {
 	m_generatedChildrenCount = m_fixedGeneratedChildrenCount;
 	maxGenerationChildrenCount = fixedMaxGenerationChildrenCount_;
@@ -193,15 +194,22 @@ Instance::Instance(Manager* pManager, EffectNode* pEffectNode, InstanceContainer
 
 		if( group != NULL )
 		{
-			group->NextUsedByInstance = childContainer->CreateGroup();
+			group->NextUsedByInstance = childContainer->CreateInstanceGroup();
 			group = group->NextUsedByInstance;
 		}
 		else
 		{
-			group = childContainer->CreateGroup();
-			m_headGroups = group;
+			group = childContainer->CreateInstanceGroup();
+			childrenGroups_ = group;
 		}
 	}
+
+#ifdef __EFFEKSEER_BUILD_VERSION16__
+	for (auto& it : uvTimeOffsets)
+	{
+		it = 0;
+	}
+#endif
 }
 
 //----------------------------------------------------------------------------------
@@ -229,13 +237,37 @@ Instance::~Instance()
 	}
 }
 
+bool Instance::IsRequiredToCreateChildren(float currentTime)
+{
+	auto instanceGlobal = this->m_pContainer->GetRootInstance();
+
+	auto parameter = (EffectNodeImplemented*)m_pEffectNode;
+
+	InstanceGroup* group = childrenGroups_;
+
+	for (int32_t i = 0; i < parameter->GetChildrenCount(); i++, group = group->NextUsedByInstance)
+	{
+		auto node = (EffectNodeImplemented*)parameter->GetChild(i);
+		assert(group != NULL);
+
+		// GenerationTimeOffset can be minus value.
+		// Minus frame particles is generated simultaniously at frame 0.
+		if (maxGenerationChildrenCount[i] > m_generatedChildrenCount[i] && m_nextGenerationTime[i] <= currentTime)
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
 void Instance::GenerateChildrenInRequired(float currentTime)
 {
 	auto instanceGlobal = this->m_pContainer->GetRootInstance();
 
 	auto parameter = (EffectNodeImplemented*)m_pEffectNode;
 
-	InstanceGroup* group = m_headGroups;
+	InstanceGroup* group = childrenGroups_;
 
 	for (int32_t i = 0; i < parameter->GetChildrenCount(); i++, group = group->NextUsedByInstance)
 	{
@@ -253,8 +285,7 @@ void Instance::GenerateChildrenInRequired(float currentTime)
 				auto newInstance = group->CreateInstance();
 				if (newInstance != nullptr)
 				{
-					Matrix43 rootMatrix;
-					rootMatrix.Indentity();
+					Mat43f rootMatrix = Mat43f::Identity;
 
 					newInstance->Initialize(this, m_generatedChildrenCount[i], (int32_t)std::max(0.0f, this->m_LivingTime), rootMatrix);
 				}
@@ -272,6 +303,22 @@ void Instance::GenerateChildrenInRequired(float currentTime)
 	}
 }
 
+void Instance::UpdateChildrenGroupMatrix()
+{
+	for (InstanceGroup* group = childrenGroups_; group != nullptr; group = group->NextUsedByInstance)
+	{
+		group->SetParentMatrix(m_GlobalMatrix43);
+	}
+}
+
+//----------------------------------------------------------------------------------
+//
+//----------------------------------------------------------------------------------
+InstanceGlobal* Instance::GetInstanceGlobal()
+{
+	return m_pContainer->GetRootInstance();
+}
+
 //----------------------------------------------------------------------------------
 //
 //----------------------------------------------------------------------------------
@@ -283,7 +330,7 @@ eInstanceState Instance::GetState() const
 //----------------------------------------------------------------------------------
 //
 //----------------------------------------------------------------------------------
-const Matrix43& Instance::GetGlobalMatrix43() const
+const Mat43f& Instance::GetGlobalMatrix43() const
 {
 	return m_GlobalMatrix43;
 }
@@ -291,7 +338,7 @@ const Matrix43& Instance::GetGlobalMatrix43() const
 //----------------------------------------------------------------------------------
 //
 //----------------------------------------------------------------------------------
-void Instance::Initialize( Instance* parent, int32_t instanceNumber, int32_t parentTime, const Matrix43& globalMatrix)
+void Instance::Initialize( Instance* parent, int32_t instanceNumber, int32_t parentTime, const Mat43f& globalMatrix)
 {
 	assert(this->m_pContainer != nullptr);
 	
@@ -357,21 +404,22 @@ void Instance::Initialize( Instance* parent, int32_t instanceNumber, int32_t par
 		m_LivedTime = FLT_MAX;
 
 		// SRTの初期化
-		m_GenerationLocation.Indentity();
+		m_GenerationLocation = Mat43f::Identity;
 		m_GlobalMatrix43 = globalMatrix;
-		m_ParentMatrix43.Indentity();
+		assert(m_GlobalMatrix43.IsValid());
 
 		// 親の初期化
-		m_ParentMatrix43 = GetGlobalMatrix43();
+		m_ParentMatrix = Mat43f::Identity;
 
 		// Generate zero frame effect
+
+		// for new children
+		UpdateChildrenGroupMatrix();
+
 		GenerateChildrenInRequired(0.0f);
 		return;
 	}
 	
-	// 親の行列を計算
-	m_pParent->CalculateMatrix( 0 );
-
 	// 状態の初期化
 	m_State = INSTANCE_STATE_ACTIVE;
 
@@ -382,79 +430,29 @@ void Instance::Initialize( Instance* parent, int32_t instanceNumber, int32_t par
 		m_LivedTime = (float)ri.getValue(*instanceGlobal);
 	}
 
-	// SRTの初期化
-	m_pParent->GetGlobalMatrix43().GetTranslation( m_GlobalPosition );
-	m_GlobalRevisionLocation = Vector3D(0.0f, 0.0f, 0.0f);
-	m_GlobalRevisionVelocity = Vector3D(0.0f, 0.0f, 0.0f);
-	m_GenerationLocation.Indentity();
+	// initialize SRT
+
+	// calculate parent matrixt to get matrix
+	m_pParent->CalculateMatrix(0);
+	
+	const Mat43f& parentMatrix = m_pParent->GetGlobalMatrix43();
+	m_GlobalPosition = parentMatrix.GetTranslation();
+	m_GlobalRevisionLocation = Vec3f(0.0f, 0.0f, 0.0f);
+	m_GlobalRevisionVelocity = Vec3f(0.0f, 0.0f, 0.0f);
+	modifyWithNoise_ = Vec3f(0.0f, 0.0f, 0.0f);
+	m_GenerationLocation = Mat43f::Identity;
 	m_GlobalMatrix43 = globalMatrix;
-	m_ParentMatrix43.Indentity();
+	assert(m_GlobalMatrix43.IsValid());
 
 	// 親の初期化
-	if( parameter->CommonValues.TranslationBindType == BindType::WhenCreating )
-	{
-		m_ParentMatrix43.Value[3][0] = m_pParent->m_GlobalMatrix43.Value[3][0];
-		m_ParentMatrix43.Value[3][1] = m_pParent->m_GlobalMatrix43.Value[3][1];
-		m_ParentMatrix43.Value[3][2] = m_pParent->m_GlobalMatrix43.Value[3][2];
-	}
-
-	if( parameter->CommonValues.RotationBindType == BindType::WhenCreating &&
+	if( parameter->CommonValues.TranslationBindType == BindType::WhenCreating ||
+		parameter->CommonValues.RotationBindType == BindType::WhenCreating ||
 		parameter->CommonValues.ScalingBindType == BindType::WhenCreating )
 	{
-		for( int m = 0; m < 3; m++ )
-		{
-			for( int n = 0; n < 3; n++ )
-			{
-				m_ParentMatrix43.Value[m][n] = m_pParent->m_GlobalMatrix43.Value[m][n];
-			}
-		}
+		m_ParentMatrix = parentMatrix;
+		assert(m_ParentMatrix.IsValid());
 	}
-	else if ( parameter->CommonValues.RotationBindType == BindType::WhenCreating )
-	{
-		for( int m = 0; m < 3; m++ )
-		{
-			for( int n = 0; n < 3; n++ )
-			{
-				m_ParentMatrix43.Value[m][n] = m_pParent->m_GlobalMatrix43.Value[m][n];
-			}
-		}
 
-		float s[3];
-		for( int m = 0; m < 3; m++ )
-		{
-			s[m] = 0;
-			for( int n = 0; n < 3; n++ )
-			{
-				s[m] += m_ParentMatrix43.Value[m][n] * m_ParentMatrix43.Value[m][n];
-			}
-			s[m] = sqrt( s[m] );
-		}
-
-		for( int m = 0; m < 3; m++ )
-		{
-			for( int n = 0; n < 3; n++ )
-			{
-				m_ParentMatrix43.Value[m][n] = m_ParentMatrix43.Value[m][n] / s[m];
-			}
-		}
-	}
-	else if ( parameter->CommonValues.ScalingBindType == BindType::WhenCreating )
-	{
-		float s[3];
-		for( int m = 0; m < 3; m++ )
-		{
-			s[m] = 0;
-			for( int n = 0; n < 3; n++ )
-			{
-				s[m] += m_pParent->m_GlobalMatrix43.Value[m][n] * m_pParent->m_GlobalMatrix43.Value[m][n];
-			}
-			s[m] = sqrt( s[m] );
-		}
-		m_ParentMatrix43.Value[0][0] = s[0];
-		m_ParentMatrix43.Value[1][1] = s[1];
-		m_ParentMatrix43.Value[2][2] = s[2];
-	}
-	
 	// Initialize parent color
 	if (parameter->RendererCommon.ColorBindType == BindType::Always)
 	{
@@ -508,9 +506,7 @@ void Instance::Initialize( Instance* parent, int32_t instanceNumber, int32_t par
 	{
 		assert( m_pEffectNode->TranslationFCurve != NULL );
 
-		translation_values.fcruve.offset.x = m_pEffectNode->TranslationFCurve->X.GetOffset( *instanceGlobal );
-		translation_values.fcruve.offset.y = m_pEffectNode->TranslationFCurve->Y.GetOffset( *instanceGlobal );
-		translation_values.fcruve.offset.z = m_pEffectNode->TranslationFCurve->Z.GetOffset( *instanceGlobal );
+		translation_values.fcruve.offset = m_pEffectNode->TranslationFCurve->GetOffsets( *instanceGlobal );
 	}
 	
 	// Rotation
@@ -557,7 +553,11 @@ void Instance::Initialize( Instance* parent, int32_t instanceNumber, int32_t par
 		rotation_values.axis.random.acceleration = m_pEffectNode->RotationAxisPVA.acceleration.getValue(*instanceGlobal);
 		rotation_values.axis.rotation = rotation_values.axis.random.rotation;
 		rotation_values.axis.axis = m_pEffectNode->RotationAxisPVA.axis.getValue(*instanceGlobal);
-		rotation_values.axis.axis.normalize();
+		if (rotation_values.axis.axis.GetLength() < 0.001f)
+		{
+			rotation_values.axis.axis = Vec3f(0, 1, 0);
+		}
+		rotation_values.axis.axis.Normalize();
 	}
 	else if( m_pEffectNode->RotationType == ParameterRotationType_AxisEasing )
 	{
@@ -565,15 +565,17 @@ void Instance::Initialize( Instance* parent, int32_t instanceNumber, int32_t par
 		rotation_values.axis.easing.end = m_pEffectNode->RotationAxisEasing.easing.end.getValue(*instanceGlobal);
 		rotation_values.axis.rotation = rotation_values.axis.easing.start;
 		rotation_values.axis.axis = m_pEffectNode->RotationAxisEasing.axis.getValue(*instanceGlobal);
-		rotation_values.axis.axis.normalize();
+		if (rotation_values.axis.axis.GetLength() < 0.001f)
+		{
+			rotation_values.axis.axis = Vec3f(0, 1, 0);
+		}
+		rotation_values.axis.axis.Normalize();
 	}
 	else if( m_pEffectNode->RotationType == ParameterRotationType_FCurve )
 	{
 		assert( m_pEffectNode->RotationFCurve != NULL );
 
-		rotation_values.fcruve.offset.x = m_pEffectNode->RotationFCurve->X.GetOffset( *instanceGlobal );
-		rotation_values.fcruve.offset.y = m_pEffectNode->RotationFCurve->Y.GetOffset( *instanceGlobal );
-		rotation_values.fcruve.offset.z = m_pEffectNode->RotationFCurve->Z.GetOffset( *instanceGlobal );
+		rotation_values.fcruve.offset = m_pEffectNode->RotationFCurve->GetOffsets( *instanceGlobal );
 	}
 
 	// Scaling
@@ -625,34 +627,31 @@ void Instance::Initialize( Instance* parent, int32_t instanceNumber, int32_t par
 	{
 		assert( m_pEffectNode->ScalingFCurve != NULL );
 
-		scaling_values.fcruve.offset.x = m_pEffectNode->ScalingFCurve->X.GetOffset( *instanceGlobal );
-		scaling_values.fcruve.offset.y = m_pEffectNode->ScalingFCurve->Y.GetOffset( *instanceGlobal );
-		scaling_values.fcruve.offset.z = m_pEffectNode->ScalingFCurve->Z.GetOffset( *instanceGlobal );
+		scaling_values.fcruve.offset = m_pEffectNode->ScalingFCurve->GetOffsets( *instanceGlobal );
 	}
 
 	// Spawning Method
 	if( m_pEffectNode->GenerationLocation.type == ParameterGenerationLocation::TYPE_POINT )
 	{
-		vector3d p = m_pEffectNode->GenerationLocation.point.location.getValue(*instanceGlobal);
-		m_GenerationLocation.Translation( p.x, p.y, p.z );
+		Vec3f p = m_pEffectNode->GenerationLocation.point.location.getValue(*instanceGlobal);
+		m_GenerationLocation = Mat43f::Translation( p.GetX(), p.GetY(), p.GetZ() );
 	}
 	else if (m_pEffectNode->GenerationLocation.type == ParameterGenerationLocation::TYPE_LINE)
 	{
-		vector3d s = m_pEffectNode->GenerationLocation.line.position_start.getValue(*instanceGlobal);
-		vector3d e = m_pEffectNode->GenerationLocation.line.position_end.getValue(*instanceGlobal);
+		Vec3f s = m_pEffectNode->GenerationLocation.line.position_start.getValue(*instanceGlobal);
+		Vec3f e = m_pEffectNode->GenerationLocation.line.position_end.getValue(*instanceGlobal);
 		auto noize = m_pEffectNode->GenerationLocation.line.position_noize.getValue(*instanceGlobal);
 		auto division = Max(1, m_pEffectNode->GenerationLocation.line.division);
 
-		Vector3D dir;
-		(e - s).setValueToArg(dir);
+		Vec3f dir = e - s;
 
-		if (Vector3D::LengthSq(dir) < 0.001)
+		if (dir.IsZero())
 		{
-			m_GenerationLocation.Translation(0 ,0, 0);
+			m_GenerationLocation = Mat43f::Translation(0 ,0, 0);
 		}
 		else
 		{
-			auto len = Vector3D::Length(dir);
+			auto len = dir.GetLength();
 			dir /= len;
 		
 			int32_t target = 0;
@@ -669,73 +668,64 @@ void Instance::Initialize( Instance* parent, int32_t instanceNumber, int32_t par
 			auto d = 0.0f;
 			if (division > 1)
 			{
-				d = (len / (float)(division-1)) * target;
+				d = (len / (float)(division - 1)) * target;
 			}
 
 			d += noize;
 		
-			s.x += dir.X * d;
-			s.y += dir.Y * d;
-			s.z += dir.Z * d;
+			s += dir * d;
 
-			Vector3D xdir;
-			Vector3D ydir;
-			Vector3D zdir;
+			Vec3f xdir;
+			Vec3f ydir;
+			Vec3f zdir;
 
-			if (fabs(dir.Y) > 0.999f)
+			if (fabs(dir.GetY()) > 0.999f)
 			{
 				xdir = dir;
-				Vector3D::Cross(zdir, xdir, Vector3D(-1, 0, 0));
-				Vector3D::Normal(zdir, zdir);
-				Vector3D::Cross(ydir, zdir, xdir);
-				Vector3D::Normal(ydir, ydir);
+				zdir = Vec3f::Cross(xdir, Vec3f(-1, 0, 0)).Normalize();
+				ydir = Vec3f::Cross(zdir, xdir).Normalize();
 			}
 			else
 			{
 				xdir = dir;
-				Vector3D::Cross(ydir, Vector3D(0, 0, 1), xdir);
-				Vector3D::Normal(ydir, ydir);
-				Vector3D::Cross(zdir, xdir, ydir);
-				Vector3D::Normal(zdir, zdir);
+				ydir = Vec3f::Cross(Vec3f(0, 0, 1), xdir).Normalize();
+				zdir = Vec3f::Cross(xdir, ydir).Normalize();
 			}
 
 			if (m_pEffectNode->GenerationLocation.EffectsRotation)
 			{
-				m_GenerationLocation.Value[0][0] = xdir.X;
-				m_GenerationLocation.Value[0][1] = xdir.Y;
-				m_GenerationLocation.Value[0][2] = xdir.Z;
+				m_GenerationLocation.X.SetX(xdir.GetX());
+				m_GenerationLocation.Y.SetX(xdir.GetY());
+				m_GenerationLocation.Z.SetX(xdir.GetZ());
 
-				m_GenerationLocation.Value[1][0] = ydir.X;
-				m_GenerationLocation.Value[1][1] = ydir.Y;
-				m_GenerationLocation.Value[1][2] = ydir.Z;
+				m_GenerationLocation.X.SetY(ydir.GetX());
+				m_GenerationLocation.Y.SetY(ydir.GetY());
+				m_GenerationLocation.Z.SetY(ydir.GetZ());
 
-				m_GenerationLocation.Value[2][0] = zdir.X;
-				m_GenerationLocation.Value[2][1] = zdir.Y;
-				m_GenerationLocation.Value[2][2] = zdir.Z;
+				m_GenerationLocation.X.SetZ(zdir.GetX());
+				m_GenerationLocation.Y.SetZ(zdir.GetY());
+				m_GenerationLocation.Z.SetZ(zdir.GetZ());
 			}
 			else
 			{
-				m_GenerationLocation.Indentity();
+				m_GenerationLocation = Mat43f::Identity;
 			}
 
-			m_GenerationLocation.Value[3][0] = s.x;
-			m_GenerationLocation.Value[3][1] = s.y;
-			m_GenerationLocation.Value[3][2] = s.z;
+			m_GenerationLocation.X.SetW(s.GetX());
+			m_GenerationLocation.Y.SetW(s.GetY());
+			m_GenerationLocation.Z.SetW(s.GetZ());
 		}
 	}
 	else if( m_pEffectNode->GenerationLocation.type == ParameterGenerationLocation::TYPE_SPHERE )
 	{
-		Matrix43 mat_x, mat_y;
-		mat_x.RotationX( m_pEffectNode->GenerationLocation.sphere.rotation_x.getValue( *instanceGlobal ) );
-		mat_y.RotationY( m_pEffectNode->GenerationLocation.sphere.rotation_y.getValue( *instanceGlobal ) );
+		Mat43f mat_x = Mat43f::RotationX( m_pEffectNode->GenerationLocation.sphere.rotation_x.getValue( *instanceGlobal ) );
+		Mat43f mat_y = Mat43f::RotationY( m_pEffectNode->GenerationLocation.sphere.rotation_y.getValue( *instanceGlobal ) );
 		float r = m_pEffectNode->GenerationLocation.sphere.radius.getValue(*instanceGlobal);
-		m_GenerationLocation.Translation( 0, r, 0 );
-		Matrix43::Multiple( m_GenerationLocation, m_GenerationLocation, mat_x );
-		Matrix43::Multiple( m_GenerationLocation, m_GenerationLocation, mat_y );
+		m_GenerationLocation = Mat43f::Translation( 0, r, 0 ) * mat_x * mat_y;
 	}
 	else if( m_pEffectNode->GenerationLocation.type == ParameterGenerationLocation::TYPE_MODEL )
 	{
-		m_GenerationLocation.Indentity();
+		m_GenerationLocation = Mat43f::Identity;
 
 		int32_t modelIndex = m_pEffectNode->GenerationLocation.model.index;
 		if( modelIndex >= 0 )
@@ -786,31 +776,28 @@ void Instance::Initialize( Instance* parent, int32_t instanceNumber, int32_t par
 						((EffectImplemented*)m_pEffectNode->GetEffect())->GetMaginification() );
 				}
 
-				m_GenerationLocation.Translation( 
-					emitter.Position.X, 
-					emitter.Position.Y,
-					emitter.Position.Z );
+				m_GenerationLocation = Mat43f::Translation( emitter.Position );
 
 				if( m_pEffectNode->GenerationLocation.EffectsRotation )
 				{
-					m_GenerationLocation.Value[0][0] = emitter.Binormal.X;
-					m_GenerationLocation.Value[0][1] = emitter.Binormal.Y;
-					m_GenerationLocation.Value[0][2] = emitter.Binormal.Z;
+					m_GenerationLocation.X.SetX(emitter.Binormal.X);
+					m_GenerationLocation.Y.SetX(emitter.Binormal.Y);
+					m_GenerationLocation.Z.SetX(emitter.Binormal.Z);
 
-					m_GenerationLocation.Value[1][0] = emitter.Tangent.X;
-					m_GenerationLocation.Value[1][1] = emitter.Tangent.Y;
-					m_GenerationLocation.Value[1][2] = emitter.Tangent.Z;
+					m_GenerationLocation.X.SetY(emitter.Tangent.X);
+					m_GenerationLocation.Y.SetY(emitter.Tangent.Y);
+					m_GenerationLocation.Z.SetY(emitter.Tangent.Z);
 
-					m_GenerationLocation.Value[2][0] = emitter.Normal.X;
-					m_GenerationLocation.Value[2][1] = emitter.Normal.Y;
-					m_GenerationLocation.Value[2][2] = emitter.Normal.Z;
+					m_GenerationLocation.X.SetZ(emitter.Normal.X);
+					m_GenerationLocation.Y.SetZ(emitter.Normal.Y);
+					m_GenerationLocation.Z.SetZ(emitter.Normal.Z);
 				}
 			}
 		}
 	}
 	else if( m_pEffectNode->GenerationLocation.type == ParameterGenerationLocation::TYPE_CIRCLE )
 	{
-		m_GenerationLocation.Indentity();
+		m_GenerationLocation = Mat43f::Identity;
 		float radius = m_pEffectNode->GenerationLocation.circle.radius.getValue(*instanceGlobal);
 		float start = m_pEffectNode->GenerationLocation.circle.angle_start.getValue(*instanceGlobal);
 		float end = m_pEffectNode->GenerationLocation.circle.angle_end.getValue(*instanceGlobal);
@@ -835,25 +822,18 @@ void Instance::Initialize( Instance* parent, int32_t instanceNumber, int32_t par
 
 		angle += m_pEffectNode->GenerationLocation.circle.angle_noize.getValue(*instanceGlobal);
 
-		Matrix43 mat;
-		if (m_pEffectNode->GenerationLocation.circle.axisDirection == ParameterGenerationLocation::AxisType::X)
+		switch (m_pEffectNode->GenerationLocation.circle.axisDirection)
 		{
-			mat.RotationX(angle);
-			m_GenerationLocation.Translation(0, 0, radius);
+			case ParameterGenerationLocation::AxisType::X:
+				m_GenerationLocation = Mat43f::Translation(0, 0, radius) * Mat43f::RotationX(angle);
+				break;
+			case ParameterGenerationLocation::AxisType::Y:
+				m_GenerationLocation = Mat43f::Translation(radius, 0, 0) * Mat43f::RotationY(angle);
+				break;
+			case ParameterGenerationLocation::AxisType::Z:
+				m_GenerationLocation = Mat43f::Translation(0, radius, 0) * Mat43f::RotationZ(angle);
+				break;
 		}
-		if (m_pEffectNode->GenerationLocation.circle.axisDirection == ParameterGenerationLocation::AxisType::Y)
-		{
-			mat.RotationY(angle);
-			m_GenerationLocation.Translation(radius, 0, 0);
-		}
-		if (m_pEffectNode->GenerationLocation.circle.axisDirection == ParameterGenerationLocation::AxisType::Z)
-		{
-			mat.RotationZ(angle);
-			m_GenerationLocation.Translation(0, radius, 0);
-		}
-
-		
-		Matrix43::Multiple( m_GenerationLocation, m_GenerationLocation, mat );
 	}
 
 	if( m_pEffectNode->SoundType == ParameterSoundType_Use )
@@ -862,6 +842,80 @@ void Instance::Initialize( Instance* parent, int32_t instanceNumber, int32_t par
 	}
 
 	// UV
+#ifdef __EFFEKSEER_BUILD_VERSION16__
+	for (int32_t i = 0; i < ParameterRendererCommon::UVParameterNum; i++)
+	{
+		const auto& UVType = m_pEffectNode->RendererCommon.UVTypes[i];
+		const auto& UV = m_pEffectNode->RendererCommon.UVs[i];
+
+		if (UVType == ParameterRendererCommon::UV_ANIMATION)
+		{
+			auto& uvTimeOffset = uvTimeOffsets[i];
+			uvTimeOffset = (int32_t)UV.Animation.StartFrame.getValue(*instanceGlobal);
+			uvTimeOffset *= UV.Animation.FrameLength;
+		}
+		else if (UVType == ParameterRendererCommon::UV_SCROLL)
+		{
+			auto& uvAreaOffset = uvAreaOffsets[i];
+			auto& uvScrollSpeed = uvScrollSpeeds[i];
+
+			auto xy = UV.Scroll.Position.getValue(*instanceGlobal);
+			auto zw = UV.Scroll.Size.getValue(*instanceGlobal);
+
+			uvAreaOffset.X = xy.GetX();
+			uvAreaOffset.Y = xy.GetY();
+			uvAreaOffset.Width = zw.GetX();
+			uvAreaOffset.Height = zw.GetY();
+
+			uvScrollSpeed = UV.Scroll.Speed.getValue(*instanceGlobal);
+		}
+		else if (UVType == ParameterRendererCommon::UV_FCURVE)
+		{
+			auto& uvAreaOffset = uvAreaOffsets[i];
+
+			uvAreaOffset.X = UV.FCurve.Position->X.GetOffset(*instanceGlobal);
+			uvAreaOffset.Y = UV.FCurve.Position->Y.GetOffset(*instanceGlobal);
+			uvAreaOffset.Width = UV.FCurve.Size->X.GetOffset(*instanceGlobal);
+			uvAreaOffset.Height = UV.FCurve.Size->Y.GetOffset(*instanceGlobal);
+		}
+	}
+
+	// Alpha Crunch
+	if (m_pEffectNode->AlphaCrunch.Type == ParameterAlphaCrunch::EType::FIXED)
+	{
+		if (m_pEffectNode->AlphaCrunch.Fixed.RefEq < 0)
+		{
+			m_AlphaThreshold = m_pEffectNode->AlphaCrunch.Fixed.Threshold;
+		}
+	}
+	else if (m_pEffectNode->AlphaCrunch.Type == ParameterAlphaCrunch::EType::FPI)
+	{
+		auto& fpiValue = alpha_crunch_values.four_point_interpolation;
+		auto& nodeAlphaCrunchValue = m_pEffectNode->AlphaCrunch.FourPointInterpolation;
+
+		fpiValue.begin_threshold	= nodeAlphaCrunchValue.BeginThreshold.getValue(*instanceGlobal);
+		fpiValue.transition_frame	= nodeAlphaCrunchValue.TransitionFrameNum.getValue(*instanceGlobal);
+		fpiValue.no2_threshold		= nodeAlphaCrunchValue.No2Threshold.getValue(*instanceGlobal);
+		fpiValue.no3_threshold		= nodeAlphaCrunchValue.No3Threshold.getValue(*instanceGlobal);
+		fpiValue.transition_frame2	= nodeAlphaCrunchValue.TransitionFrameNum2.getValue(*instanceGlobal);
+		fpiValue.end_threshold		= nodeAlphaCrunchValue.EndThreshold.getValue(*instanceGlobal);
+	}
+	else if (m_pEffectNode->AlphaCrunch.Type == ParameterAlphaCrunch::EType::EASING)
+	{
+		auto& easingValue = alpha_crunch_values.easing;
+		auto& nodeAlphaCrunchValue = m_pEffectNode->AlphaCrunch.Easing;
+
+		easingValue.start = nodeAlphaCrunchValue.Threshold.start.getValue(*instanceGlobal);
+		easingValue.end = nodeAlphaCrunchValue.Threshold.end.getValue(*instanceGlobal);
+	}
+	else if (m_pEffectNode->AlphaCrunch.Type == ParameterAlphaCrunch::EType::F_CURVE)
+	{
+		auto& fcurveValue = alpha_crunch_values.fcurve;
+		auto& nodeAlphaCrunchValue = m_pEffectNode->AlphaCrunch.FCurve;
+
+		fcurveValue.offset = nodeAlphaCrunchValue.Threshold->GetOffsets(*instanceGlobal);
+	}
+#else
 	if (m_pEffectNode->RendererCommon.UVType == ParameterRendererCommon::UV_ANIMATION)
 	{
 		uvTimeOffset = (int32_t)m_pEffectNode->RendererCommon.UV.Animation.StartFrame.getValue(*instanceGlobal);
@@ -873,12 +927,12 @@ void Instance::Initialize( Instance* parent, int32_t instanceNumber, int32_t par
 		auto xy = m_pEffectNode->RendererCommon.UV.Scroll.Position.getValue(*instanceGlobal);
 		auto zw = m_pEffectNode->RendererCommon.UV.Scroll.Size.getValue(*instanceGlobal);
 
-		uvAreaOffset.X = xy.x;
-		uvAreaOffset.Y = xy.y;
-		uvAreaOffset.Width = zw.x;
-		uvAreaOffset.Height = zw.y;
+		uvAreaOffset.X = xy.GetX();
+		uvAreaOffset.Y = xy.GetY();
+		uvAreaOffset.Width = zw.GetX();
+		uvAreaOffset.Height = zw.GetY();
 
-		m_pEffectNode->RendererCommon.UV.Scroll.Speed.getValue(*instanceGlobal).setValueToArg(uvScrollSpeed);
+		uvScrollSpeed = m_pEffectNode->RendererCommon.UV.Scroll.Speed.getValue(*instanceGlobal);
 	}
 
 	if (m_pEffectNode->RendererCommon.UVType == ParameterRendererCommon::UV_FCURVE)
@@ -888,11 +942,61 @@ void Instance::Initialize( Instance* parent, int32_t instanceNumber, int32_t par
 		uvAreaOffset.Width = m_pEffectNode->RendererCommon.UV.FCurve.Size->X.GetOffset(*instanceGlobal);
 		uvAreaOffset.Height = m_pEffectNode->RendererCommon.UV.FCurve.Size->Y.GetOffset(*instanceGlobal);
 	}
+#endif
+
+	// CustomData
+	for (int32_t index = 0; index < 2; index++)
+	{
+		ParameterCustomData* parameterCustomData = nullptr;
+		InstanceCustomData* instanceCustomData = nullptr;
+
+		if (index == 0)
+		{
+			parameterCustomData = &m_pEffectNode->RendererCommon.CustomData1;
+			instanceCustomData = &customDataValues1;
+		}
+		else if (index == 1)
+		{
+			parameterCustomData = &m_pEffectNode->RendererCommon.CustomData2;
+			instanceCustomData = &customDataValues2;
+		}
+
+		if (parameterCustomData->Type == ParameterCustomDataType::Fixed2D)
+		{
+			// none
+		}
+		else if (parameterCustomData->Type == ParameterCustomDataType::Easing2D)
+		{
+			instanceCustomData->easing.start = parameterCustomData->Easing.Values.start.getValue(*instanceGlobal);
+			instanceCustomData->easing.end = parameterCustomData->Easing.Values.end.getValue(*instanceGlobal);
+		}
+		else if (parameterCustomData->Type == ParameterCustomDataType::Random2D)
+		{
+			instanceCustomData->random.value = parameterCustomData->Random.Values.getValue(*instanceGlobal);
+		}
+		else if (parameterCustomData->Type == ParameterCustomDataType::FCurve2D)
+		{
+			instanceCustomData->fcruve.offset = parameterCustomData->FCurve.Values->GetOffsets(*instanceGlobal);
+		}
+		else if (parameterCustomData->Type == ParameterCustomDataType::FCurveColor)
+		{
+			instanceCustomData->fcurveColor.offset = parameterCustomData->FCurveColor.Values->GetOffsets(*instanceGlobal);
+		}
+	}
 
 	m_pEffectNode->InitializeRenderedInstance(*this, m_pManager);
 
-	// Generate zero frame effect
-	GenerateChildrenInRequired(0.0f);
+	if (IsRequiredToCreateChildren(0.0f))
+	{
+		// calculate myself to update children group matrix
+		CalculateMatrix(0);
+
+		// for new children
+		UpdateChildrenGroupMatrix();
+
+		// Generate zero frame effect
+		GenerateChildrenInRequired(0.0f);
+	}
 }
 
 //----------------------------------------------------------------------------------
@@ -935,7 +1039,10 @@ void Instance::Update( float deltaFrame, bool shown )
 	{
 		CalculateMatrix( deltaFrame );
 	}
-	else if( m_pEffectNode->LocationAbs.type != LocationAbsType::None )
+	else if (m_pEffectNode->LocationAbs.type != LocationAbsType::None 
+		|| m_pEffectNode->LocalForceFields[0].Turbulence != nullptr 
+		|| m_pEffectNode->LocalForceFields[1].Turbulence != nullptr 
+		|| m_pEffectNode->LocalForceFields[2].Turbulence != nullptr)
 	{
 		// If attraction forces are not default, updating is needed in each frame.
 		CalculateMatrix( deltaFrame );
@@ -962,7 +1069,15 @@ void Instance::Update( float deltaFrame, bool shown )
 	{
 		GenerateChildrenInRequired(originalTime + deltaFrame);
 	}
-	
+
+	UpdateChildrenGroupMatrix();
+	/*
+	for (InstanceGroup* group = childrenGroups_; group != nullptr; group = group->NextUsedByInstance)
+	{
+		group->SetParentMatrix(m_GlobalMatrix43);
+	}
+	*/
+
 	// check whether killed?
 	bool killed = false;
 	if( m_pEffectNode->GetType() != EFFECT_NODE_TYPE_ROOT )
@@ -990,7 +1105,7 @@ void Instance::Update( float deltaFrame, bool shown )
 		if( !killed && m_pEffectNode->CommonValues.RemoveWhenChildrenIsExtinct )
 		{
 			int maxcreate_count = 0;
-			InstanceGroup* group = m_headGroups;
+			InstanceGroup* group = childrenGroups_;
 
 			for (int i = 0; i < m_pEffectNode->GetChildrenCount(); i++, group = group->NextUsedByInstance)
 			{
@@ -1012,6 +1127,113 @@ void Instance::Update( float deltaFrame, bool shown )
 			}
 		}
 	}
+
+#ifdef __EFFEKSEER_BUILD_VERSION16__
+	{
+		auto& CommonValue = m_pEffectNode->RendererCommon;
+		auto& UV = CommonValue.UVs[0];
+		int UVType = CommonValue.UVTypes[0];
+
+		if (UVType == ParameterRendererCommon::UV_ANIMATION)
+		{
+			auto time = m_LivingTime + uvTimeOffsets[0];
+
+			// 経過時間を取得
+			if (m_pEffectNode->GetType() == eEffectNodeType::EFFECT_NODE_TYPE_RIBBON ||
+				m_pEffectNode->GetType() == eEffectNodeType::EFFECT_NODE_TYPE_TRACK)
+			{
+				auto baseInstance = this->m_pContainer->GetFirstGroup()->GetFirst();
+				if (baseInstance != nullptr)
+				{
+					time = baseInstance->m_LivingTime + baseInstance->uvTimeOffsets[0];
+				}
+			}
+
+			float fFrameNum = time / (float)UV.Animation.FrameLength;
+			int32_t frameNum = (int32_t)fFrameNum;
+			int32_t frameCount = UV.Animation.FrameCountX * UV.Animation.FrameCountY;
+
+			if (UV.Animation.LoopType == UV.Animation.LOOPTYPE_ONCE)
+			{
+				if (frameNum >= frameCount)
+				{
+					frameNum = frameCount - 1;
+				}
+			}
+			else if (UV.Animation.LoopType == UV.Animation.LOOPTYPE_LOOP)
+			{
+				frameNum %= frameCount;
+			}
+			else if (UV.Animation.LoopType == UV.Animation.LOOPTYPE_REVERSELOOP)
+			{
+				bool rev = (frameNum / frameCount) % 2 == 1;
+				frameNum %= frameCount;
+				if (rev)
+				{
+					frameNum = frameCount - 1 - frameNum;
+				}
+			}
+
+			m_flipbookIndexAndNextRate = static_cast<float>(frameNum);
+			m_flipbookIndexAndNextRate += fFrameNum - static_cast<float>(frameNum);
+		}
+	}
+
+	{
+		if (m_pEffectNode->AlphaCrunch.Type == ParameterAlphaCrunch::EType::FIXED)
+		{
+			if (m_pEffectNode->AlphaCrunch.Fixed.RefEq >= 0)
+			{
+				auto alphaThreshold = static_cast<float>(m_pEffectNode->AlphaCrunch.Fixed.Threshold);
+				ApplyEq(alphaThreshold,
+						this->m_pEffectNode->m_effect,
+						this->m_pContainer->GetRootInstance(),
+						m_pEffectNode->AlphaCrunch.Fixed.RefEq,
+						alphaThreshold);
+
+				m_AlphaThreshold = alphaThreshold;
+			}
+		}
+		else if (m_pEffectNode->AlphaCrunch.Type == ParameterAlphaCrunch::EType::FPI)
+		{
+			float t = m_LivingTime / m_LivedTime;
+			auto val = alpha_crunch_values.four_point_interpolation;
+
+			float p[4][2] =
+			{
+				0.0f, val.begin_threshold, 
+				float(val.transition_frame) / m_LivedTime, val.no2_threshold,
+				(m_LivedTime - float(val.transition_frame2)) / m_LivedTime, val.no3_threshold,
+				1.0f, val.end_threshold
+			};
+
+			for (int32_t i = 1; i < 4; i++)
+			{
+				if (0 < p[i][0] && p[i - 1][0] <= t && t <= p[i][0])
+				{
+					float r = (t - p[i - 1][0]) / (p[i][0] - p[i - 1][0]);
+					m_AlphaThreshold = p[i - 1][1] + (p[i][1] - p[i - 1][1]) * r;
+					break;
+				}
+			}
+		}
+		else if (m_pEffectNode->AlphaCrunch.Type == ParameterAlphaCrunch::EType::EASING)
+		{
+			m_AlphaThreshold = m_pEffectNode->AlphaCrunch.Easing.Threshold.getValue
+			(
+				alpha_crunch_values.easing.start,
+				alpha_crunch_values.easing.end,
+				m_LivingTime / m_LivedTime
+			);
+		}
+		else if (m_pEffectNode->AlphaCrunch.Type == ParameterAlphaCrunch::EType::F_CURVE)
+		{
+			auto fcurve = m_pEffectNode->AlphaCrunch.FCurve.Threshold->GetValues(m_LivingTime, m_LivedTime);
+			m_AlphaThreshold = fcurve + alpha_crunch_values.fcurve.offset;
+			m_AlphaThreshold /= 100.0f;
+		}
+	}
+#endif
 
 	if(killed)
 	{
@@ -1057,19 +1279,17 @@ void Instance::CalculateMatrix( float deltaFrame )
 		CalculateParentMatrix( deltaFrame );
 	}
 
-	Vector3D localPosition;
-	Vector3D localAngle;
-	Vector3D localScaling;
-
 	/* 更新処理 */
 	if( m_pEffectNode->GetType() != EFFECT_NODE_TYPE_ROOT )
 	{
+		Vec3f localPosition;
+		Vec3f localAngle;
+		Vec3f localScaling;
+
 		/* 位置の更新(時間から直接求めれるよう対応済み) */
 		if( m_pEffectNode->TranslationType == ParameterTranslationType_None )
 		{
-			localPosition.X = 0;
-			localPosition.Y = 0;
-			localPosition.Z = 0;
+			localPosition = {0, 0, 0};
 		}
 		else if( m_pEffectNode->TranslationType == ParameterTranslationType_Fixed )
 		{
@@ -1081,48 +1301,32 @@ void Instance::CalculateMatrix( float deltaFrame )
 		else if( m_pEffectNode->TranslationType == ParameterTranslationType_PVA )
 		{
 			/* 現在位置 = 初期座標 + (初期速度 * t) + (初期加速度 * t * t * 0.5)*/
-			localPosition.X = translation_values.random.location.x +
-				(translation_values.random.velocity.x * m_LivingTime) +
-				(translation_values.random.acceleration.x * m_LivingTime * m_LivingTime * 0.5f);
-
-			localPosition.Y = translation_values.random.location.y +
-				(translation_values.random.velocity.y * m_LivingTime) +
-				(translation_values.random.acceleration.y * m_LivingTime * m_LivingTime * 0.5f);
-
-			localPosition.Z = translation_values.random.location.z +
-				(translation_values.random.velocity.z * m_LivingTime) +
-				(translation_values.random.acceleration.z * m_LivingTime * m_LivingTime * 0.5f);
-
+			localPosition = translation_values.random.location +
+				(translation_values.random.velocity * m_LivingTime) +
+				(translation_values.random.acceleration * (m_LivingTime * m_LivingTime * 0.5f));
 		}
 		else if( m_pEffectNode->TranslationType == ParameterTranslationType_Easing )
 		{
-			m_pEffectNode->TranslationEasing.location.setValueToArg(
-				localPosition,
-				translation_values.easing.start,
-				translation_values.easing.end,
+			localPosition = m_pEffectNode->TranslationEasing.location.getValue(
+				translation_values.easing.start, translation_values.easing.end,
 				m_LivingTime / m_LivedTime );
 		}
 		else if( m_pEffectNode->TranslationType == ParameterTranslationType_FCurve )
 		{
 			assert( m_pEffectNode->TranslationFCurve != NULL );
-			localPosition.X = m_pEffectNode->TranslationFCurve->X.GetValue( (int)m_LivingTime ) + translation_values.fcruve.offset.x;
-			localPosition.Y = m_pEffectNode->TranslationFCurve->Y.GetValue( (int)m_LivingTime ) + translation_values.fcruve.offset.y;
-			localPosition.Z = m_pEffectNode->TranslationFCurve->Z.GetValue( (int)m_LivingTime ) + translation_values.fcruve.offset.z;
+			auto fcurve = m_pEffectNode->TranslationFCurve->GetValues(m_LivingTime, m_LivedTime);
+			localPosition = fcurve + translation_values.fcruve.offset;
 		}
 
 		if( !m_pEffectNode->GenerationLocation.EffectsRotation )
 		{
-			localPosition.X += m_GenerationLocation.Value[3][0];
-			localPosition.Y += m_GenerationLocation.Value[3][1];
-			localPosition.Z += m_GenerationLocation.Value[3][2];
+			localPosition += m_GenerationLocation.GetTranslation();
 		}
 
 		/* 回転の更新(時間から直接求めれるよう対応済み) */
 		if( m_pEffectNode->RotationType == ParameterRotationType_None )
 		{
-			localAngle.X = 0;
-			localAngle.Y = 0;
-			localAngle.Z = 0;
+			localAngle = {0, 0, 0};
 		}
 		else if( m_pEffectNode->RotationType == ParameterRotationType_Fixed )
 		{
@@ -1134,25 +1338,14 @@ void Instance::CalculateMatrix( float deltaFrame )
 		else if( m_pEffectNode->RotationType == ParameterRotationType_PVA )
 		{
 			/* 現在位置 = 初期座標 + (初期速度 * t) + (初期加速度 * t * t * 0.5)*/
-			localAngle.X = rotation_values.random.rotation.x +
-				(rotation_values.random.velocity.x * m_LivingTime) +
-				(rotation_values.random.acceleration.x * m_LivingTime * m_LivingTime * 0.5f);
-
-			localAngle.Y = rotation_values.random.rotation.y +
-				(rotation_values.random.velocity.y * m_LivingTime) +
-				(rotation_values.random.acceleration.y * m_LivingTime * m_LivingTime * 0.5f);
-
-			localAngle.Z = rotation_values.random.rotation.z +
-				(rotation_values.random.velocity.z * m_LivingTime) +
-				(rotation_values.random.acceleration.z * m_LivingTime * m_LivingTime * 0.5f);
-
+			localAngle = rotation_values.random.rotation +
+				(rotation_values.random.velocity * m_LivingTime) +
+				(rotation_values.random.acceleration * (m_LivingTime * m_LivingTime * 0.5f));
 		}
 		else if( m_pEffectNode->RotationType == ParameterRotationType_Easing )
 		{
-			m_pEffectNode->RotationEasing.rotation.setValueToArg(
-				localAngle,
-				rotation_values.easing.start,
-				rotation_values.easing.end,
+			localAngle = m_pEffectNode->RotationEasing.rotation.getValue(
+				rotation_values.easing.start, rotation_values.easing.end,
 				m_LivingTime / m_LivedTime );
 		}
 		else if( m_pEffectNode->RotationType == ParameterRotationType_AxisPVA )
@@ -1160,30 +1353,25 @@ void Instance::CalculateMatrix( float deltaFrame )
 			rotation_values.axis.rotation = 
 				rotation_values.axis.random.rotation +
 				rotation_values.axis.random.velocity * m_LivingTime +
-				rotation_values.axis.random.acceleration * m_LivingTime * m_LivingTime * 0.5f;
+				rotation_values.axis.random.acceleration * (m_LivingTime * m_LivingTime * 0.5f);
 		}
 		else if( m_pEffectNode->RotationType == ParameterRotationType_AxisEasing )
 		{
-			m_pEffectNode->RotationAxisEasing.easing.setValueToArg(
-				rotation_values.axis.rotation,
-				rotation_values.axis.easing.start,
-				rotation_values.axis.easing.end,
+			rotation_values.axis.rotation = m_pEffectNode->RotationAxisEasing.easing.getValue(
+				rotation_values.axis.easing.start, rotation_values.axis.easing.end,
 				m_LivingTime / m_LivedTime );
 		}
 		else if( m_pEffectNode->RotationType == ParameterRotationType_FCurve )
 		{
 			assert( m_pEffectNode->RotationFCurve != NULL );
-			localAngle.X = m_pEffectNode->RotationFCurve->X.GetValue( (int)m_LivingTime ) + rotation_values.fcruve.offset.x;
-			localAngle.Y = m_pEffectNode->RotationFCurve->Y.GetValue( (int)m_LivingTime ) + rotation_values.fcruve.offset.y;
-			localAngle.Z = m_pEffectNode->RotationFCurve->Z.GetValue( (int)m_LivingTime ) + rotation_values.fcruve.offset.z;
+			auto fcurve = m_pEffectNode->RotationFCurve->GetValues(m_LivingTime, m_LivedTime);
+			localAngle = fcurve + rotation_values.fcruve.offset;
 		}
 
 		/* 拡大の更新(時間から直接求めれるよう対応済み) */
 		if( m_pEffectNode->ScalingType == ParameterScalingType_None )
 		{
-			localScaling.X = 1.0f;
-			localScaling.Y = 1.0f;
-			localScaling.Z = 1.0f;
+			localScaling = {1.0f, 1.0f, 1.0f};
 		}
 		else if( m_pEffectNode->ScalingType == ParameterScalingType_Fixed )
 		{
@@ -1195,24 +1383,14 @@ void Instance::CalculateMatrix( float deltaFrame )
 		else if( m_pEffectNode->ScalingType == ParameterScalingType_PVA )
 		{
 			/* 現在位置 = 初期座標 + (初期速度 * t) + (初期加速度 * t * t * 0.5)*/
-			localScaling.X = scaling_values.random.scale.x +
-				(scaling_values.random.velocity.x * m_LivingTime) +
-				(scaling_values.random.acceleration.x * m_LivingTime * m_LivingTime * 0.5f);
-
-			localScaling.Y = scaling_values.random.scale.y +
-				(scaling_values.random.velocity.y * m_LivingTime) +
-				(scaling_values.random.acceleration.y * m_LivingTime * m_LivingTime * 0.5f);
-
-			localScaling.Z = scaling_values.random.scale.z +
-				(scaling_values.random.velocity.z * m_LivingTime) +
-				(scaling_values.random.acceleration.z * m_LivingTime * m_LivingTime * 0.5f);
+			localScaling = scaling_values.random.scale +
+				(scaling_values.random.velocity * m_LivingTime) +
+				(scaling_values.random.acceleration * (m_LivingTime * m_LivingTime * 0.5f));
 		}
 		else if( m_pEffectNode->ScalingType == ParameterScalingType_Easing )
 		{
-			m_pEffectNode->ScalingEasing.Position.setValueToArg(
-				localScaling,
-				scaling_values.easing.start,
-				scaling_values.easing.end,
+			localScaling = m_pEffectNode->ScalingEasing.Position.getValue(
+				scaling_values.easing.start, scaling_values.easing.end,
 				m_LivingTime / m_LivedTime );
 		}
 		else if( m_pEffectNode->ScalingType == ParameterScalingType_SinglePVA )
@@ -1220,85 +1398,104 @@ void Instance::CalculateMatrix( float deltaFrame )
 			float s = scaling_values.single_random.scale +
 				scaling_values.single_random.velocity * m_LivingTime +
 				scaling_values.single_random.acceleration * m_LivingTime * m_LivingTime * 0.5f;
-			localScaling.X = s;
-			localScaling.Y = s;
-			localScaling.Z = s;
+			localScaling = {s, s, s};
 		}
 		else if( m_pEffectNode->ScalingType == ParameterScalingType_SingleEasing )
 		{
-			float scale;
-			m_pEffectNode->ScalingSingleEasing.setValueToArg(
-				scale,
-				scaling_values.single_easing.start,
-				scaling_values.single_easing.end,
+			float s = m_pEffectNode->ScalingSingleEasing.getValue(
+				scaling_values.single_easing.start, scaling_values.single_easing.end,
 				m_LivingTime / m_LivedTime );
-			localScaling.X = scale;
-			localScaling.Y = scale;
-			localScaling.Z = scale;
+			localScaling = {s, s, s};
 		}
 		else if( m_pEffectNode->ScalingType == ParameterScalingType_FCurve )
 		{
 			assert( m_pEffectNode->ScalingFCurve != NULL );
+			auto fcurve = m_pEffectNode->ScalingFCurve->GetValues(m_LivingTime, m_LivedTime);
+			localScaling = fcurve + scaling_values.fcruve.offset;
+		}
 
-			localScaling.X = m_pEffectNode->ScalingFCurve->X.GetValue( (int32_t)m_LivingTime ) + scaling_values.fcruve.offset.x;
-			localScaling.Y = m_pEffectNode->ScalingFCurve->Y.GetValue( (int32_t)m_LivingTime ) + scaling_values.fcruve.offset.y;
-			localScaling.Z = m_pEffectNode->ScalingFCurve->Z.GetValue( (int32_t)m_LivingTime ) + scaling_values.fcruve.offset.z;
+		// update local fields
+		Vec3f currentLocalPosition;
+
+		if (m_pEffectNode->GenerationLocation.EffectsRotation)
+		{
+			// the center of force field depends Spawn method
+			// It should be used a result of past frame
+			auto location = Mat43f::Translation(localPosition);
+			location *= m_GenerationLocation;
+			currentLocalPosition = location.GetTranslation();
+		}
+		else
+		{
+			currentLocalPosition = localPosition;
+		}
+
+		currentLocalPosition += modifyWithNoise_;
+
+		for (const auto& field : m_pEffectNode->LocalForceFields)
+		{
+			if (field.Turbulence != nullptr)
+			{
+				auto mag = static_cast<EffectImplemented*>(m_pEffectNode->GetEffect())->GetMaginification();
+				modifyWithNoise_ += field.Turbulence->Noise.Get(currentLocalPosition / mag) * field.Turbulence->Strength * mag;
+			}
+
 		}
 
 		/* 描画部分の更新 */
 		m_pEffectNode->UpdateRenderedInstance( *this, m_pManager );
-	}
-	
-	// 行列の更新
-	if( m_pEffectNode->GetType() != EFFECT_NODE_TYPE_ROOT )
-	{
-		m_GlobalMatrix43.Scaling( localScaling.X, localScaling.Y,  localScaling.Z );
 
+		// 回転行列の作成
+		Mat43f MatRot;
 		if( m_pEffectNode->RotationType == ParameterRotationType_Fixed ||
 			m_pEffectNode->RotationType == ParameterRotationType_PVA ||
 			m_pEffectNode->RotationType == ParameterRotationType_Easing ||
 			m_pEffectNode->RotationType == ParameterRotationType_FCurve )
 		{
-			Matrix43 MatRot;
-			MatRot.RotationZXY( localAngle.Z, localAngle.X, localAngle.Y );
-			Matrix43::Multiple( m_GlobalMatrix43, m_GlobalMatrix43, MatRot );
+			MatRot = Mat43f::RotationZXY( localAngle.GetZ(), localAngle.GetX(), localAngle.GetY() );
 		}
 		else if( m_pEffectNode->RotationType == ParameterRotationType_AxisPVA ||
 				 m_pEffectNode->RotationType == ParameterRotationType_AxisEasing )
 		{
-			Matrix43 MatRot;
-			Vector3D axis;
-			axis.X = rotation_values.axis.axis.x;
-			axis.Y = rotation_values.axis.axis.y;
-			axis.Z = rotation_values.axis.axis.z;
+			Vec3f axis = rotation_values.axis.axis;
 
-			MatRot.RotationAxis( axis, rotation_values.axis.rotation );
-			Matrix43::Multiple( m_GlobalMatrix43, m_GlobalMatrix43, MatRot );
+			MatRot = Mat43f::RotationAxis( axis, rotation_values.axis.rotation );
 		}
-
-		if( localPosition.X != 0.0f ||
-			localPosition.Y != 0.0f || 
-			localPosition.Z != 0.0f )
+		else
 		{
-			Matrix43 MatTra;
-			MatTra.Translation( localPosition.X, localPosition.Y, localPosition.Z );
-			Matrix43::Multiple( m_GlobalMatrix43, m_GlobalMatrix43, MatTra );
+			MatRot = Mat43f::Identity;
 		}
 
-		if( m_pEffectNode->GenerationLocation.EffectsRotation )
+		// Update matrix
+		if (m_pEffectNode->GenerationLocation.EffectsRotation)
 		{
-			Matrix43::Multiple( m_GlobalMatrix43, m_GlobalMatrix43, m_GenerationLocation );
+			m_GlobalMatrix43 = Mat43f::SRT(localScaling, MatRot, localPosition);
+			assert(m_GlobalMatrix43.IsValid());
+
+			m_GlobalMatrix43 *= m_GenerationLocation;
+			assert(m_GlobalMatrix43.IsValid());
+
+			m_GlobalMatrix43 *= Mat43f::Translation(modifyWithNoise_);
+		}
+		else
+		{
+			localPosition += modifyWithNoise_;
+
+			m_GlobalMatrix43 = Mat43f::SRT(localScaling, MatRot, localPosition);
+			assert(m_GlobalMatrix43.IsValid());
 		}
 
-		Matrix43::Multiple( m_GlobalMatrix43, m_GlobalMatrix43, m_ParentMatrix43 );
-		
-		Vector3D currentPosition;
-		m_GlobalMatrix43.GetTranslation( currentPosition );
-		m_GlobalVelocity = currentPosition - m_GlobalPosition;
-		m_GlobalPosition = currentPosition;
+		m_GlobalMatrix43 *= m_ParentMatrix;
+		assert(m_GlobalMatrix43.IsValid());
 
 		if( m_pEffectNode->LocationAbs.type != LocationAbsType::None )
 		{
+			Vec3f currentTranslation = m_GlobalMatrix43.GetTranslation();
+			assert(m_GlobalMatrix43.IsValid());
+
+			m_GlobalVelocity = currentTranslation - m_GlobalPosition;
+			m_GlobalPosition = currentTranslation;
+
 			ModifyMatrixFromLocationAbs( deltaFrame );
 		}
 	}
@@ -1314,75 +1511,44 @@ void Instance::CalculateParentMatrix( float deltaFrame )
 	// 親の行列を計算
 	m_pParent->CalculateMatrix( deltaFrame );
 
-	if( m_pEffectNode->GetType() != EFFECT_NODE_TYPE_ROOT )
+	if (m_pEffectNode->GetType() != EFFECT_NODE_TYPE_ROOT)
 	{
-		BindType lType = m_pEffectNode->CommonValues.TranslationBindType;
+		BindType tType = m_pEffectNode->CommonValues.TranslationBindType;
 		BindType rType = m_pEffectNode->CommonValues.RotationBindType;
 		BindType sType = m_pEffectNode->CommonValues.ScalingBindType;
 
-		const Instance* rootInstance;
-		InstanceGlobal* instanceGlobal = m_pContainer->GetRootInstance();
-		InstanceContainer* rootContainer = instanceGlobal->GetRootContainer();
-		InstanceGroup* firstGloup = rootContainer->GetFirstGroup();
-		if( firstGloup && firstGloup->GetInstanceCount() > 0 )
+		if (tType == BindType::WhenCreating && rType == BindType::WhenCreating && sType == BindType::WhenCreating)
 		{
-			rootInstance = firstGloup->GetFirst();
+			// do not do anything
+		}
+		else if (tType == BindType::Always && rType == BindType::Always && sType == BindType::Always)
+		{
+			m_ParentMatrix = ownGroup_->GetParentMatrix();
+			assert(m_ParentMatrix.IsValid());
 		}
 		else
 		{
-			rootInstance = NULL;
-		}
-		
-		if( (lType == BindType::Always && rType == BindType::Always && sType == BindType::Always) )
-		{
-			m_ParentMatrix43 = m_pParent->GetGlobalMatrix43();
-		}
-		else if ( lType == BindType::NotBind_Root && rType == BindType::NotBind_Root && sType == BindType::NotBind_Root )
-		{
-			m_ParentMatrix43 = rootInstance->GetGlobalMatrix43();
-		}
-		else
-		{
-			Vector3D s, t;
-			Matrix43 r;
+			Vec3f s, t;
+			Mat43f r;
 
-			m_ParentMatrix43.GetSRT( s, r, t );
-			
-			if( lType == BindType::Always )
-			{
-				m_pParent->GetGlobalMatrix43().GetTranslation( t );
-			}
-			else if( lType == BindType::NotBind_Root && rootInstance != NULL )
-			{
-				rootInstance->GetGlobalMatrix43().GetTranslation( t );
-			}
-			
-			if( rType == BindType::Always )
-			{
-				m_pParent->GetGlobalMatrix43().GetRotation( r );
-			}
-			else if( rType == BindType::NotBind_Root && rootInstance != NULL )
-			{
-				rootInstance->GetGlobalMatrix43().GetRotation( r );
-			}
-			
+			if (tType == BindType::WhenCreating)
+				t = m_ParentMatrix.GetTranslation();
+			else
+				t = ownGroup_->GetParentTranslation();
 
-			if( sType == BindType::Always )
-			{
-				m_pParent->GetGlobalMatrix43().GetScale( s );
-			}
-			else if( sType == BindType::NotBind_Root && rootInstance != NULL )
-			{
-				rootInstance->GetGlobalMatrix43().GetScale( s );
-			}
+			if (rType == BindType::WhenCreating)
+				r = m_ParentMatrix.GetRotation();
+			else
+				r = ownGroup_->GetParentRotation();
 
-			m_ParentMatrix43.SetSRT( s, r, t );
+			if (sType == BindType::WhenCreating)
+				s = m_ParentMatrix.GetScale();
+			else
+				s = ownGroup_->GetParentScale();
+
+			m_ParentMatrix = Mat43f::SRT(s, r, t);
+			assert(m_ParentMatrix.IsValid());
 		}
-	}
-	else
-	{
-		// Rootの場合
-		m_ParentMatrix43 = m_pParent->GetGlobalMatrix43();
 	}
 
 	m_ParentMatrix43Calculated = true;
@@ -1401,12 +1567,8 @@ void Instance::ModifyMatrixFromLocationAbs( float deltaFrame )
 	}
 	else if( m_pEffectNode->LocationAbs.type == LocationAbsType::Gravity )
 	{
-		m_GlobalRevisionLocation.X = m_pEffectNode->LocationAbs.gravity.x *
-			m_LivingTime * m_LivingTime * 0.5f;
-		m_GlobalRevisionLocation.Y = m_pEffectNode->LocationAbs.gravity.y *
-			m_LivingTime * m_LivingTime * 0.5f;
-		m_GlobalRevisionLocation.Z = m_pEffectNode->LocationAbs.gravity.z *
-			m_LivingTime * m_LivingTime * 0.5f;
+		m_GlobalRevisionLocation = m_pEffectNode->LocationAbs.gravity *
+			(m_LivingTime * m_LivingTime * 0.5f);
 	}
 	else if( m_pEffectNode->LocationAbs.type == LocationAbsType::AttractiveForce )
 	{
@@ -1415,13 +1577,13 @@ void Instance::ModifyMatrixFromLocationAbs( float deltaFrame )
 		float minRange = m_pEffectNode->LocationAbs.attractiveForce.minRange;
 		float maxRange = m_pEffectNode->LocationAbs.attractiveForce.maxRange;
 		
-		Vector3D position = m_GlobalPosition - m_GlobalVelocity + m_GlobalRevisionLocation;
+		Vec3f position = m_GlobalPosition - m_GlobalVelocity + m_GlobalRevisionLocation;
 
-		Vector3D targetDifference = instanceGlobal->GetTargetLocation() - position;
-		float targetDistance = Vector3D::Length( targetDifference );
+		Vec3f targetDifference = instanceGlobal->GetTargetLocation() - position;
+		float targetDistance = targetDifference.GetLength();
 		if( targetDistance > 0.0f )
 		{
-			Vector3D targetDirection = targetDifference / targetDistance;
+			Vec3f targetDirection = targetDifference / targetDistance;
 		
 			if( minRange > 0.0f || maxRange > 0.0f )
 			{
@@ -1439,8 +1601,8 @@ void Instance::ModifyMatrixFromLocationAbs( float deltaFrame )
 			{
 				float eps = 0.0001f;
 				m_GlobalRevisionVelocity += targetDirection * force * deltaFrame;
-				float currentVelocity = Vector3D::Length(m_GlobalRevisionVelocity) + eps;
-				Vector3D currentDirection = m_GlobalRevisionVelocity / currentVelocity;
+				float currentVelocity = m_GlobalRevisionVelocity.GetLength() + eps;
+				Vec3f currentDirection = m_GlobalRevisionVelocity / currentVelocity;
 
 				m_GlobalRevisionVelocity = (targetDirection * control + currentDirection * (1.0f - control)) * currentVelocity;
 				m_GlobalRevisionLocation += m_GlobalRevisionVelocity * deltaFrame;
@@ -1448,9 +1610,9 @@ void Instance::ModifyMatrixFromLocationAbs( float deltaFrame )
 		}
 	}
 
-	Matrix43 MatTraGlobal;
-	MatTraGlobal.Translation( m_GlobalRevisionLocation.X, m_GlobalRevisionLocation.Y, m_GlobalRevisionLocation.Z );
-	Matrix43::Multiple( m_GlobalMatrix43, m_GlobalMatrix43, MatTraGlobal );
+	Mat43f MatTraGlobal = Mat43f::Translation( m_GlobalRevisionLocation );
+	m_GlobalMatrix43 *= MatTraGlobal;
+	assert(m_GlobalMatrix43.IsValid());
 }
 
 //----------------------------------------------------------------------------------
@@ -1477,7 +1639,7 @@ void Instance::Kill()
 {
 	if( m_State == INSTANCE_STATE_ACTIVE )
 	{
-		for( InstanceGroup* group = m_headGroups; group != NULL; group = group->NextUsedByInstance )
+		for( InstanceGroup* group = childrenGroups_; group != NULL; group = group->NextUsedByInstance )
 		{
 			group->IsReferencedFromInstance = false;
 		}
@@ -1489,15 +1651,130 @@ void Instance::Kill()
 //----------------------------------------------------------------------------------
 //
 //----------------------------------------------------------------------------------
+#ifdef __EFFEKSEER_BUILD_VERSION16__
+RectF Instance::GetUV(const int32_t index) const
+{
+	RectF uv(0.0f, 0.0f, 1.0f, 1.0f);
+
+	const auto& UVType = m_pEffectNode->RendererCommon.UVTypes[index];
+	const auto& UV = m_pEffectNode->RendererCommon.UVs[index];
+
+	if( UVType == ParameterRendererCommon::UV_DEFAULT )
+	{
+		return RectF( 0.0f, 0.0f, 1.0f, 1.0f );
+	}
+	else if( UVType == ParameterRendererCommon::UV_FIXED )
+	{
+		uv = RectF(
+			UV.Fixed.Position.x,
+			UV.Fixed.Position.y,
+			UV.Fixed.Position.w,
+			UV.Fixed.Position.h );
+	}
+	else if( UVType == ParameterRendererCommon::UV_ANIMATION )
+	{
+		auto& uvTimeOffset = uvTimeOffsets[index];
+
+		auto time = m_LivingTime + uvTimeOffset;
+
+		int32_t frameNum = (int32_t)(time / UV.Animation.FrameLength);
+		int32_t frameCount = UV.Animation.FrameCountX * UV.Animation.FrameCountY;
+
+		if( UV.Animation.LoopType == UV.Animation.LOOPTYPE_ONCE )
+		{
+			if( frameNum >= frameCount )
+			{
+				frameNum = frameCount - 1;
+			}
+		}
+		else if ( UV.Animation.LoopType == UV.Animation.LOOPTYPE_LOOP )
+		{
+			frameNum %= frameCount;
+		}
+		else if ( UV.Animation.LoopType == UV.Animation.LOOPTYPE_REVERSELOOP )
+		{
+			bool rev = (frameNum / frameCount) % 2 == 1;
+			frameNum %= frameCount;
+			if( rev )
+			{
+				frameNum = frameCount - 1 - frameNum;
+			}
+		}
+
+		int32_t frameX = frameNum % UV.Animation.FrameCountX;
+		int32_t frameY = frameNum / UV.Animation.FrameCountX;
+
+		uv = RectF(
+			UV.Animation.Position.x + UV.Animation.Position.w * frameX,
+			UV.Animation.Position.y + UV.Animation.Position.h * frameY,
+			UV.Animation.Position.w,
+			UV.Animation.Position.h );
+	}
+	else if( UVType == ParameterRendererCommon::UV_SCROLL )
+	{
+		auto& uvAreaOffset = uvAreaOffsets[index];
+		auto& uvScrollSpeed = uvScrollSpeeds[index];
+
+		auto time = (int32_t)m_LivingTime;
+
+		uv = RectF(
+			uvAreaOffset.X + uvScrollSpeed.GetX() * time,
+			uvAreaOffset.Y + uvScrollSpeed.GetY() * time,
+			uvAreaOffset.Width,
+			uvAreaOffset.Height);
+	}
+	else if ( UVType == ParameterRendererCommon::UV_FCURVE)
+	{
+		auto& uvAreaOffset = uvAreaOffsets[index];
+
+		auto time = (int32_t)m_LivingTime;
+
+		auto fcurvePos = UV.FCurve.Position->GetValues(m_LivingTime, m_LivedTime);
+		auto fcurveSize = UV.FCurve.Size->GetValues(m_LivingTime, m_LivedTime);
+
+		uv = RectF(uvAreaOffset.X + fcurvePos.GetX(),
+				   uvAreaOffset.Y + fcurvePos.GetY(),
+				   uvAreaOffset.Width + fcurveSize.GetX(),
+				   uvAreaOffset.Height + fcurveSize.GetY());
+	}
+
+	// For webgl bug (it makes slow if sampling points are too far on WebGL)
+	float far = 4.0;
+
+	if (uv.X < -far && uv.X + uv.Width < -far)
+	{
+		uv.X += (-static_cast<int32_t>(uv.X) - far);
+	}
+
+	if (uv.X > far && uv.X + uv.Width > far)
+	{
+		uv.X -= (static_cast<int32_t>(uv.X) - far);
+	}
+
+	if (uv.Y < -far && uv.Y + uv.Height < -far)
+	{
+		uv.Y += (-static_cast<int32_t>(uv.Y) - far);
+	}
+
+	if (uv.Y > far && uv.Y + uv.Height > far)
+	{
+		uv.Y -= (static_cast<int32_t>(uv.Y) - far);
+	}
+
+	return uv;
+}
+#else
 RectF Instance::GetUV() const
 {
+	RectF uv(0.0f, 0.0f, 1.0f, 1.0f);
+
 	if( m_pEffectNode->RendererCommon.UVType == ParameterRendererCommon::UV_DEFAULT )
 	{
 		return RectF( 0.0f, 0.0f, 1.0f, 1.0f );
 	}
 	else if( m_pEffectNode->RendererCommon.UVType == ParameterRendererCommon::UV_FIXED )
 	{
-		return RectF(
+		uv = RectF(
 			m_pEffectNode->RendererCommon.UV.Fixed.Position.x,
 			m_pEffectNode->RendererCommon.UV.Fixed.Position.y,
 			m_pEffectNode->RendererCommon.UV.Fixed.Position.w,
@@ -1534,7 +1811,7 @@ RectF Instance::GetUV() const
 		int32_t frameX = frameNum % m_pEffectNode->RendererCommon.UV.Animation.FrameCountX;
 		int32_t frameY = frameNum / m_pEffectNode->RendererCommon.UV.Animation.FrameCountX;
 
-		return RectF(
+		uv = RectF(
 			m_pEffectNode->RendererCommon.UV.Animation.Position.x + m_pEffectNode->RendererCommon.UV.Animation.Position.w * frameX,
 			m_pEffectNode->RendererCommon.UV.Animation.Position.y + m_pEffectNode->RendererCommon.UV.Animation.Position.h * frameY,
 			m_pEffectNode->RendererCommon.UV.Animation.Position.w,
@@ -1542,27 +1819,120 @@ RectF Instance::GetUV() const
 	}
 	else if( m_pEffectNode->RendererCommon.UVType == ParameterRendererCommon::UV_SCROLL )
 	{
-		auto time = (int32_t)m_LivingTime + uvTimeOffset;
+		auto time = (int32_t)m_LivingTime;
 
-		return RectF(
-			uvAreaOffset.X + uvScrollSpeed.X * time,
-			uvAreaOffset.Y + uvScrollSpeed.Y * time,
+		uv = RectF(
+			uvAreaOffset.X + uvScrollSpeed.GetX() * time,
+			uvAreaOffset.Y + uvScrollSpeed.GetY() * time,
 			uvAreaOffset.Width,
 			uvAreaOffset.Height);
 	}
 	else if (m_pEffectNode->RendererCommon.UVType == ParameterRendererCommon::UV_FCURVE)
 	{
-		auto time = (int32_t)m_LivingTime + uvTimeOffset;
+		auto time = (int32_t)m_LivingTime;
 
-		return RectF(
-			uvAreaOffset.X + m_pEffectNode->RendererCommon.UV.FCurve.Position->X.GetValue(time),
-			uvAreaOffset.Y + m_pEffectNode->RendererCommon.UV.FCurve.Position->Y.GetValue(time),
-			uvAreaOffset.Width + m_pEffectNode->RendererCommon.UV.FCurve.Size->X.GetValue(time),
-			uvAreaOffset.Height + m_pEffectNode->RendererCommon.UV.FCurve.Size->Y.GetValue(time));
+		auto fcurvePos = m_pEffectNode->RendererCommon.UV.FCurve.Position->GetValues(m_LivingTime, m_LivedTime);
+		auto fcurveSize = m_pEffectNode->RendererCommon.UV.FCurve.Size->GetValues(m_LivingTime, m_LivedTime);
+
+		uv = RectF(uvAreaOffset.X + fcurvePos.GetX(),
+					 uvAreaOffset.Y + fcurvePos.GetY(),
+					 uvAreaOffset.Width + fcurveSize.GetX(),
+					 uvAreaOffset.Height + fcurveSize.GetY());
 	}
 
+	// For webgl bug (it makes slow if sampling points are too far on WebGL)
+	float far = 4.0;
 
-	return RectF( 0.0f, 0.0f, 1.0f, 1.0f );
+	if (uv.X < -far && uv.X + uv.Width < -far)
+	{
+		uv.X += (-static_cast<int32_t>(uv.X) - far);
+	}
+
+	if (uv.X > far && uv.X + uv.Width > far)
+	{
+		uv.X -= (static_cast<int32_t>(uv.X) - far);
+	}
+
+	if (uv.Y < -far && uv.Y + uv.Height < -far)
+	{
+		uv.Y += (-static_cast<int32_t>(uv.Y) - far);
+	}
+
+	if (uv.Y > far && uv.Y + uv.Height > far)
+	{
+		uv.Y -= (static_cast<int32_t>(uv.Y) - far);
+	}
+
+	return uv;
+}
+#endif
+
+std::array<float, 4> Instance::GetCustomData(int32_t index) const
+{
+	assert(0 <= index && index < 2);
+
+	ParameterCustomData* parameterCustomData = nullptr;
+	const InstanceCustomData* instanceCustomData = nullptr;
+
+	if (index == 0)
+	{
+		parameterCustomData = &m_pEffectNode->RendererCommon.CustomData1;
+		instanceCustomData = &customDataValues1;
+	}
+	else if (index == 1)
+	{
+		parameterCustomData = &m_pEffectNode->RendererCommon.CustomData2;
+		instanceCustomData = &customDataValues2;
+	}
+	else
+	{
+		return std::array<float, 4>{0.0f, 0.0f, 0, 0};
+	}
+
+	if (parameterCustomData->Type == ParameterCustomDataType::None)
+	{
+		return std::array<float, 4>{0, 0, 0, 0};
+	}
+	else if (parameterCustomData->Type == ParameterCustomDataType::Fixed2D)
+	{
+		auto v = parameterCustomData->Fixed.Values;
+		return std::array<float, 4>{v.x, v.y, 0, 0};
+	}
+	else if (parameterCustomData->Type == ParameterCustomDataType::Random2D)
+	{
+		auto v = instanceCustomData->random.value;
+		return std::array<float, 4>{v.GetX(), v.GetY(), 0, 0};
+	}
+	else if (parameterCustomData->Type == ParameterCustomDataType::Easing2D)
+	{
+		Vec2f v = parameterCustomData->Easing.Values.getValue(
+			instanceCustomData->easing.start, instanceCustomData->easing.end, 
+			m_LivingTime / m_LivedTime);
+		return std::array<float, 4>{v.GetX(), v.GetY(), 0, 0};
+	}
+	else if (parameterCustomData->Type == ParameterCustomDataType::FCurve2D)
+	{
+		auto values = parameterCustomData->FCurve.Values->GetValues(m_LivingTime, m_LivedTime);
+		return std::array<float, 4>{values.GetX() + instanceCustomData->fcruve.offset.GetX(), values.GetY() + instanceCustomData->fcruve.offset.GetY(), 0, 0};
+	}
+	else if (parameterCustomData->Type == ParameterCustomDataType::Fixed4D)
+	{
+		return parameterCustomData->Fixed4D;
+	}
+	else if (parameterCustomData->Type == ParameterCustomDataType::FCurveColor)
+	{
+		auto values = parameterCustomData->FCurveColor.Values->GetValues(m_LivingTime, m_LivedTime);
+		return std::array<float, 4>{(values[0] + instanceCustomData->fcurveColor.offset[0]) / 255.0f,
+									(values[1] + instanceCustomData->fcurveColor.offset[1]) / 255.0f,
+									(values[2] + instanceCustomData->fcurveColor.offset[2]) / 255.0f,
+									(values[3] + instanceCustomData->fcurveColor.offset[3]) / 255.0f};
+	}
+	else
+	{
+		assert(false);
+	}
+
+	return std::array<float, 4>{0, 0, 0, 0};
 }
 
 //----------------------------------------------------------------------------------

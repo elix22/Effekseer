@@ -10,7 +10,9 @@
 #include "Effekseer.Matrix43.h"
 #include "Effekseer.Matrix44.h"
 #include "Culling/Culling3D.h"
-#include "Effekseer.CustomAllocator.h"
+#include "Utils/Effekseer.CustomAllocator.h"
+#include "Effekseer.IntrusiveList.h"
+#include "Effekseer.InstanceChunk.h"
 
 //----------------------------------------------------------------------------------
 //
@@ -55,9 +57,8 @@ private:
 		bool				GoingToStopRoot;
 		EffectInstanceRemovingCallback	RemovingCallback;
 		
-		Matrix43			BaseMatrix;
-
-		Matrix43			GlobalMatrix;
+		Mat43f				BaseMatrix;
+		Mat43f				GlobalMatrix;
 
 		float				Speed;
 
@@ -105,7 +106,7 @@ private:
 		
 		}
 
-		Matrix43* GetEnabledGlobalMatrix();
+		Mat43f* GetEnabledGlobalMatrix();
 
 		void CopyMatrixFromInstanceToRoot();
 	};
@@ -137,11 +138,23 @@ private:
 	// 確保済みインスタンス数
 	int m_instance_max;
 
-	// 確保済みインスタンス
-	std::queue<Instance*>	m_reserved_instances;
+	// buffers which is allocated while initializing
+	// 初期化中に確保されたバッファ
+	std::unique_ptr<InstanceChunk[]> reservedChunksBuffer_;
+	std::unique_ptr<uint8_t[]> reservedGroupBuffer_;
+	std::unique_ptr<uint8_t[]> reservedContainerBuffer_;
 
-	// 確保済みインスタンスバッファ
-	uint8_t*				m_reserved_instances_buffer;
+	// pooled instances. Thease are not used and waiting to be used.
+	// プールされたインスタンス。使用されておらず、使用されてるのを待っている。
+	std::queue<InstanceChunk*> pooledChunks_;
+	std::queue<InstanceGroup*> pooledGroups_;
+	std::queue<InstanceContainer*> pooledContainers_;
+
+	// instance chunks by generations
+	// 世代ごとのインスタンスチャンク
+	static const size_t GenerationsMax = 20;
+	std::array<std::vector<InstanceChunk*>, GenerationsMax> instanceChunks_;
+	std::array<int32_t, GenerationsMax> creatableChunkOffsets_;
 
 	// 再生中オブジェクトの組み合わせ集合体
 	std::map<Handle,DrawSet>	m_DrawSets;
@@ -212,9 +225,6 @@ private:
 	// 描画オブジェクト破棄処理
 	void GCDrawSet( bool isRemovingManager );
 
-	// インスタンスコンテナ生成
-	InstanceContainer* CreateInstanceContainer( EffectNode* pEffectNode, InstanceGlobal* pGlobal, bool isRoot, const Matrix43& rootMatrix, Instance* pParent);
-
 	// メモリ確保関数
 	static void* EFK_STDCALL Malloc( unsigned int size );
 
@@ -234,11 +244,14 @@ public:
 	// デストラクタ
 	virtual ~ManagerImplemented();
 
-	/* Root以外の破棄済みインスタンスバッファ回収(Flip,Update,終了時からのみ呼ばれる) */
-	void PushInstance( Instance* instance );
+	/* Root以外のインスタンスバッファ生成(Flip,Update,終了時からのみ呼ばれる) */
+	Instance* CreateInstance( EffectNode* pEffectNode, InstanceContainer* pContainer, InstanceGroup* pGroup );
 
-	/* Root以外のインスタンスバッファ取得(Flip,Update,終了時からのみ呼ばれる) */
-	Instance* PopInstance();
+	InstanceGroup* CreateInstanceGroup( EffectNode* pEffectNode, InstanceContainer* pContainer, InstanceGlobal* pGlobal );
+	void ReleaseGroup( InstanceGroup* group );
+
+	InstanceContainer* CreateInstanceContainer( EffectNode* pEffectNode, InstanceGlobal* pGlobal, bool isRoot, const Mat43f& rootMatrix, Instance* pParent );
+	void ReleaseInstanceContainer( InstanceContainer* container );
 
 	/**
 		@brief マネージャー破棄
@@ -428,6 +441,8 @@ public:
 
 	int32_t GetInstanceCount( Handle handle ) override;
 
+	int32_t GetTotalInstanceCount() const override;
+
 	/**
 		@brief	エフェクトのインスタンスに設定されている行列を取得する。
 		@param	handle	[in]	インスタンスのハンドル
@@ -521,7 +536,11 @@ public:
 	void UpdateHandle( Handle handle, float deltaFrame = 1.0f ) override;
 
 private:
-	void UpdateHandle( DrawSet& drawSet, float deltaFrame );
+
+	void UpdateInstancesByInstanceGlobal(const DrawSet& drawSet);
+
+	//! update draw sets
+	void UpdateHandleInternal(DrawSet& drawSet);
 
 	void Preupdate(DrawSet& drawSet);
 
@@ -547,20 +566,11 @@ private:
 	
 	int GetCameraCullingMaskToShowAllEffects() override;
 
-	/**
-		@brief	Update処理時間を取得。
-	*/
-	int GetUpdateTime() const override {return m_updateTime;};
+	int GetUpdateTime() const override;
 	
-	/**
-		@brief	Draw処理時間を取得。
-	*/
-	int GetDrawTime() const override {return m_drawTime;};
+	int GetDrawTime() const override;
 
-	/**
-		@brief	残りの確保したインスタンス数を取得する。
-	*/
-	virtual int32_t GetRestInstancesCount() const override { return (int32_t)m_reserved_instances.size(); }
+	int32_t GetRestInstancesCount() const override;
 
 	/**
 		@brief	start reload

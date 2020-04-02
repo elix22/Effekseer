@@ -36,13 +36,22 @@ build/
 CMakeFiles/
 
 Debug*/
-Release/RuntimeSample/lib/*.lib
 Dev/release/*.exe
 Dev/release/*.lib
 Dev/release/*.dll
 Dev/release/*.config
 Dev/release/*.xml
+Dev/release/resources/fonts/
 
 Dev/Cpp/include/
 Dev/Cpp/lib/
 Downloads/*/
+Dev/Editor/packages/
+mono_crash.*.json
+mono_crash.*.blob
+Dev/release/imgui.ini
+Script/__pycache__/aceutils.cpython-37.pyc
+
+
+Dev/release/resources/icons/Copy.png
+Dev/release/resources/icons/Paste.png
