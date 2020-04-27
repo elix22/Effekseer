@@ -5,10 +5,10 @@ project(Effekseer)
 cmake_minimum_required(VERSION 3.1)
 
 # C++ version
-if(WIN32)
-    set(CMAKE_CXX_STANDARD 17)
-else()
+if(APPLE)
     set(CMAKE_CXX_STANDARD 14)
+else()	
+    set(CMAKE_CXX_STANDARD 17)
 endif()
 
 # For Mac
@@ -21,7 +21,6 @@ option(USE_INTERNAL_LOADER "Use Internal Loader" ON)
 option(USE_OPENGLES2 "Use OpenGL ES2" OFF)
 option(USE_OPENGLES3 "Use OpenGL ES3" OFF)
 option(USE_OPENGL3 "Use OpenGL 3" OFF)
-option(USE_LLGI "Use LLGI" OFF)
 
 if (MSVC)
 option(USE_OPENAL "Use OpenAL" OFF)

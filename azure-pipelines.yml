@@ -3,44 +3,6 @@ trigger:
 - master
 
 jobs:
-  - job: Windows
-    pool:
-      vmImage: 'vs2017-win2016'
-    steps:
-      - task: Bash@3
-        inputs:
-          targetType: 'inline'
-          script: |
-            git submodule update --init
-            git lfs install
-            git lfs pull
-            python build.py
-      - task: PublishBuildArtifacts@1
-        inputs:
-          PathtoPublish: 'dev/release'
-          ArtifactName: 'Windows'
-          publishLocation: 'Container'
-
-      - task: BatchScript@1
-        inputs:
-          filename: 'release_runtime.bat'
-
-      - task: PublishBuildArtifacts@1
-        inputs:
-          PathtoPublish: 'EffekseerRuntime150'
-          ArtifactName: 'EffekseerRuntime150'
-          publishLocation: 'Container'
-
-      - task: BatchScript@1
-        inputs:
-          filename: 'release_tool.bat'
-
-      - task: PublishBuildArtifacts@1
-        inputs:
-          PathtoPublish: 'Effekseer150Win'
-          ArtifactName: 'Effekseer150Win'
-          publishLocation: 'Container'
-
   - job: Windows_x86
     pool:
       vmImage: 'vs2017-win2016'
@@ -61,7 +23,7 @@ jobs:
       - task: PublishBuildArtifacts@1
         inputs:
           PathtoPublish: 'Effekseer150Win'
-          ArtifactName: 'Effekseer150Win_x86'
+          ArtifactName: 'Effekseer152Win_x86'
           publishLocation: 'Container'
 
   - job: MacOS
@@ -83,6 +45,6 @@ jobs:
           publishLocation: 'Container'
       - task: PublishBuildArtifacts@1
         inputs:
-          PathtoPublish: 'dev/Mac'
-          ArtifactName: 'MacOS'
+          PathtoPublish: 'Dev/Effekseer.dmg'
+          ArtifactName: 'EffekseerMac'
           publishLocation: 'Container'

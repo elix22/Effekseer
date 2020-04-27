@@ -27,6 +27,7 @@ file(GLOB files_core
 list(APPEND files_core
     EffekseerCore/IO/EfkEfc.cs
     EffekseerCore/Utils/ResourceCache.cs
+    EffekseerCore/Utils/CsvReader.cs
 )
 
 add_library(EffekseerCore
@@ -63,8 +64,8 @@ file(GLOB files
     Effekseer/Properties/*.cs
     Effekseer/swig/*.cs
     Effekseer/Utils/*.cs
-	Effekseer/Process/*.cs
-	)
+    Effekseer/Process/*.cs
+    )
 
 list(APPEND files
     Effekseer/swig/IO.cs

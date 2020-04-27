@@ -21,6 +21,12 @@ namespace Effekseer
 			private set;
 		}
 
+		public static string EntryDirectory
+		{
+			get;
+			private set;
+		}
+
 		[STAThread]
 		[HandleProcessCorruptedStateExceptions]
 		static void Main(string[] args)
@@ -29,7 +35,19 @@ namespace Effekseer
 			var test = new Effekseer.InternalScript.Tests();
 			Effekseer.IO.ChunkTest.Test();
 #endif
-			StartDirectory = System.IO.Directory.GetCurrentDirectory();
+
+			try
+			{
+				StartDirectory = System.IO.Directory.GetCurrentDirectory();
+				EntryDirectory = GUI.Manager.GetEntryDirectory();
+			}
+			catch(Exception e)
+			{
+				DateTime dt = DateTime.Now;
+				var filename = string.Format("error_{0:D4}_{1:D2}_{2:D2}_{3:D2}_{4:D2}_{5:D2}.txt", dt.Year, dt.Month, dt.Day, dt.Hour, dt.Minute, dt.Second);
+				System.IO.File.WriteAllText(filename, e.ToString());
+				return;
+			}
 
 			bool gui = true;
 			string input = string.Empty;
@@ -104,33 +122,43 @@ namespace Effekseer
 				{
 					DateTime dt = DateTime.Now;
 					var filename = string.Format("error_{0:D4}_{1:D2}_{2:D2}_{3:D2}_{4:D2}_{5:D2}.txt", dt.Year, dt.Month, dt.Day, dt.Hour, dt.Minute, dt.Second);
-					System.IO.File.WriteAllText(filename, e.ToString());
+					var filepath = Path.Combine(EntryDirectory, filename);
+					System.IO.File.WriteAllText(filepath, e.ToString());
 				}
 			}
 		}
 
 		static void Exec(bool gui, string input, string output, string export, string format, float magnification)
 		{
+			// Register UI
+			GUI.Component.ParameterListComponentFactory.Register(typeof(Data.LanguageSelector), () => { return new GUI.Component.LanguageSelector(); });
+
+
 			// Debug
 			bool isDebugMode = false;
 #if DEBUG
 			isDebugMode = true;
 #endif
-			if(System.IO.File.Exists("debug.txt") || isDebugMode)
+			if(System.IO.File.Exists(Path.Combine(EntryDirectory, "debug.txt")) || isDebugMode)
 			{
 				swig.Native.SetFileLogger(Path.Combine(GUI.Manager.GetEntryDirectory(),"Effekseer.log.txt"));	
 			}
 
+			LanguageTable.LoadTable(Path.Combine(EntryDirectory, "resources/languages/languages.txt"));
+
 			var systemLanguage = EfkN.GetSystemLanguage();
-			Language? language = null;
+			string language = null;
 
 			if(systemLanguage != swig.SystemLanguage.Unknown)
 			{
-				language = (Language)systemLanguage;
-			}
-			else
-			{
-				language = Language.English;
+				if(systemLanguage == swig.SystemLanguage.Japanese)
+				{
+					language = "ja";
+				}
+				else if (systemLanguage == swig.SystemLanguage.English)
+				{
+					language = "en";
+				}
 			}
 
 			Core.OnOutputMessage += new Action<string>(Core_OnOutputMessage);
@@ -139,10 +167,7 @@ namespace Effekseer
 			if (gui)
 			{
 				ChangeLanguage();
-
-#if DEBUG
-				Core.OnLanguageChanged += (lang) => { ChangeLanguage(); };
-#endif
+				LanguageTable.OnLanguageChanged += (o,e) => { ChangeLanguage(); };
 
 				// Failed to compile script
 				if (Core.ExportScripts.Count == 0)
@@ -261,17 +286,15 @@ namespace Effekseer
 
 		private static void ChangeLanguage()
 		{
-			var appDirectory = GUI.Manager.GetEntryDirectory();
-			if (Core.Language == Language.Japanese)
-			{
-				var fullPath = Path.Combine(appDirectory, "resources/languages/effekseer_ja.txt");
-				Resources.LoadLanguageFile(fullPath);
-			}
-			if (Core.Language == Language.English)
-			{
-				var fullPath = Path.Combine(appDirectory, "resources/languages/effekseer_en.txt");
-				Resources.LoadLanguageFile(fullPath);
-			}
+			MultiLanguageTextProvider.RootDirectory = GUI.Manager.GetEntryDirectory() + "/";
+			MultiLanguageTextProvider.Reset();
+			MultiLanguageTextProvider.LoadCSV("Base.csv");
+			MultiLanguageTextProvider.LoadCSV("Effekseer.csv");
+			MultiLanguageTextProvider.LoadCSV("Effekseer_Options.csv");
+			MultiLanguageTextProvider.LoadCSV("Effekseer_BasicSettings.csv");
+			MultiLanguageTextProvider.LoadCSV("Effekseer_Position.csv");
+			MultiLanguageTextProvider.LoadCSV("Effekseer_Rotation.csv");
+			GUI.Manager.UpdateFont();
 		}
 
 		static void Core_OnOutputMessage(string obj)

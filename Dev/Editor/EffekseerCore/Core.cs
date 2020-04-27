@@ -8,9 +8,140 @@ using System.Threading;
 
 namespace Effekseer
 {
+	public class LanguageTable
+	{
+		static int selectedIndex = 0;
+		static List<string> languages = new List<string> { "en" };
+
+		public static void LoadTable(string path)
+		{
+			var lines = System.IO.File.ReadAllLines(path);
+			languages = lines.ToList();
+		}
+
+		public static void SelectLanguage(int index, bool callEvent = true)
+		{
+			if (selectedIndex == index) return;
+			selectedIndex = index;
+			if (OnLanguageChanged != null && callEvent)
+			{
+				OnLanguageChanged(null, null);
+			}
+		}
+
+		public static void SelectLanguage(string key, bool callEvent = true)
+		{
+			var ind = languages.Select((i, v) => Tuple35.Create(i, v)).FirstOrDefault(_ => _.Item1 == key).Item2;
+			SelectLanguage(ind, callEvent);
+		}
+
+		public static IReadOnlyList<string> Languages { get { return languages; } }
+
+		public static int SelectedIndex { get { return selectedIndex; } }
+
+		public static Action<object, ChangedValueEventArgs> OnLanguageChanged;
+	}
+
+	public class MultiLanguageTextProvider
+	{
+		internal static int UpdateCounter { get; private set; }
+
+		static Dictionary<string, string> texts = new Dictionary<string, string>();
+
+		public static string Language { get; set; } = "en";
+
+		public static string RootDirectory = string.Empty;
+
+		public static void Reset()
+		{
+			texts.Clear();
+			UpdateCounter++;
+		}
+
+		public static void LoadCSV(string path)
+		{
+			LoadCSV(path, "en");
+			if(LanguageTable.Languages.Count > 0)
+			{
+				LoadCSV(path, LanguageTable.Languages[LanguageTable.SelectedIndex]);
+			}
+		}
+
+		internal static void LoadCSV(string path, string language)
+		{
+			using (var streamReader = new System.IO.StreamReader(RootDirectory + "resources/languages/" + language + "/" + path, Encoding.UTF8))
+			{
+				var records = Utils.CsvReaader.Read(streamReader.ReadToEnd());
+
+				foreach(var record in records)
+				{
+					if (record.Count < 2) continue;
+					if (record[0] == string.Empty) continue;
+
+					if (texts.ContainsKey(record[0]))
+					{
+						texts[record[0]] = record[1];
+					}
+					else
+					{
+						texts.Add(record[0], record[1]);
+					}
+				}
+			}
+		}
+
+		public static bool HasKey(string key)
+		{
+			return texts.ContainsKey(key);
+		}
+
+		public static string GetText(string key)
+		{
+			string ret = string.Empty;
+			if(texts.TryGetValue(key, out ret))
+			{
+				return ret;
+			}
+			return key;
+		}
+	}
+
+	public class MultiLanguageString
+	{
+		string cached = null;
+
+		internal int UpdateCounter = 0;
+
+		internal string Key = string.Empty;
+
+		public MultiLanguageString(string key)
+		{
+			Key = key;
+		}
+
+		public string Value
+		{
+			get
+			{
+				if (UpdateCounter != MultiLanguageTextProvider.UpdateCounter || cached == null)
+				{
+					UpdateCounter = MultiLanguageTextProvider.UpdateCounter;
+					cached = MultiLanguageTextProvider.GetText(Key);
+				}
+				return cached;
+			}
+		}
+
+		public override string ToString()
+		{
+			return Value;
+		}
+	}
+
+
 	public class Core
 	{
-		public const string Version = "1.51";
+		public const string Version = "1.52";
 
 		public const string OptionFilePath = "config.option.xml";
 
@@ -57,15 +188,14 @@ namespace Effekseer
 			set;
 		}
 
+		/// <summary>
+		/// For compatibility
+		/// </summary>
 		public static Language Language
 		{
-			get { return language; }
-			set { 
-				language = value; 
-				if(OnLanguageChanged != null)
-				{
-					OnLanguageChanged(language);
-				}
+			get {
+				if (LanguageTable.Languages[LanguageTable.SelectedIndex] == "ja") return Language.Japanese;
+				return Language.English;
 			}
 		}
 
@@ -168,7 +298,7 @@ namespace Effekseer
 				}
 			}
 		}
-#if SCRIPT_ENABLED
+
         public static Script.ScriptCollection<Script.CommandScript> CommandScripts
 		{
 			get;
@@ -192,7 +322,7 @@ namespace Effekseer
 			get;
 			private set;
 		}
-#endif
+
 		public static Data.OptionValues Option
 		{
 			get { return option; }
@@ -315,29 +445,22 @@ namespace Effekseer
 		/// </summary>
 		public static event EventHandler OnReload;
 
-		/// <summary>
-		/// (Experimental) Called when language is changed
-		/// </summary>
-		public static Action<Language> OnLanguageChanged;
-
 		static Core()
 		{
 			ResourceCache = new Utils.ResourceCache();
 
-#if SCRIPT_ENABLED
 			CommandScripts = new Script.ScriptCollection<Script.CommandScript>();
 			SelectedScripts = new Script.ScriptCollection<Script.SelectedScript>();
 			ExportScripts = new Script.ScriptCollection<Script.ExportScript>();
 			ImportScripts = new Script.ScriptCollection<Script.ImportScript>();
-#endif
+
             // change a separator
             System.Globalization.CultureInfo customCulture = (System.Globalization.CultureInfo)System.Threading.Thread.CurrentThread.CurrentCulture.Clone();
             customCulture.NumberFormat.NumberDecimalSeparator = ".";
             System.Threading.Thread.CurrentThread.CurrentCulture = customCulture;
-            Language = Language.English;
         }
 
-		public static void Initialize(Language? language = null)
+		public static void Initialize(string language = null)
 		{
 			var entryDirectory = GetEntryDirectory() + "/";
 
@@ -345,20 +468,6 @@ namespace Effekseer
 			FullPath = string.Empty;
 
 			option = LoadOption(language);
-
-			// Switch the language according to the loaded settings
-			Language = Option.GuiLanguage;
-
-			// Switch the culture according to the set language
-			switch (Language)
-			{
-				case Language.English:
-					Thread.CurrentThread.CurrentUICulture = new CultureInfo("en-US");
-					break;
-				case Language.Japanese:
-					Thread.CurrentThread.CurrentUICulture = new CultureInfo("ja-JP");
-					break;
-			}
 
 			New();
 
@@ -370,13 +479,13 @@ namespace Effekseer
 
 		static void InitializeScripts(string entryDirectory)
 		{
-#if SCRIPT_ENABLED
 			// Load scripts
 			System.IO.Directory.CreateDirectory(entryDirectory + "scripts");
 			System.IO.Directory.CreateDirectory(entryDirectory + "scripts/import");
 			System.IO.Directory.CreateDirectory(entryDirectory + "scripts/export");
 			System.IO.Directory.CreateDirectory(entryDirectory + "scripts/command");
 			System.IO.Directory.CreateDirectory(entryDirectory + "scripts/selected");
+#if SCRIPT_ENABLED
 
 			Script.Compiler.Initialize();
 
@@ -1186,7 +1295,7 @@ namespace Effekseer
 		/// </summary>
 		/// <param name="defaultLanguage"></param>
 		/// <returns></returns>
-		static public Data.OptionValues LoadOption(Language? defaultLanguage)
+		static public Data.OptionValues LoadOption(string defaultLanguage)
 		{
             Data.OptionValues res = new Data.OptionValues();
 			environments = new Data.EnvironmentValues();
@@ -1197,7 +1306,7 @@ namespace Effekseer
 			{
 				if (defaultLanguage != null)
 				{
-					res.GuiLanguage.SetValueDirectly((Language)defaultLanguage.Value);
+					LanguageTable.SelectLanguage(defaultLanguage, false);
 				}
 				return res;
 			}

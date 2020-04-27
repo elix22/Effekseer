@@ -90,8 +90,8 @@ endif()
 
 target_include_directories(
     EffekseerMaterialEditor
-	PRIVATE
-	${EFK_THIRDPARTY_INCLUDES}
+    PRIVATE
+    ${EFK_THIRDPARTY_INCLUDES}
     ../include/
     ${PROJECT_SOURCE_DIR}/../3rdParty/AltseedRHI/include/
     ../EffekseerMaterial/
@@ -110,11 +110,11 @@ target_link_directories(
 target_link_libraries(
     EffekseerMaterialEditor
     PRIVATE
+    EffekseerMaterial
     EditorCommon
+    AltseedRHI
     debug "${GLFW3_LIB_DEBUG}"
     optimized "${GLFW3_LIB_RELEASE}"
-	debug "${LIBPNG_LIB_DEBUG}"
-    optimized "${LIBPNG_LIB_RELEASE}"
 )
 
 if(USE_LIBPNG_LOADER)
@@ -127,11 +127,12 @@ if(USE_LIBPNG_LOADER)
     target_link_libraries(
         ${PROJECT_NAME}
         PRIVATE
+        debug "${LIBPNG_LIB_DEBUG}"
+        optimized "${LIBPNG_LIB_RELEASE}"
         debug "${ZLIB_LIB_DEBUG}"
         optimized "${ZLIB_LIB_RELEASE}"
-        debug "${LIBPNG_LIB_DEBUG}"
-	    optimized "${LIBPNG_LIB_RELEASE}"
-	)
+    )
+
 endif()
 
 if (WIN32)
@@ -139,13 +140,11 @@ if (WIN32)
 target_link_libraries(
     EffekseerMaterialEditor
     PRIVATE
-    EffekseerMaterial
     Effekseer # to use shader loader
     EffekseerRendererGL # to use shader loader
     IPC
     debug libglew32d
-    optimized libglew32
-    AltseedRHI)
+    optimized libglew32)
 
 elseif(APPLE)
 
@@ -162,13 +161,9 @@ find_library(CORE_VIDEO_FRAMEWORK CoreVideo)
 target_link_libraries(
     EffekseerMaterialEditor
     PRIVATE
-    EffekseerMaterial
     Effekseer # to use shader loader
     EffekseerRendererGL # to use shader loader
     IPC
-    AltseedRHI
-    z
-    EffekseerMaterial
     ${CMAKE_THREAD_LIBS_INIT}
     ${COCOA_FRAMEWORK}
     ${OPENGL_gl_LIBRARY}
@@ -176,6 +171,43 @@ target_link_libraries(
     ${IOKIT_FRAMEWORK}
     ${CORE_FOUNDATION_FRAMEWORK}
     ${CORE_VIDEO_FRAMEWORK})
+
+else()
+
+# For Linux
+
+FIND_PACKAGE(Threads REQUIRED)
+FIND_PACKAGE(OpenGL REQUIRED)
+
+find_package(X11 REQUIRED)
+find_package(Threads REQUIRED)
+
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(GTK3 REQUIRED gtk+-3.0)
+
+include_directories(
+    ${OPENGL_INCLUDE_DIR}
+    ${GTK3_INCLUDE_DIRS}
+    ${X11_INCLUDE_DIR})
+
+link_directories(${GTK3_LIBRARY_DIRS})
+
+add_definitions(${GTK3_CFLAGS_OTHER})
+
+target_link_libraries(
+    EffekseerMaterialEditor
+    PRIVATE
+    Effekseer # to use shader loader
+    EffekseerRendererGL # to use shader loader
+    IPC
+    GLEW
+    dl
+    stdc++fs
+    ${CMAKE_THREAD_LIBS_INIT}
+    ${OPENGL_LIBRARY}
+    ${GTK3_LIBRARIES}
+    ${X11_LIBRARIES})
+
 endif()
 
 set_target_properties(EffekseerMaterialEditor PROPERTIES LINKER_LANGUAGE CXX)

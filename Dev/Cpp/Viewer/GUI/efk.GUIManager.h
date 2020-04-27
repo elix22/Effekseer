@@ -19,6 +19,8 @@
 
 #include "../../3rdParty/imgui_markdown/imgui_markdown.h"
 #include <EditorCommon/GUI/MainWindow.h>
+#include <EditorCommon/GUI/FramerateController.h>
+
 class Native;
 
 namespace efk
@@ -341,6 +343,8 @@ namespace efk
 
 		ImGui::MarkdownConfig markdownConfig_;
 
+		Effekseer::FramerateController framerateController_;
+
 		static void MarkdownLinkCallback(ImGui::MarkdownLinkCallbackData data);
 
 	public:
@@ -400,7 +404,7 @@ namespace efk
 		Vec2 GetWindowSize();
 		Vec2 GetContentRegionAvail();
 
-		void SetNextWindowPos(const Vec2& pos, Cond cond, const const Vec2& pivot);
+		void SetNextWindowPos(const Vec2& pos, Cond cond, const Vec2& pivot);
 
 		void SetNextWindowSize(float size_x, float size_y, Cond cond);
 
@@ -467,6 +471,8 @@ namespace efk
 		bool InputInt(const char16_t* label, int* v, int step = 1, int step_fast = 100);
 
 		bool SliderInt(const char16_t* label, int* v, int v_min, int v_max);
+
+		void ProgressBar(float fraction, const Vec2& size);
 
 		// Widgets: Combo Box
 		bool BeginCombo(const char16_t* label, const char16_t* preview_value, ComboFlags flags, ImageResource* user_texture_id = NULL);

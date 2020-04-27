@@ -932,7 +932,13 @@ namespace efk
 
 	bool GUIManager::DoEvents()
 	{
-		return window->DoEvents();
+		if(window->DoEvents())
+		{
+			framerateController_.Update();
+			return true;
+		}
+
+		return false;
 	}
 
 	void GUIManager::Present()
@@ -1109,7 +1115,7 @@ namespace efk
 		return Vec2(v.x, v.y);
 	}
 
-	void GUIManager::SetNextWindowPos(const Vec2& pos, Cond cond, const const Vec2& pivot)
+	void GUIManager::SetNextWindowPos(const Vec2& pos, Cond cond, const Vec2& pivot)
 	{
 		ImGui::SetNextWindowPos(ImVec2(pos.X, pos.Y), (ImGuiCond)cond, ImVec2(pivot.X, pivot.Y));
 	}
@@ -1456,6 +1462,11 @@ namespace efk
 	bool GUIManager::SliderInt(const char16_t* label, int* v, int v_min, int v_max)
 	{
 		return ImGui::SliderInt(utf8str<256>(label), v, v_min, v_max);
+	}
+
+	void GUIManager::ProgressBar(float fraction, const Vec2& size)
+	{
+		ImGui::ProgressBar(fraction, ImVec2(size.X, size.Y));
 	}
 
 	bool GUIManager::BeginCombo(const char16_t* label, const char16_t* preview_value, ComboFlags flags, ImageResource* user_texture_id)

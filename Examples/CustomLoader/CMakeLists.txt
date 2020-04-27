@@ -55,6 +55,21 @@ if(APPLE)
     )
 endif()
 
+if(UNIX AND NOT APPLE)
+    find_package(X11 REQUIRED)
+
+    include_directories(${X11_INCLUDE_DIR})
+
+    target_link_libraries(
+        Example_CustomLoader
+        PRIVATE
+        Effekseer
+        EffekseerRendererGL
+        dl
+        ${X11_LIBRARIES}
+    )
+endif()
+
 set_property(TARGET ${PROJECT_NAME} PROPERTY FOLDER "Examples") 
 
 if(USE_LIBPNG_LOADER)
@@ -67,9 +82,10 @@ if(USE_LIBPNG_LOADER)
     target_link_libraries(
         ${PROJECT_NAME}
         PRIVATE
+        debug "${LIBPNG_LIB_DEBUG}"
+        optimized "${LIBPNG_LIB_RELEASE}"
         debug "${ZLIB_LIB_DEBUG}"
         optimized "${ZLIB_LIB_RELEASE}"
-        debug "${LIBPNG_LIB_DEBUG}"
-	    optimized "${LIBPNG_LIB_RELEASE}"
-	)
+    )
+
 endif()

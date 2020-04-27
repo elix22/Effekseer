@@ -148,12 +148,22 @@ void UpdateHandleTest()
 		platform->Play((GetDirectoryPathAsU16(__FILE__) + u"../../../../TestData/Effects/10/Ribbon_Parameters1.efk").c_str());
 		platform->Play((GetDirectoryPathAsU16(__FILE__) + u"../../../../TestData/Effects/10/Parents1.efk").c_str());
 		platform->Play((GetDirectoryPathAsU16(__FILE__) + u"../../../../TestData/Effects/10/Parents1.efk").c_str());
+		platform->Play((GetDirectoryPathAsU16(__FILE__) + u"../../../../TestData/Effects/Memory/DestroyWhenNoMoreChildren.efkefc").c_str());
 
 		for (size_t i = 0; i < 20; i++)
 		{
 			platform->Update();
 		}
 		platform->TakeScreenshot("UpdateHandle_0.png");
+
+		platform->StopAllEffects();
+
+		for (size_t i = 0; i < 5; i++)
+		{
+			platform->Update();
+		}
+
+		assert(platform->GetManager()->GetRestInstancesCount() == 8000);
 
 		platform->Terminate();
 	}
@@ -171,12 +181,51 @@ void UpdateHandleTest()
 		platform->Play((GetDirectoryPathAsU16(__FILE__) + u"../../../../TestData/Effects/10/Ribbon_Parameters1.efk").c_str());
 		platform->Play((GetDirectoryPathAsU16(__FILE__) + u"../../../../TestData/Effects/10/Parents1.efk").c_str());
 		platform->Play((GetDirectoryPathAsU16(__FILE__) + u"../../../../TestData/Effects/10/Parents1.efk").c_str());
+		platform->Play((GetDirectoryPathAsU16(__FILE__) + u"../../../../TestData/Effects/Memory/DestroyWhenNoMoreChildren.efkefc").c_str());
 
 		for (size_t i = 0; i < 20; i++)
 		{
 			platform->Update();
 		}
 		platform->TakeScreenshot("UpdateHandle_1.png");
+
+		platform->StopAllEffects();
+
+		for (size_t i = 0; i < 5; i++)
+		{
+			platform->Update();
+		}
+
+		assert(platform->GetManager()->GetRestInstancesCount() == 8000);
+
+		platform->Terminate();
+	}
+
+	// Check memory leak
+	{
+		srand(0);
+		auto platform = std::make_shared<EffectPlatformGL>();
+
+		EffectPlatformInitializingParameter param;
+		param.IsUpdatedByHandle = true;
+
+		platform->Initialize(param);
+
+		auto handle = platform->Play((GetDirectoryPathAsU16(__FILE__) + u"../../../../TestData/Effects/10/SimpleLaser.efk").c_str());
+
+		for (size_t i = 0; i < 10; i++)
+		{
+			platform->Update();
+		}
+
+		platform->GetManager()->StopEffect(handle);
+
+		for (size_t i = 0; i < 10; i++)
+		{
+			platform->Update();
+		}
+
+		assert(platform->GetManager()->GetRestInstancesCount() == 8000);
 
 		platform->Terminate();
 	}

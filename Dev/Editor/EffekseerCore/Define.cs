@@ -100,81 +100,56 @@ namespace Effekseer
     // カルチャーによってローカライズ済の文字列が得られます。
     public static class Resources
     {
-		/* this implementation causes errors in mono
-		[DataContract]
-		class Data
-		{
-			[DataMember]
-			public Dictionary<string, string> kv;
-		}
-		*/
-
-		static ResourceManager resources;
-
 		static Dictionary<string, string> keyToStrings = new Dictionary<string, string>();
 
 		static Resources()
         {
         }
 
-		public static void SetResourceManager(ResourceManager resourceManager)
-		{
-			resources = resourceManager;
-		}
-
-		public static void LoadLanguageFile(string path)
-		{
-			keyToStrings.Clear();
-			var lines = System.IO.File.ReadAllLines(path);
-
-			foreach(var line in lines)
-			{
-				var strs = line.Split(',');
-				if (strs.Length < 2) continue;
-
-				var key = strs[0];
-				var value = string.Join(",", strs.Skip(1).ToArray());
-				value = value.Replace(@"\n", "\n");
-
-				keyToStrings.Add(key, value);
-			}
-
-			/* this implementation causes errors in mono
-			var bytes = System.IO.File.ReadAllBytes(path);
-		
-			var settings = new DataContractJsonSerializerSettings();
-			settings.UseSimpleDictionaryFormat = true;
-			var serializer = new DataContractJsonSerializer(typeof(Data), settings);
-			using (var ms = new MemoryStream(bytes))
-			{
-				var data = (Data)serializer.ReadObject(ms);
-				foreach (var x in data.kv)
-				{
-					keyToStrings = data.kv;
-				}
-			}
-			*/
-		}
-
 		public static string GetString(string name)
         {
-			if(keyToStrings.ContainsKey(name))
+			if(MultiLanguageTextProvider.HasKey(name))
 			{
-				return keyToStrings[name];
+				return MultiLanguageTextProvider.GetText(name);
 			}
-
-            if (resources == null) return string.Empty;
-			
-            try
-            {
-                var value = resources.GetString(name);
-                if (!String.IsNullOrEmpty(value)) return value; // 発見した場合、文字列を返す
-            }
-            catch {}
             
             return string.Empty;
         }
     }
+
+	/// <summary>
+	/// attribute for parameter's key
+	/// </summary>
+	[AttributeUsage(
+	AttributeTargets.Class | AttributeTargets.Property | AttributeTargets.Field | AttributeTargets.Method,
+	AllowMultiple = true,
+	Inherited = false)]
+	public class KeyAttribute : Attribute
+	{
+		static KeyAttribute()
+		{
+		}
+
+		public string key
+		{
+			get;
+			set;
+		}
+
+
+		public static string GetKey(object[] attributes)
+		{
+			if (attributes != null && attributes.Length > 0)
+			{
+				foreach (var attribute in attributes.OfType<KeyAttribute>())
+				{
+					if (!String.IsNullOrEmpty(attribute.key)) return attribute.key;
+				}
+			}
+
+			return null;
+		}
+	}
 
 	/// <summary>
 	/// attribute for parameter's name
@@ -207,6 +182,12 @@ namespace Effekseer
 			set;
 		}
 
+		public string key
+		{
+			get;
+			set;
+		}
+
 		/// <summary>
 		/// Get name from attributes
 		/// </summary>
@@ -232,6 +213,19 @@ namespace Effekseer
 
 			return string.Empty;
 		}
+
+		public static string GetKey(object[] attributes)
+		{
+			if (attributes != null && attributes.Length > 0)
+			{
+				foreach (var attribute in attributes.OfType<NameAttribute>())
+				{
+					if (!String.IsNullOrEmpty(attribute.key)) return attribute.key;
+				}
+			}
+
+			return null;
+		}
 	}
 
 	/// <summary>
@@ -256,6 +250,11 @@ namespace Effekseer
 		}
 
 		public string value
+		{
+			get;
+			set;
+		}
+		public string key
 		{
 			get;
 			set;
@@ -286,9 +285,23 @@ namespace Effekseer
 
 			return string.Empty;
 		}
+
+		public static string GetKey(object[] attributes)
+		{
+			if (attributes != null && attributes.Length > 0)
+			{
+				foreach (var attribute in attributes.OfType<DescriptionAttribute>())
+				{
+					if (!String.IsNullOrEmpty(attribute.key)) return attribute.key;
+				}
+			}
+
+			return null;
+		}
+
 	}
 
-	
+
 	/// <summary>
 	/// アイコンを設定する属性
 	/// </summary>

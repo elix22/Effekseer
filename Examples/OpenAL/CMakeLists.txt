@@ -45,8 +45,9 @@ if(OpenAL_FOUND)
             ${OPENGL_gl_LIBRARY}
             debug "${LIBPNG_LIB_DEBUG}"
             optimized "${LIBPNG_LIB_RELEASE}"
-            z
-        )
+            debug "${ZLIB_LIB_DEBUG}"
+            optimized "${ZLIB_LIB_RELEASE}"
+	)
     endif()
    
     if(APPLE)
@@ -64,6 +65,22 @@ if(OpenAL_FOUND)
             ${CORE_VIDEO_FRAMEWORK}
         )
     endif()
+
+    if(UNIX AND NOT APPLE)
+        find_package(X11 REQUIRED)
+
+        include_directories(${X11_INCLUDE_DIR})
+
+        target_link_libraries(
+            Example_OpenAL
+            PRIVATE
+            Effekseer
+            EffekseerRendererGL
+            dl
+            ${X11_LIBRARIES}
+        )
+    endif()
+
 else()
     message("Example_OpenAL : OpenAL is not found.")
 endif()
